@@ -10,6 +10,8 @@ permissions:
   contents: read
   pages: write
   id-token: write
+  # Required by actions/configure-pages (enablement: true) to create the site.
+  administration: write
 
 concurrency:
   group: pages-deploy
