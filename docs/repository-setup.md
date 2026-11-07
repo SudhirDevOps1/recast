@@ -35,7 +35,6 @@ Add rule) for `main`:
   - `Lint, types, tests (ubuntu-22.04)`
   - `Lint, types, tests (windows-latest)`
   - `Lint, types, tests (windows-11-arm)`
-  - `Lint, types, tests (macos-14)`
   - `Lint, types, tests (macos-15)`
   - `Smoke (ubuntu-22.04)`
 - Block force pushes: **on**
@@ -54,7 +53,6 @@ curl -X PUT -H "Authorization: Bearer $GH_TOKEN" \
       "Lint, types, tests (ubuntu-22.04)",
       "Lint, types, tests (windows-latest)",
       "Lint, types, tests (windows-11-arm)",
-      "Lint, types, tests (macos-14)",
       "Lint, types, tests (macos-15)",
       "Smoke (ubuntu-22.04)"
     ]},

@@ -3,6 +3,10 @@
 # and are asar-unpacked so they stay executable. Never commit those binaries.
 appId: app.recast.desktop
 productName: Recast
+# The binary is named `recast` (canonical, see the master build prompt).
+# Without this, electron-builder derives an unsafe name from the scoped npm
+# package name (@recast/desktop) and AppImage/NSIS refuse to build.
+executableName: recast
 copyright: Copyright © 2025-2026 Recast contributors
 directories:
   output: ../../release
@@ -14,11 +18,13 @@ files:
 asarUnpack:
   - "node_modules/better-sqlite3/**"
 extraResources:
-  - from: resources/ffmpeg/${os}-${arch}
+  # Paths are resolved relative to apps/desktop (the electron-builder working
+  # directory); the fetch script stages into the repo-root resources/ folder.
+  - from: ../../resources/ffmpeg/${os}-${arch}
     to: ffmpeg/${os}-${arch}
     filter:
       - "**/*"
-  - from: resources/ffmpeg/LICENSE.txt
+  - from: ../../resources/ffmpeg/LICENSE.txt
     to: ffmpeg/LICENSE.txt
   - from: build/entitlements.mac.plist
     to: entitlements.mac.plist

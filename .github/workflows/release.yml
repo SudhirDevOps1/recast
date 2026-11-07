@@ -20,10 +20,12 @@ jobs:
         include:
           - { os: windows-latest, name: win-x64, script: dist:win, arch_suffix: '', ffmpeg_target: win32-x64 }
           - { os: windows-11-arm, name: win-arm64, script: dist:win:arm64, arch_suffix: '-arm64', ffmpeg_target: win32-arm64 }
-          - { os: macos-14, name: mac-arm64, script: dist:mac:arm64, arch_suffix: '', ffmpeg_target: darwin-arm64 }
-          # macos-13 (Intel) runner images are retired; darwin-x64 is
-          # cross-compiled on arm64 hardware. See STATUS.md "Intel macOS".
-          - { os: macos-14, name: mac-x64, script: dist:mac:x64, arch_suffix: '', ffmpeg_target: darwin-x64 }
+          # macos-14 jobs cancel instantly on this repo (image withdrawn for
+          # new use); macos-15 is the supported arm64 image — see STATUS.md.
+          - { os: macos-15, name: mac-arm64, script: dist:mac:arm64, arch_suffix: '', ffmpeg_target: darwin-arm64 }
+          # No Intel macOS runners remain; darwin-x64 is cross-compiled on
+          # arm64 hardware.
+          - { os: macos-15, name: mac-x64, script: dist:mac:x64, arch_suffix: '', ffmpeg_target: darwin-x64 }
           - { os: ubuntu-22.04, name: linux-x64, script: dist:linux, arch_suffix: '', ffmpeg_target: linux-x64 }
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
@@ -45,6 +47,12 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends libx11-dev libxtst-dev libxrandr-dev libxinerama-dev libxi-dev libxcursor-dev libxkbcommon-dev pkg-config
+
+      - name: Use a node-gyp that recognizes VS 2026 (image ships VS 18)
+        if: runner.os == 'Windows'
+        run: |
+          npm install -g node-gyp@latest
+          "npm_config_node_gyp=$(npm root -g)\node-gyp\bin\node-gyp.js" >> $env:GITHUB_ENV
 
       - uses: pnpm/action-setup@v6
         with:
