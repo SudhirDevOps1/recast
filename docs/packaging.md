@@ -1,6 +1,6 @@
 # Packaging — every installer target
 
-Configs live in `apps/desktop/electron-builder.yml`; community-repo manifests in `packaging/`.
+Configs live in `apps/desktop/electron-builder.yml` (artifacts land in the repo-root `release/`); community-repo manifests in `packaging/`.
 
 ## Windows
 
