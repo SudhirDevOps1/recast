@@ -17,15 +17,13 @@ files:
   - "!node_modules/**/test/**"
 asarUnpack:
   - "node_modules/better-sqlite3/**"
+# Per-platform extraResources: electron-builder resolves ${os} differently per
+# platform ("mac" vs process.platform "darwin"), while the runtime resolver
+# (packages/shared/src/ffmpeg/resolve.ts) always uses process.platform names
+# (darwin/win32/linux). Pinning the platform dir per section keeps both in
+# sync. Binaries under resources/ffmpeg/<platform>-<arch>/ are staged by
+# scripts/fetch-ffmpeg.mjs and never committed.
 extraResources:
-  # Paths are resolved relative to apps/desktop (the electron-builder working
-  # directory); the fetch script stages into the repo-root resources/ folder.
-  - from: ../../resources/ffmpeg/${os}-${arch}
-    to: ffmpeg/${os}-${arch}
-    filter:
-      - "**/*"
-  - from: ../../resources/ffmpeg/LICENSE.txt
-    to: ffmpeg/LICENSE.txt
   - from: build/entitlements.mac.plist
     to: entitlements.mac.plist
 protocols:
@@ -41,6 +39,13 @@ publish:
 # ---------------- Windows ----------------
 win:
   artifactName: Recast-Setup-${version}${env.ARCH_SUFFIX}.${ext}
+  extraResources:
+    - from: ../../resources/ffmpeg/win32-${arch}
+      to: ffmpeg/win32-${arch}
+      filter:
+        - "**/*"
+    - from: ../../resources/ffmpeg/LICENSE.txt
+      to: ffmpeg/LICENSE.txt
   target:
     - target: nsis
       arch: [x64]
@@ -73,6 +78,13 @@ mac:
   entitlements: build/entitlements.mac.plist
   entitlementsInherit: build/entitlements.mac.plist
   notarize: false
+  extraResources:
+    - from: ../../resources/ffmpeg/darwin-${arch}
+      to: ffmpeg/darwin-${arch}
+      filter:
+        - "**/*"
+    - from: ../../resources/ffmpeg/LICENSE.txt
+      to: ffmpeg/LICENSE.txt
   target:
     - target: dmg
       arch: [arm64, x64]
@@ -91,6 +103,13 @@ pkg:
 linux:
   artifactName: Recast-${version}-${arch}.${ext}
   category: Video
+  extraResources:
+    - from: ../../resources/ffmpeg/linux-${arch}
+      to: ffmpeg/linux-${arch}
+      filter:
+        - "**/*"
+    - from: ../../resources/ffmpeg/LICENSE.txt
+      to: ffmpeg/LICENSE.txt
   desktop:
     entry:
       Name: Recast

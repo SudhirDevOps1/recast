@@ -1,5 +1,8 @@
 import { test, expect, _electron } from '@playwright/test';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const here = dirname(fileURLToPath(import.meta.url));
 
 /**
  * Smoke test: launch → create a synthetic recording (canvas capture stream,
@@ -14,7 +17,7 @@ test.skip(process.env.RECAST_SMOKE !== '1', 'set RECAST_SMOKE=1 with a built app
 
 test('record synthetic source → library → export', async () => {
   const app = await _electron.launch({
-    args: [join(__dirname, '..', 'out', 'main', 'index.js')],
+    args: [join(here, '..', 'out', 'main', 'index.js')],
     env: {
       ...process.env,
       RECAST_SMOKE: '1',

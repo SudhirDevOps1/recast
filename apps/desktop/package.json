@@ -5,6 +5,10 @@
   "type": "module",
   "description": "Recast desktop app",
   "homepage": "https://sudhirdevops1.github.io/recast/",
+  "author": {
+    "name": "Recast contributors",
+    "email": "SudhirDevOps1@users.noreply.github.com"
+  },
   "main": "out/main/index.js",
   "scripts": {
     "dev": "electron-vite dev",

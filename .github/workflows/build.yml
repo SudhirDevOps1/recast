@@ -41,7 +41,11 @@ jobs:
     timeout-minutes: 60
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      # Signing is a no-op until these secrets exist (see docs/code-signing.md).
+      # Artifacts are unsigned for now: with no signing secrets configured an
+      # empty CSC_LINK sends electron-builder's mac signer down a broken path
+      # ("not a file"). Flip to 'true' when signing secrets exist
+      # (docs/code-signing.md).
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
       CSC_LINK: ${{ secrets.CSC_LINK }}
       CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
       WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
