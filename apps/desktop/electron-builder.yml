@@ -85,10 +85,11 @@ pkg:
 linux:
   artifactName: Recast-${version}-${arch}.${ext}
   category: Video
-  desktopEntry:
-    Name: Recast
-    Comment: Record, auto-zoom, caption, export — locally.
-    StartupWMClass: Recast
+  desktop:
+    entry:
+      Name: Recast
+      Comment: Record, auto-zoom, caption, export — locally.
+      StartupWMClass: Recast
   target:
     - AppImage
     - deb
