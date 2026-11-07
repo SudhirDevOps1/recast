@@ -1,95 +1,65 @@
-# Platform support
+# Platform support — honest capability matrix
 
-Status: **specification — all rows are planned, none are verified yet.**
+Nothing here says "works" unless it was tested on that OS. Untested = untested.
 
-This table exists so nobody promises a feature the OS cannot deliver. When a row is tested on real hardware, replace `Planned` with `Verified` and add the date and machine in the notes.
-
-## Capability matrix
-
-| Capability | Windows 10/11 | macOS 12.3–14.1 | macOS 14.2+ | Linux X11 | Linux Wayland |
-|---|---|---|---|---|---|
-| Full-screen capture | Planned | Planned | Planned | Planned | Planned (portal) |
-| Window capture | Planned | Planned | Planned | Planned | Portal-dependent |
-| Area capture | Planned | Planned | Planned | Planned | Portal-dependent |
-| System audio | Planned | **Unsupported** | Planned | Planned | Planned |
-| Microphone | Planned | Planned | Planned | Planned | Planned |
-| Camera overlay | Planned | Planned | Planned | Planned | Planned |
-| Global cursor tracking | Planned | Planned | Planned | Planned | Limited |
-| Global hotkeys | Planned | Planned | Planned | Planned | Compositor-dependent |
-| Click-through tray | Planned | Planned | Planned | Planned | Compositor-dependent |
-| Hardware encode | Planned | Planned | Planned | Planned | Planned |
-| Auto-update | Planned | Planned | Planned | Planned | Planned |
-
-## Windows
-
-- Minimum **Windows 10 1809 (build 17763)**, x64 and ARM64.
-- Capture runs through Chromium's Window Graphics Capture path; no extra driver.
-- System audio uses **WASAPI loopback** — no virtual cable needed.
-- DPI: per-monitor awareness is mandatory. Moving the window between a 100 % and a 150 % monitor must not blur or resize it.
-- Per-user install into `%LOCALAPPDATA%\Programs\Recast`; no UAC prompt.
-- `Recast.exe` registers `.recast` and `recast://`, and enforces a single instance.
-- ARM64 devices (Snapdragon X) get the same feature set; if a codec is missing, fall back visibly rather than silently.
-
-Known risks:
-
-- SmartScreen will warn on unsigned builds. Signing is documented in `docs/code-signing.md`.
-- Some corporate machines block WASAPI loopback via policy. Detect and explain.
-- HDR displays can produce washed-out captures; detect HDR and warn, with an SDR fallback.
+Legend: ✅ tested working · 🟡 implemented, awaiting on-device verification · 🟠 partially implemented · ❌ not available · — not applicable
 
 ## macOS
 
-- Minimum **macOS 12.3** for ScreenCaptureKit.
-- System audio capture requires **macOS 14.2+**. On older versions the toggle is disabled with an explanation — not hidden, not silently ignored.
-- Required Info.plist keys: `NSCameraUsageDescription`, `NSMicrophoneUsageDescription`, `NSScreenCaptureUsageDescription`.
-- Entitlements: camera, audio-input, and `allow-jit` if the renderer needs it. Hardened runtime enabled.
-- TCC handling:
-  - Screen Recording requires a relaunch after granting — detect and offer it.
-  - Accessibility is needed only for global cursor tracking.
-  - A revoked permission mid-recording must pause cleanly, not produce a corrupt file.
-- Native chrome: traffic lights, vibrancy, ⌘ shortcuts, Dock menu, menu-bar extra.
+| Capability | 12.3–14.1 | 14.2+ | Notes |
+|---|---|---|---|
+| Screen capture | 🟡 | 🟡 | ScreenCaptureKit-backed via Electron; verify on QA pass |
+| System audio (loopback) | ❌ | 🟡 | Requires 14.2+; stated in UI |
+| Microphone / camera | 🟡 | 🟡 | TCC prompts; status deep links; relaunch after grant |
+| Window capture | 🟡 | 🟡 | |
+| Area selection | 🟡 | 🟡 | |
+| Cursor tracking (uiohook) | 🟡 | 🟡 | Accessibility permission may be required |
+| Global hotkeys | 🟡 | 🟡 | |
+| Traffic lights / menu-bar tray / Dock | 🟡 | 🟡 | hiddenInset traffic lights implemented |
+| Signing + notarization | ❌ | ❌ | Pipeline ready (entitlements, notarytool env), no certificate yet |
 
-Known risks:
+Minimum macOS: 12.3.
 
-- ScreenCaptureKit behavior changed across 13, 14, and 15. Test each major version.
-- Notarization requires an Apple Developer account. Unsigned builds will be blocked by Gatekeeper.
-- Retina scaling: capture in points vs pixels must be handled once, centrally.
+## Windows
+
+| Capability | Win 10 1809+ x64 | ARM64 | Notes |
+|---|---|---|---|
+| Screen capture | 🟡 | 🟡 | |
+| System audio (WASAPI loopback) | 🟡 | 🟡 | No virtual cable needed |
+| Window capture | 🟡 | 🟡 | |
+| Area selection | 🟡 | 🟡 | |
+| Cursor tracking | 🟡 | 🟡 | |
+| Global hotkeys | 🟡 | 🟡 | |
+| Per-user install, no UAC | 🟡 | 🟡 | NSIS `perMachine: false` |
+| Portable mode | 🟡 | 🟡 | `portable.marker` beside exe; settings adjacent when writable |
+| MSI (enterprise/GPO) | 🟡 | — | WiX-based target |
+| Code signing (Azure Trusted Signing) | ❌ | ❌ | Env plumbing ready; SmartScreen will warn until reputation builds — documented, not hidden |
+| Per-monitor DPI / mixed-DPI | 🟡 | 🟡 | Chromium handles scaling; verify 125/150/200 % on QA pass |
 
 ## Linux
 
-### X11
-
-- Full support: screen, window, area, cursor position, global hotkeys.
-- Cursor capture via XFixes.
-- Audio via PulseAudio/PipeWire monitor sources.
-
-### Wayland
-
-Wayland deliberately prevents apps from capturing the screen or reading global input. Recast does **not** try to bypass this.
-
-- Capture goes through the **PipeWire portal** (`xdg-desktop-portal` + `xdg-desktop-portal-gnome`/`-kde`). The compositor shows its own picker; Recast cannot pre-select a window or area.
-- Global cursor position is generally unavailable. Auto-zoom falls back to manual zoom, and the UI says why.
-- Global hotkeys depend on the compositor; Recast registers a portal shortcut where supported and otherwise asks the user to bind a command.
-- System audio requires a PipeWire monitor source; if the portal does not expose one, Recast offers mic-only.
-
-This is a compositor limitation, not a bug. The UI states it plainly and links to `docs/troubleshooting.md`.
-
-## Distribution coverage
-
-| Package | Windows | macOS | Linux |
+| Capability | X11 | Wayland | Notes |
 |---|---|---|---|
-| Native installer | NSIS `.exe`, `.msi` | `.dmg`, `.pkg` | `.deb`, `.rpm` |
-| Portable | `.exe` | `.zip` | AppImage, `.tar.gz` |
-| Package manager | winget, Scoop, Chocolatey | Homebrew cask | Flathub, Snap, AUR |
-| Auto-update | electron-updater | electron-updater + Sparkle-compatible feed | electron-updater |
+| Screen capture | 🟡 | 🟡 | Wayland via xdg-desktop-portal/PipeWire only — never bypassing the compositor |
+| Window capture | 🟡 | 🟡 | Portal-dependent |
+| Area selection | 🟡 | ❌ | Overlay window needs X11; Wayland shows the limitation in the UI |
+| Cursor tracking | 🟡 | ❌ | uiohook cannot hook Wayland; auto-zoom disabled with explanation |
+| Global hotkeys | 🟡 | ❌ | Same limitation, stated |
+| System audio | ❌ | ❌ | Mic-only fallback; PipeWire monitor capture is on the roadmap |
+| AppImage | 🟡 | 🟡 | Missing `libfuse2` detection with a copyable fix command planned (troubleshooting.md) |
+| deb/rpm/tar.gz | 🟡 | 🟡 | |
+| Flatpak / Snap / AUR | 🟠 | 🟠 | Manifests authored; not submitted yet |
 
-Full detail: `docs/packaging.md`.
+## Verified in CI (2026-11-07)
 
-## How to report a platform result
+- ✅ linux-x64 FFmpeg bundle fetch + hash pinning + binary execution (sandbox CI-equivalent)
+- ✅ Full verify gate (typecheck/lint/tests/build) on linux
+- ❌ Windows/macOS device runs — not performed yet; everything above marked 🟡 for those OSes reflects code-complete-untested status
 
-When you test a row, open a PR that updates this file with:
+## Test log
 
-```
-| System audio | Verified 2026-03-04 · Win 11 23H2 · Realtek ALC897 |
-```
-
-No date and no hardware means no verification.
+| Date | OS | What was tested | Result |
+|---|---|---|---|
+| 2026-11-07 | Linux x64 (CI sandbox) | verify gate, build, ffmpeg fetch/pin | pass |
+| — | Windows 10/11 x64 | pending | — |
+| — | macOS 14 arm64 | pending | — |

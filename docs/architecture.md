@@ -1,131 +1,68 @@
 # Architecture
 
-Status: specification. Implementation starts in Phase 1.
-
-## Goals
-
-Recast must record reliably for hours, render a 60fps editor UI on a five-year-old laptop, and produce exports that match the preview exactly. Those three goals drive every decision below.
-
 ## Process model
 
-```
-┌──────────────────────────────────────────────────────────────┐
-│ Main process                                                 │
-│  · windows & tray        · global shortcuts                  │
-│  · permissions / TCC     · file system & project store       │
-│  · capture orchestration · FFmpeg sidecar supervision        │
-│  · auto-updater          · single-instance & deep links      │
-└───────────────┬──────────────────────────────────────────────┘
-                │ typed, versioned IPC (zod on both ends)
-┌───────────────▼──────────────────────────────────────────────┐
-│ Renderer (React)                                             │
-│  · library · recorder setup · editor · export · settings     │
-│  · preview canvas (GPU)                                      │
-└───────────────┬──────────────────────────────────────────────┘
-                │ postMessage / MessageChannel
-┌───────────────▼──────────────────────────────────────────────┐
-│ Workers                                                      │
-│  · encoder (WebCodecs)   · muxer (mp4/webm)                  │
-│  · thumbnailer          · whisper                            │
-└──────────────────────────────────────────────────────────────┘
-```
-
-### Windows owned by main
-
-| Window | Purpose | Properties |
-|---|---|---|
-| `library` | Main app, project list | Standard window, custom title bar |
-| `recorder` | Setup: source, audio, cam, countdown | Frameless-ish modal |
-| `tray` | Floating recording capsule | Frameless, always-on-top, draggable, click-through outside |
-| `picker` | Source / area selection overlay | Full-screen per display, transparent |
-| `editor` | Timeline and preview | Standard window, can open a second project |
-| `hidden` | Export compositor | Offscreen, no user interaction |
-
-Each window is isolated: its own renderer, its own state slice. Never pass live objects across; pass serializable messages only.
-
-## IPC contract
-
-- One bridge in `preload/index.ts`. No `ipcRenderer` exposure.
-- Every channel is declared in `packages/shared/ipc.ts` with a zod request and response schema.
-- Channels are versioned by group (`recorder:*`, `media:*`, `project:*`, `export:*`, `system:*`).
-- Renderer never receives a raw file path it can write to. Main resolves paths and returns opaque handles.
-- Main validates the caller window for privileged channels (e.g. only the recorder window may start capture).
-
-## Capture pipeline
+Three Electron processes, one direction of trust:
 
 ```
-desktopCapturer → setDisplayMediaRequestHandler → getDisplayMedia
-      → MediaStreamTrack (video, optional audio)
-      → MediaStreamTrackProcessor → VideoFrame
-      → VideoEncoder (hardware) → EncodedVideoChunk → muxer worker → disk
+┌────────────────────────── main (Node) ──────────────────────────┐
+│ windows, tray, menu, globalShortcut, permissions, deep links     │
+│ better-sqlite3 library, .recast project files (atomic writes)    │
+│ session service (segments, manifest, cursor.jsonl)               │
+│ input sampler (60 Hz poll + uiohook-napi hooks)                  │
+│ FFmpeg runner (spawn, shell:false, arg arrays, tree-kill)        │
+│ whisper sidecar, updater, export disk IO (positional .part)      │
+└───────────────▲─────────────────────────────▲───────────────────┘
+        typed, zod-validated IPC       media + export file protocol
+                ▼                             ▼
+┌──────────────────────── renderer (sandboxed) ───────────────────┐
+│ React 19 app: Library / Record / Editor / Export / Settings      │
+│ capture engine (WebCodecs, mp4-muxer, AudioWorklet)              │
+│ export engine (frame clock, compositor, WebCodecs muxing)        │
+│ preview (same compositor, rAF only for interactive playback)     │
+└──────────────────────────────────────────────────────────────────┘
 ```
 
-- Video and audio chunks are written as **fragmented segments** every ~2 seconds with a 2-second keyframe interval, so a crash leaves a recoverable file.
-- The recorder keeps a small ring buffer in memory; segments are flushed with `fsync` on a background thread.
-- Audio is captured as two tracks (mic, system) and mixed at export. A single mixed track would destroy editing options.
+- **Main owns the OS.** Windows, tray, shortcuts, permissions, file IO, FFmpeg/whisper supervision, updater, deep links (`recast://`), single instance. The renderer never touches Node.
+- **Renderer owns pixels.** Capture, preview and export all run in the renderer where the GPU and WebCodecs live.
+- **Preload is one typed bridge.** `window.recast` with `invoke(channel, payload)`, `on(event, handler)`, `send(channel, payload)`. Contract version asserted at startup.
 
-## Audio graph
+## IPC
 
-```
-mic device ──► MediaStreamAudioSourceNode ──► gain ──┐
-                                                      ├──► AudioWorklet (meter + resample + timestamp)
-system loop ─► MediaStreamAudioSourceNode ──► gain ──┘
-                                                      └──► MediaStreamAudioDestinationNode → encoder
-```
-
-The worklet emits 20 Hz meter levels to the recorder UI and a 48 kHz PCM stream to the encoder worker.
-
-## Cursor and input
-
-- `uiohook-napi` runs in main and samples global cursor position at 60 Hz.
-- Samples are batched and sent at ~20 Hz to the renderer to avoid IPC flooding.
-- Clicks, scrolls, and modifier state are captured with monotonic timestamps.
-- The renderer stores a ring buffer per recording and writes it into the project at stop.
-- On macOS this requires **Accessibility** permission. If it is missing, recording still works; auto-zoom falls back to manual.
-
-## Rendering
-
-- Preview: `<canvas>` with WebGL2 (or WebGPU where available) compositing layers: screen, face cam, cursor, annotations, captions, frame/background.
-- Export: the same compositor, driven by a frame clock instead of `requestAnimationFrame`, in a hidden window or worker with `OffscreenCanvas`.
-- Because both paths share the compositor code, preview and export cannot drift.
-- Proxy media: 4K sources are transcoded once to a 720p proxy for scrubbing; exports always read the original.
+- Every channel is declared once in `packages/shared/src/ipc.ts` as `{ req: zodSchema, res: zodSchema }`.
+- Main validates requests (`ipc.ts` registry), preload validates responses and event payloads before they reach React.
+- A malformed payload fails loudly with the channel name — no silent `undefined` propagation.
+- Errors cross as `{ __error: string }` and throw on the caller side.
 
 ## Storage
 
-```
-<userData>/
-  recast.db            SQLite (better-sqlite3): projects, presets, assets, settings
-  projects/<id>/       project.json + media/ + thumbs/ + proxy/
-  recordings/          raw captures, grouped by session
-  cache/               thumbnails, waveforms, models
-  logs/                rotating logs, 7 days
-  bin/                 optionally downloaded FFmpeg binaries
-```
+| Data | Location | Format |
+|---|---|---|
+| Settings | `<data>/settings.json` | JSON, atomic writes |
+| Library index | `<data>/library.db` | better-sqlite3, WAL |
+| Projects | `<data>/projects/<id>.recast` | JSON (schemaVersion 1), atomic, autosaved every 5 s |
+| Recording sessions | `<data>/recordings/<sessionId>/` | `session.json` manifest + `seg-NNNN.mp4` fragments + `cursor.jsonl` |
+| FFmpeg (in-app install) | `<data>/bin/ffmpeg/` | binaries + manifest.json |
+| Whisper models | `<data>/models/` | ggml files |
 
-- `.recast` files are portable bundles: zipped project JSON plus media, or a references-only variant that points to local paths.
-- Autosave every 5 seconds into `project.json.tmp` then atomic rename; a startup scan recovers from a leftover temp file.
-- Schema migrations live in `packages/shared/migrations` and run once on launch with a backup taken first.
+`<data>` = `%APPDATA%\Recast` / `~/Library/Application Support/Recast` / `~/.config/recast`, or the executable directory in portable mode.
 
 ## Failure domains
 
-| Failure | Containment |
-|---|---|
-| Encoder init fails | Fallback chain: HW H.264 → HW HEVC → software → MediaRecorder |
-| Renderer crashes | Main restarts the window; recording continues in the tray window |
-| Main crashes | Segments on disk; recovery offered on relaunch |
-| Disk full | Recording stops cleanly, file finalized, user warned |
-| FFmpeg missing | Utility features degrade with a clear message; export falls back to WebCodecs |
-| Worker hangs | Watchdog with timeout and kill; export marked failed, not silently stuck |
+| Failure | Blast radius | Recovery |
+|---|---|---|
+| App crash mid-recording | current ≤ 2 s fragment (unclosed) | closed segments are complete MP4s; `session.json` lists them; Library offers recovery → `ffmpeg -c copy` remux |
+| Renderer crash | recording dies; segments survive | same recovery path; main marks session `crashed` |
+| Disk full | recording degrades | disk-space guard reported in tray state; recorder error surfaced, never silently truncated |
+| FFmpeg missing | utility features degrade | launch-time `-version` probe (2 s timeout); affected features show a Repair button; core record→edit→export unaffected |
+| whisper.cpp missing | captions degrade | precise message with the install command; never a fake transcript |
+| Export cancel | nothing | bytes live in `.part`; renamed only after mux + verify |
+| Power loss during settings/project write | nothing | tmp + rename atomic writes everywhere |
 
-## Performance budgets
+## Clock discipline
 
-| Metric | Budget |
-|---|---|
-| Cold start | < 2.5 s |
-| Idle RAM | < 250 MB |
-| Editor interaction | < 100 ms |
-| Timeline scrub | 60 fps on a 10-minute 1080p project |
-| Dropped frames | < 2 % at 1080p60 (M1 / i5-1135G7) |
-| Export | 1 min 1080p30 < 30 s on mid-tier hardware |
+Renderer capture clock and main input sampler both use `(Date.now() − sessionStartEpochMs) × 1000` minus paused time. One shared epoch (`recorder:start` returns `startEpochMs`) keeps cursor events aligned with video frames across the process boundary. Pauses subtract on both sides (`inputSampler.pause/resume` ↔ recorder pause bookkeeping).
 
-Measurements live in `PERFORMANCE.md` once the app exists. Until then these are targets, not claims.
+## Determinism
+
+The compositor is a pure function of `(project, timeUs) → draw plan`, and the zoom camera is a fixed-step (60 Hz) integrated track evaluated by binary search + lerp. Preview and export call the same `computeComposition` + `drawComposition`; export steps the frame clock at `1/fps` while preview steps at rAF for interactivity. The golden-frame SSIM harness (planned, see STATUS) will lock preview/export parity at ≥ 0.995.

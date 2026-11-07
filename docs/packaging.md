@@ -1,106 +1,55 @@
-# Packaging
+# Packaging — every installer target
 
-Status: specification. The full matrix is the release contract — a release is not done until every row builds green in CI.
+Configs live in `apps/desktop/electron-builder.yml`; community-repo manifests in `packaging/`.
 
-## Artifact matrix
+## Windows
 
-| OS | Artifact | Tool | Purpose | Notes |
-|---|---|---|---|---|
-| Windows | `Recast-Setup-x.y.z.exe` | electron-builder NSIS | Default installer | Per-user, no UAC, desktop + Start Menu shortcuts |
-| Windows | `Recast-x.y.z.msi` | electron-builder MSI (WiX) | Enterprise / GPO / Intune | Per-machine option |
-| Windows | `Recast-Portable-x.y.z.exe` | electron-builder portable | No install, USB | Settings live next to the exe when writable |
-| Windows | `Recast-x.y.z-arm64.exe` | electron-builder | Snapdragon laptops | Same features |
-| Windows | `.nsis-web` | electron-builder | Small stub installer | Optional |
-| Windows | winget manifest | `wingetcreate` | `winget install Recast` | Submitted to winget-pkgs |
-| Windows | Scoop manifest | bucket PR | Dev-friendly install | Community bucket first |
-| Windows | Chocolatey package | `choco pack` | Enterprise familiarity | Optional |
-| macOS | `Recast-x.y.z-arm64.dmg` | electron-builder | Apple Silicon | Primary |
-| macOS | `Recast-x.y.z-x64.dmg` | electron-builder | Intel | Primary |
-| macOS | `Recast-universal.dmg` | electron-builder | One download for both | ~2× size |
-| macOS | `Recast-x.y.z.pkg` | electron-builder | MDM / managed installs | Signed installer |
-| macOS | `Recast-x.y.z.zip` + `latest-mac.yml` | electron-builder | Auto-update payload | Required by electron-updater |
-| macOS | Homebrew cask | `brew` cask | `brew install --cask recast` | PR to homebrew-cask |
-| Linux | `Recast-x.y.z.AppImage` | electron-builder | Universal, no install | Document `libfuse2` |
-| Linux | `recast_x.y.z_amd64.deb` | electron-builder | Debian / Ubuntu | GPG-sign |
-| Linux | `recast-x.y.z.x86_64.rpm` | electron-builder | Fedora / RHEL / openSUSE | GPG-sign |
-| Linux | `recast-x.y.z.tar.gz` | electron-builder | Generic / AUR source | |
-| Linux | Flatpak | flatpak-builder + Flathub | Sandboxed | Portal-correct permissions |
-| Linux | Snap | snapcraft | Auto-updating | Strict confinement needs testing |
-| Linux | AUR PKGBUILD | AUR | Arch users | |
+| Artifact | Target | Notes |
+|---|---|---|
+| `Recast-Setup-x.y.z.exe` | NSIS | Per-user (`perMachine: false`), no UAC, install dir selectable, no data deletion on uninstall |
+| `Recast-x.y.z-enterprise.msi` | MSI | Per-machine for GPO deployment |
+| `Recast-Portable-x.y.z.exe` | Portable | `portable.marker` → settings next to exe when writable |
+| `Recast-Setup-x.y.z-arm64.exe` | NSIS arm64 | `ARCH_SUFFIX=-arm64` env in CI |
+| winget | `packaging/winget/` | Submitted after first signed release |
+| Scoop | `packaging/scoop/` | auto-update via GitHub checkver |
+| Chocolatey | `packaging/choco/` | Community repo submission |
+| `.nsis-web` stub | optional | Not built yet (❌) |
+
+## macOS
+
+| Artifact | Notes |
+|---|---|
+| `Recast-x.y.z-arm64.dmg` | hardened runtime, entitlements (audio, camera, JIT) |
+| `Recast-x.y.z-x64.dmg` | macos-13 runner |
+| `Recast-x.y.z.pkg` | MDM installs |
+| `Recast-x.y.z-<arch>-mac.zip` + `latest-mac.yml` | electron-updater feed |
+| Homebrew cask | submitted after notarized releases exist |
+| Universal DMG | ❌ not built yet (two slices shipped instead) |
+
+## Linux
+
+| Artifact | Notes |
+|---|---|
+| `Recast-x.y.z-x64.AppImage` | smoke-tested in CI (`--appimage-extract` + resource check) |
+| `.deb`, `.rpm`, `.tar.gz` | depends: libgtk-3, libnss3, libasound2 |
+| Flatpak | `packaging/flatpak/app.recast.desktop.json` (Flathub submission pending) |
+| Snap | `packaging/snapcraft.yaml` (strict, gnome extension) |
+| AUR | `packaging/aur/PKGBUILD` (hash filled from published SHA256SUMS) |
+
+## File association & protocol
+
+`.recast` (project) and `.recaststyle` (style preset) associations plus the `recast://` deep link (`app.setAsDefaultProtocolClient`, single-instance routed) are declared for all platforms.
 
 ## Scripts
 
-```json
-{
-  "scripts": {
-    "dist:win": "electron-builder --win --x64 --arm64",
-    "dist:mac": "electron-builder --mac --arm64 --x64",
-    "dist:mac:universal": "electron-builder --mac --universal",
-    "dist:linux": "electron-builder --linux AppImage deb rpm tar.gz",
-    "dist:all": "pnpm dist:win && pnpm dist:mac && pnpm dist:linux"
-  }
-}
+```bash
+pnpm dist:win        # NSIS + MSI + portable (x64)
+pnpm dist:win:arm64  # arm64 suffix
+pnpm dist:mac:arm64  # macos-14 runner
+pnpm dist:mac        # universal build via macos-13 + macos-14 jobs
+pnpm dist:linux      # AppImage + deb + rpm + tar.gz
 ```
 
-## electron-builder notes
+## CI
 
-- `asar: true`, with `asarUnpack: ["resources/ffmpeg/**", "**/*.node"]`.
-- `files` allowlist — never ship source maps, tests, docs, or dev dependencies.
-- `extraResources` carries FFmpeg and license texts.
-- `artifactName` pattern: `${productName}-${version}-${arch}.${ext}` for consistency across OSes.
-- `protocols` registers `recast://`.
-- `fileAssociations` registers `.recast` and `.recaststyle`.
-- `directories.buildResources` = `build/` (icons, entitlements, installer assets).
-- `publish` = GitHub releases; electron-updater reads `latest.yml`.
-- `compression: maximum` for NSIS; skip `differentialPackage` until the first releases exist.
-
-## Icons and assets
-
-| Asset | Spec |
-|---|---|
-| `build/icon.icns` | 1024×1024 source, macOS |
-| `build/icon.ico` | 256/128/64/48/32/16, Windows |
-| `build/icons/` | 16→512 PNGs, Linux |
-| `build/installerHeader.bmp` | 150×57, NSIS |
-| `build/installerSidebar.bmp` | 164×314, NSIS |
-| `build/trayTemplate.png` | 16×16 + @2x, macOS template image |
-
-## Versioning
-
-- SemVer. `0.y.z` until the first stable release.
-- Pre-releases: `1.2.0-beta.1` published to the `beta` update channel.
-- `CHANGELOG.md` generated from conventional commits, edited by hand before tagging.
-
-## Release process
-
-1. `pnpm verify` green on `main`.
-2. Bump version, update `CHANGELOG.md`.
-3. Tag `v1.2.0`, push.
-4. CI builds the full matrix, signs, notarizes, and creates a **draft** GitHub release.
-5. Smoke-test each artifact on real hardware using the checklist in `docs/code-signing.md`.
-6. Publish the release; electron-updater picks up `latest.yml` within minutes.
-7. Announce, then watch crash-free sessions for 48 hours.
-
-## Install QA checklist (release gate)
-
-- [ ] Windows 10 22H2, Windows 11 23H2, and an ARM64 device.
-- [ ] Windows at 100 / 125 / 150 / 200 % scaling on a mixed-DPI dual-monitor setup.
-- [ ] Per-user install completes without an admin prompt; uninstall leaves no files, registry keys, or shortcuts.
-- [ ] Portable build runs from a read-only folder and from a USB stick.
-- [ ] VirusTotal: zero detections on the signed installer.
-- [ ] macOS on a fresh user account: TCC prompts appear and the relaunch flow works.
-- [ ] macOS Gatekeeper accepts the notarized app; `spctl -a -vv` passes.
-- [ ] Linux: AppImage on Ubuntu 22.04, `.deb` on Debian 12, `.rpm` on Fedora 40.
-- [ ] Linux Wayland: portal picker appears; the UI explains missing cursor tracking.
-- [ ] Every artifact launches, records 10 seconds, and exports a playable file.
-
-## Size budget
-
-| Artifact | Budget |
-|---|---|
-| Windows installer | ≤ 150 MB |
-| macOS DMG | ≤ 170 MB |
-| Linux AppImage | ≤ 170 MB |
-| Flatpak | ≤ 200 MB |
-
-If a build exceeds budget, the PR must explain why and propose a reduction.
+`.github/workflows/build.yml`: five runner jobs (win x64, win arm64, mac arm64, mac x64, linux x64/arm64), FFmpeg caches keyed by the lockfile hash, AppImage smoke, then a release job that collects artifacts, writes `SHA256SUMS`, and publishes release notes on `v*` tags. Nightly on `main`.

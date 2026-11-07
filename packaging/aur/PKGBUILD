@@ -1,0 +1,20 @@
+# Maintainer: Recast contributors
+pkgname=recast-bin
+pkgver=0.1.0
+pkgrel=1
+pkgdesc='Free, open-source, local-first screen recorder and cinematic editor'
+arch=('x86_64')
+url='https://github.com/SudhirDevOps1/recast'
+license=('GPL-3.0-or-later')
+depends=('gtk3' 'nss' 'alsa-lib' 'libxss' 'libxtst')
+optdepends=('ffmpeg: system fallback for the media-engine safety net')
+provides=('recast')
+conflicts=('recast')
+source_x86_64=("recast-${pkgver}-x64.AppImage::https://github.com/SudhirDevOps1/recast/releases/download/v${pkgver}/Recast-${pkgver}-x64.AppImage")
+sha256sums_x86_64=('REPLACE_WITH_PUBLISHED_SHA256_FROM_SHA256SUMS')
+
+package() {
+  install -Dm755 "${srcdir}/recast-${pkgver}-x64.AppImage" "${pkgdir}/opt/recast/recast.AppImage"
+  install -d "${pkgdir}/usr/bin"
+  ln -s /opt/recast/recast.AppImage "${pkgdir}/usr/bin/recast"
+}

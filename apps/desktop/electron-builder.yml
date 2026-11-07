@@ -1,0 +1,107 @@
+# Recast packaging — every installer target from docs/packaging.md.
+# Binaries under resources/ffmpeg/<platform>-<arch>/ ship via extraResources
+# and are asar-unpacked so they stay executable. Never commit those binaries.
+appId: app.recast.desktop
+productName: Recast
+copyright: Copyright © 2025 Recast contributors
+directories:
+  output: release
+  buildResources: build
+files:
+  - out/**
+  - "!**/*.map"
+  - "!node_modules/**/test/**"
+asarUnpack:
+  - "node_modules/better-sqlite3/**"
+extraResources:
+  - from: resources/ffmpeg/${os}-${arch}
+    to: ffmpeg/${os}-${arch}
+    filter:
+      - "**/*"
+  - from: resources/ffmpeg/LICENSE.txt
+    to: ffmpeg/LICENSE.txt
+  - from: build/entitlements.mac.plist
+    to: entitlements.mac.plist
+protocols:
+  - name: Recast
+    schemes:
+      - recast
+publish:
+  provider: github
+  owner: SudhirDevOps1
+  repo: recast
+  releaseType: release
+
+# ---------------- Windows ----------------
+win:
+  artifactName: Recast-Setup-${version}${env.ARCH_SUFFIX}.${ext}
+  target:
+    - target: nsis
+      arch: [x64]
+    - target: msi
+      arch: [x64]
+    - target: portable
+      arch: [x64]
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  perUser: true
+  deleteAppDataOnUninstall: false
+  shortcutName: Recast
+  artifactName: Recast-Setup-${version}${env.ARCH_SUFFIX}.${ext}
+  uninstallDisplayName: Recast
+msi:
+  perMachine: true
+  artifactName: Recast-${version}-enterprise${env.ARCH_SUFFIX}.${ext}
+  oneClick: false
+portable:
+  artifactName: Recast-Portable-${version}${env.ARCH_SUFFIX}.${ext}
+  unicode: true
+
+# ---------------- macOS ----------------
+mac:
+  category: public.app-category.video
+  artifactName: Recast-${version}-${arch}.${ext}
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.plist
+  notarize: false
+  target:
+    - target: dmg
+      arch: [arm64, x64]
+    - target: pkg
+      arch: [arm64, x64]
+    - target: zip
+      arch: [arm64, x64]
+dmg:
+  artifactName: Recast-${version}-${arch}.${ext}
+  title: Recast ${version}
+  writeUpdateInfo: true
+pkg:
+  artifactName: Recast-${version}-${arch}.pkg
+
+# ---------------- Linux ----------------
+linux:
+  artifactName: Recast-${version}-${arch}.${ext}
+  category: Video
+  desktop:
+    Name: Recast
+    Comment: Record, auto-zoom, caption, export — locally.
+    StartupWMClass: Recast
+  target:
+    - AppImage
+    - deb
+    - rpm
+    - tar.gz
+appImage:
+  artifactName: Recast-${version}-${arch}.${ext}
+deb:
+  artifactName: Recast-${version}-${arch}.deb
+  depends:
+    - libgtk-3-0
+    - libnss3
+    - libasound2
+rpm:
+  artifactName: Recast-${version}-${arch}.rpm

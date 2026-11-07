@@ -1,155 +1,55 @@
 # Editing
 
-Status: specification. Implementation starts in Phase 2.
+## The compositor contract
 
-## Model
+`packages/editor/src/compositor.ts` exports two pure functions:
 
-The project is a plain JSON document (`.recast`) plus media references. Everything is expressed in **integer milliseconds** on one monotonic timeline. The renderer is a pure function of `(project, timeMs) → frame`, which is what makes preview and export identical.
+- `computeComposition(project, tUs, outW, outH, deps)` → a full draw plan (background, screen rect, visible source rect, cursor, annotations, redactions, captions).
+- `drawComposition(ctx, comp, project, deps)` → paints the plan onto any 2D canvas.
 
-```ts
-type Project = {
-  id: string;
-  version: number;
-  source: { width: number; height: number; duration: number };
-  canvas: { aspect: '16:9' | '9:16' | '1:1' | '4:5' | '21:9' | 'custom'; width: number; height: number };
-  tracks: {
-    video: VideoClip[];
-    cursor: CursorTrack;
-    zoom: ZoomKeyframe[];
-    annotations: Annotation[];
-    audio: AudioTrack[];
-    captions: CaptionCue[];
-  };
-  style: StyleRef;          // preset + overrides
-  background: Background;
-  frame: FrameStyle;
-  export: ExportSettings;
-};
+Preview and export both call exactly these. There is no second rendering path — that is the determinism guarantee.
+
+## Zoom math
+
 ```
+cursor track (60 Hz) + clicks
+  → interest points        speed ≥ 15% frame diagonal/s, clicks weight 2
+  → clusters               1.2 s window, 80 px radius @1080p (resolution-scaled),
+                           contiguous motion (≤ 50 ms gaps) chains into one region
+  → keyframes              zoom = intensity target, clamped so the cluster (+45% margin)
+                           always fits the frame; center clamped to the viewport;
+                           pre-roll 300 ms; near-duplicates within 400 ms dropped
+  → zoom track             fixed 16.667 ms grid, closed-form critically damped spring
+                           (ω from intensity: 1.0 / 1.2 / 1.5 Hz), state carried
+                           continuously across keyframe switches — no jumps
+  → pose at t              binary search + linear interpolation
+```
+
+Intensities: `subtle` 1.25× / `balanced` 1.6× / `punchy` 2.0×.
+
+**Follow mode** keeps the cursor inside an 18 % dead zone (of the zoomed viewport) and clamps pan speed to 2400 px/s; the camera never leaves the source bounds.
+
+**Manual keyframes** carry an anchor in source coordinates and an ease (`in`/`out`/`hold`); they integrate through the same spring.
+
+All of it is pure and unit-tested (`packages/editor/tests/zoom-math.test.ts`): settle-without-overshoot, determinism, viewport clamping, dead-zone hold, discontinuity bounds.
 
 ## Timeline
 
-- Tracks: video · cursor/zoom · annotations · audio · captions.
-- Horizontal zoom from 4 px/s to 400 px/s; virtualized rendering (only visible clips mount).
-- Snapping to playhead, clip edges, keyframes, and caption boundaries.
-- Ripple delete closes gaps on all tracks; plain delete leaves them.
-- Undo/redo is a command stack with coalescing for drags (one entry per gesture).
+- Clips map `sourceIn/OutUs ↔ timelineInUs` with per-clip `speed`; `buildTimeMap` lays them end to end.
+- `splitClipsAt` splits at the playhead; `rippleDeleteRange` removes a range and pulls the rest left, re-laying the timeline so the model stays consistent.
+- Keyboard: Space play/pause, J/K/L shuttle, S split, ←/→ frame step (Shift = 1 s), Home/End, ⌘Z/⇧⌘Z, Delete ripple-deletes 1 s around the playhead.
+- Autosave: every edit schedules an atomic `.recast` write 5 s later (and on demand from the palette).
 
-### Shortcuts
+## Cursor rendering
 
-| Key | Action |
-|---|---|
-| `Space` | Play / pause |
-| `J` / `K` / `L` | Reverse / pause / forward (repeat to speed up) |
-| `I` / `O` | Set in / out |
-| `←` / `→` | Step 1 frame |
-| `Shift + ←/→` | Step 1 second |
-| `S` | Split at playhead |
-| `Delete` | Delete selection |
-| `Shift + Delete` | Ripple delete |
-| `Z` | Toggle zoom tool |
-| `⌘/Ctrl + Z` | Undo |
-| `⌘/Ctrl + Shift + Z` | Redo |
-| `⌘/Ctrl + K` | Command palette |
-
-## Zoom engine
-
-### Automatic
-
-1. **Interest points** — clicks, scroll bursts, and dwell (cursor nearly stationary for > 600 ms).
-2. **Clustering** — merge points closer than 1.2 s and 80 px into one region.
-3. **Keyframes** — each region becomes `zoomTo(level, anchor, hold)` plus `zoomOut` when the cursor leaves.
-4. **Smoothing** — animate with a critically damped spring:
-
-```
-ω = 2π · frequency          // frequency ≈ 1.2 Hz for "balanced"
-ζ = 1                       // critically damped
-x(t) = target + (x₀ − target) · (1 + ωt) · e^(−ωt)
-```
-
-No linear ramps, no overshoot, no jitter. Intensity presets scale `frequency` and `level`:
-
-| Preset | Zoom | Frequency | Hold |
-|---|---|---|---|
-| Subtle | 1.25× | 1.0 Hz | 1.6 s |
-| Balanced | 1.6× | 1.2 Hz | 1.2 s |
-| Punchy | 2.0× | 1.5 Hz | 0.9 s |
-
-### Manual
-
-- Drag a keyframe to retime, drag its anchor to reframe, scroll to change level.
-- Each keyframe has `easeIn`, `easeOut`, `hold`, and an optional `follow` flag.
-- Anchor lives in **source** coordinates, so changing canvas aspect does not break it.
-
-### Follow cursor
-
-- Viewport follows the cursor only when it moves outside a dead zone (18 % of the viewport by default).
-- Pan speed is clamped so fast cursor moves don't cause motion sickness.
-- Disabled automatically during idle periods.
-
-### Determinism
-
-Export drives the same function with `t = frameIndex / fps`. No wall-clock values, no `Math.random()`, no CSS transitions in the export path. A golden-frame test compares preview and export with SSIM.
-
-## Cursor
-
-| Property | Range | Default |
-|---|---|---|
-| Style | native / rendered SVG | rendered |
-| Size | 50–200 % | 100 % |
-| Tint | none / accent / custom | none |
-| Outline | 0–4 px | 1.5 px |
-| Shadow | 0–100 % | 40 % |
-| Click ripple | off / subtle / strong | subtle |
-| Press scale | 1.0–1.3 | 1.12 |
-| Idle fade | 0–2 s | 0.6 s |
-| Path smoothing | 0–100 % | 60 % |
-
-Path smoothing is a Catmull-Rom interpolation over the 60 Hz samples with velocity-aware resampling, so slow moves stay precise and fast moves stop looking steppy.
-
-## Frame and background
-
-- **Padding** 0–15 % of the shorter edge.
-- **Corner radius** 0–40 px on the video, 0–60 px on the canvas.
-- **Border** 0–3 px, low-alpha white or accent.
-- **Shadow** layered ambient + key, never pure black.
-- **Backgrounds**: solid, curated gradients, mesh/aurora, blurred screen echo (scaled 1.4×, 40 px blur, 35 % dim), custom image/video, transparent.
-- **Safe area** guide for 9:16 and 1:1 exports so captions don't land under platform UI.
-
-## Audio
-
-- Waveform rendered from a precomputed peak file (min/max per 256 samples).
-- Per-track gain, fade in/out, mute/solo.
-- Noise gate with attack/release and a live gain-reduction meter.
-- Loudness normalization to −14 LUFS (podcast/social) with true-peak limiting at −1 dBFS.
-- Voice ducking: when speech energy exceeds a threshold, music drops by a configurable amount with a 250 ms release.
-
-## Redaction
-
-- Draw a region, choose blur or pixelate, set intensity.
-- Region can be static or **tracked** — keyframes follow a feature between two anchor points.
-- Redaction is applied before encoding, never as a preview-only overlay.
-
-## Captions
-
-- Local Whisper (see `docs/architecture.md`), word-level timestamps.
-- Editable text blocks with auto line-breaking at a max characters-per-line setting.
-- Five built-in styles: Clean, Bold, Pill, Broadcast, Minimal.
-- Burn-in, or export `.srt` / `.vtt` sidecars.
-- Language auto-detect; Hindi and English verified first.
+Styles: native (as captured), rendered pointer (SVG path, outline, shadow), dot, circle. Options: size, tint, outline width/color, press scale, click ripple (450 ms), idle fade (fade out after N ms without movement). The ripple and press state derive from the input log — the same events that drive auto-zoom.
 
 ## Presets
 
-A preset stores frame + background + cursor + zoom intensity + caption style + export defaults.
+- Six built-ins (`BUILTIN_PRESETS` in `packages/shared/src/style.ts`), schema-validated.
+- `.recaststyle` files are JSON with `format: "recaststyle"` and `version: 1`; import parses + validates and applies as **one undo step**.
+- Style covers: aspect ratio, padding, radius, border, shadow level, background (solid/gradient/mesh/blurred echo/transparent/image), cursor style, caption style.
 
-- Shipped: Studio Dark, Paper, Aurora, Terminal, Minimal Light, Social Vertical.
-- Saved as `.recaststyle` JSON, versioned, importable/exportable.
-- Preset cards show a live thumbnail rendered from the user's own project, not a static image.
-- Applying a preset is one undo step.
+## Captions
 
-## What "done" means for Phase 2
-
-- Auto-zoom on a real 3-minute recording looks intentional, not random, at all three intensities.
-- Preview and export match on a golden-frame SSIM check.
-- A preset can be created, exported, re-imported, and applied without visual drift.
-- The timeline holds 60fps with a 10-minute 1080p project.
+Imported/generated captions are stored as `.srt` next to the session media; the compositor renders them through the style (clean/bold/boxed/pill/karaoke) with auto line-breaking at 42 chars, two lines max.

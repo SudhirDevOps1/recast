@@ -1,76 +1,31 @@
 # Dependencies
 node_modules/
 .pnpm-store/
-.pnpm-debug.log*
 
-# Builds
-dist/
+# Build output
 out/
-build/
+dist/
 release/
-apps/desktop/dist/
-packages/*/dist/
+build/flag-icons/
 *.tsbuildinfo
 
-# Electron
-*.asar
-*.asar.unpacked/
-.electron/
-.electron-builder-cache/
-app-update.yml
-latest*.yml
-*.blockmap
+# Binaries — never commit (fetched by scripts/fetch-ffmpeg.mjs)
+resources/ffmpeg/*/
+resources/ffmpeg/*/manifest.json
+resources/whisper/
 
-# Generated binaries (downloaded at build time, verified by lockfile)
-resources/ffmpeg/
-resources/bin/
-vendor/ffmpeg/
-*.exe.tmp
+# Runtime artifacts
+*.log
+*.part
 
-# Media — never commit recordings or renders
-*.recast
-*.recaststyle
-*.mp4
-*.mov
-*.webm
-*.mkv
-*.gif
-*.srt
-*.vtt
-*.wav
-*.m4a
-!docs/**/*.mp4
-!docs/**/*.gif
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
 
-# Test artifacts
-coverage/
-test-results/
-playwright-report/
-golden-frames/
-tmp/
-.tmp/
-
-# Env and secrets
+# Local env — secrets never enter git
 .env
 .env.*
 !.env.example
-*.pem
-*.p12
-*.pfx
-*.cer
-*.mobileprovision
-*.provisionprofile
-credentials.json
-
-# Editors / OS
-.vscode/*
-!.vscode/extensions.json
-!.vscode/settings.example.json
-.idea/
-.DS_Store
-Thumbs.db
-desktop.ini
-
-# Logs
-*.log
-logs/

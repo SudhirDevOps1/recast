@@ -1,0 +1,111 @@
+/*
+ * Recast design tokens — dark-first with a true light mode.
+ * 4 pt spacing, one accent, hairline borders at low alpha, real type scale.
+ * Motion: 120/180/240/320 ms; springs are used for physical elements.
+ */
+
+:root {
+  color-scheme: dark;
+
+  /* Surfaces */
+  --bg: #0e1015;
+  --bg-sunken: #0a0c10;
+  --surface: #161a22;
+  --surface-raised: #1c212b;
+  --surface-hover: #232936;
+  --hairline: rgba(255, 255, 255, 0.08);
+  --hairline-strong: rgba(255, 255, 255, 0.14);
+
+  /* Text */
+  --text-primary: #e8ebf2;
+  --text-secondary: #9aa3b2;
+  --text-muted: #6b7382;
+
+  /* Accent — one hue, no rainbow gradients */
+  --accent: #7c8cf8;
+  --accent-hover: #8e9bfa;
+  --accent-press: #6a79e8;
+  --accent-subtle: rgba(124, 140, 248, 0.14);
+  --accent-contrast: #0b0e12;
+
+  /* Functional (used sparingly, never decoratively) */
+  --success: #4ade80;
+  --warning: #fbbf24;
+  --danger: #f87171;
+  --recording: #ef4444;
+
+  /* Spacing — 4 pt scale */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --space-8: 64px;
+
+  /* Radius */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+
+  /* Type scale */
+  --font-sans: -apple-system, 'Segoe UI Variable Text', 'Segoe UI', 'Inter', system-ui, sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', 'Cascadia Code', 'JetBrains Mono', Menlo, monospace;
+  --text-xs: 11px;
+  --text-sm: 12px;
+  --text-md: 13px;
+  --text-lg: 15px;
+  --text-xl: 17px;
+  --text-2xl: 20px;
+  --text-3xl: 24px;
+  --text-4xl: 32px;
+
+  /* Elevation */
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.25);
+  --shadow-2: 0 4px 16px rgba(0, 0, 0, 0.35);
+  --shadow-3: 0 12px 40px rgba(0, 0, 0, 0.45);
+
+  /* Motion */
+  --dur-fast: 120ms;
+  --dur-base: 180ms;
+  --dur-slow: 240ms;
+  --dur-slower: 320ms;
+  --ease-out: cubic-bezier(0.2, 0, 0, 1);
+  --ease-in-out: cubic-bezier(0.45, 0, 0.55, 1);
+
+  /* Title bar */
+  --titlebar-height: 44px;
+}
+
+:root[data-theme='light'] {
+  color-scheme: light;
+  --bg: #f7f8fa;
+  --bg-sunken: #eef0f4;
+  --surface: #ffffff;
+  --surface-raised: #ffffff;
+  --surface-hover: #f0f2f7;
+  --hairline: rgba(16, 20, 24, 0.08);
+  --hairline-strong: rgba(16, 20, 24, 0.16);
+  --text-primary: #171a20;
+  --text-secondary: #55606e;
+  --text-muted: #8b94a3;
+  --accent: #5a6cf0;
+  --accent-hover: #6b7cf5;
+  --accent-press: #4a5be0;
+  --accent-subtle: rgba(90, 108, 240, 0.12);
+  --accent-contrast: #ffffff;
+  --shadow-1: 0 1px 2px rgba(20, 24, 34, 0.08);
+  --shadow-2: 0 4px 16px rgba(20, 24, 34, 0.1);
+  --shadow-3: 0 12px 40px rgba(20, 24, 34, 0.14);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --dur-fast: 0ms;
+    --dur-base: 0ms;
+    --dur-slow: 0ms;
+    --dur-slower: 0ms;
+  }
+}

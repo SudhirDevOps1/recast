@@ -1,0 +1,45 @@
+{
+  "name": "recast",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Recast \u2014 free, open-source, local-first screen recorder and cinematic editor for macOS, Windows and Linux.",
+  "license": "GPL-3.0-or-later",
+  "author": "Recast contributors",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/SudhirDevOps1/recast"
+  },
+  "type": "module",
+  "packageManager": "pnpm@9.15.9",
+  "engines": {
+    "node": ">=20.11"
+  },
+  "scripts": {
+    "dev": "pnpm --filter @recast/desktop dev",
+    "build": "pnpm -r build",
+    "typecheck": "pnpm -r typecheck",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "verify": "pnpm typecheck && pnpm lint && pnpm test && pnpm build",
+    "smoke": "pnpm --filter @recast/desktop smoke",
+    "fetch:ffmpeg": "node scripts/fetch-ffmpeg.mjs",
+    "icons": "node scripts/make-icons.mjs",
+    "dist:win": "pnpm --filter @recast/desktop dist:win",
+    "dist:mac": "pnpm --filter @recast/desktop dist:mac",
+    "dist:linux": "pnpm --filter @recast/desktop dist:linux",
+    "dist:all": "pnpm dist:win && pnpm dist:mac && pnpm dist:linux"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "eslint": "^9.17.0",
+    "eslint-plugin-react-hooks": "^5.1.0",
+    "prettier": "^3.4.2",
+    "typescript": "^5.7.2",
+    "typescript-eslint": "^8.18.2",
+    "vitest": "^2.1.8",
+    "@eslint/js": "^9.17.0"
+  }
+}

@@ -1,0 +1,604 @@
+import { ipcMain, dialog, shell, BrowserWindow, screen, app, desktopCapturer } from 'electron';
+import { promises as fs } from 'node:fs';
+import { join } from 'node:path';
+import {
+  type IpcChannel,
+  type ListSourcesResponse,
+  type FfmpegStatus,
+  type RecorderState,
+  type PlatformInfo,
+  type SessionManifest,
+} from '@recast/shared';
+import { parseSrt, parseVtt, toSrt, toVtt } from '@recast/editor';
+import { context, settingsStore } from './context';
+import { saveSettings } from './store';
+import { buildProjectFromSession, loadProject, saveProject, readCursorJsonl, suggestExportName } from './projects';
+import { permissionStatus, openPermissionSettings, requestAccess } from './permissions';
+import { ffmpegState, installFfmpeg, broadcastFfmpegProgress } from './ffmpeg-service';
+import { whisperStatus, downloadWhisperModel, transcribe } from './whisper';
+import { checkForUpdates, downloadUpdate, installUpdate } from './updater';
+import {
+  beginChunkedExport,
+  writeExportChunkAt,
+  finalizeExport,
+  discardExport,
+  makeTempFrameDir,
+  writeFrameImage,
+  cleanupFrameDir,
+  runFfmpegGif,
+  runFfmpegProres,
+  runLoudnorm,
+  probeFile,
+  readUserFile,
+} from './export-service';
+import { exportsDir, dataDirHint, isPortable, recordingsDir, projectsDir } from './paths';
+import { mediaUrlFor } from './protocol';
+
+/**
+ * IPC registry. Every channel is declared in @recast/shared/ipc.ts and is
+ * zod-validated on BOTH ends: request here, response in the preload bridge.
+ * No raw `ipcMain.on` strings outside this file.
+ */
+
+type Handler = (payload: unknown, event: Electron.IpcMainInvokeEvent) => Promise<unknown> | unknown;
+
+const handlers = new Map<string, Handler>();
+
+let areaResolver: ((r: { x: number; y: number; w: number; h: number } | null) => void) | null = null;
+
+function register(channel: IpcChannel, handler: Handler): void {
+  handlers.set(channel, handler);
+}
+
+function broadcastEvent(channel: string, payload: unknown): void {
+  for (const w of BrowserWindow.getAllWindows()) {
+    w.webContents.send(channel, payload);
+  }
+}
+
+export async function registerIpcHandlers(): Promise<void> {
+  const c = context();
+
+  // ---------------- app / settings ----------------
+  register('app:getPlatformInfo', (): PlatformInfo => {
+    const sessionType =
+      process.platform === 'win32' ? 'windows' : process.platform === 'darwin' ? 'macos'
+      : process.env.WAYLAND_DISPLAY || process.env.XDG_SESSION_TYPE === 'wayland' ? 'wayland' : 'x11';
+    const wayland = sessionType === 'wayland';
+    const macVer = process.platform === 'darwin' ? Number(process.getSystemVersion().split('.')[0] ?? 0) : 0;
+    return {
+      platform: process.platform as PlatformInfo['platform'],
+      arch: process.arch,
+      osVersion: process.getSystemVersion(),
+      sessionType,
+      dataDir: dataDirHint(),
+      isPortable: isPortable(),
+      versions: {
+        app: app.getVersion(),
+        electron: process.versions.electron ?? '',
+        chrome: process.versions.chrome ?? '',
+        node: process.versions.node ?? '',
+      },
+      capabilities: {
+        systemAudio: process.platform === 'win32' || (process.platform === 'darwin' && macVer >= 14.2),
+        systemAudioNote:
+          process.platform === 'win32'
+            ? 'WASAPI loopback — no virtual cable needed.'
+            : process.platform === 'darwin'
+              ? macVer >= 14.2
+                ? 'macOS 14.2+ loopback is active.'
+                : 'System audio needs macOS 14.2 or newer. Update macOS to enable it.'
+              : 'System audio capture is not available on this platform yet — mic-only fallback is used.',
+        cursorTracking: !wayland,
+        globalHotkeys: !wayland,
+        areaSelection: !wayland,
+        windowCapture: true,
+      },
+    };
+  });
+
+  register('app:getSettings', () => c.settings);
+  register('app:setSettings', (payload) => {
+    const patch = payload as Partial<typeof c.settings>;
+    c.settings = { ...c.settings, ...patch };
+    saveSettings(c.settings);
+    if (patch.launchAtLogin !== undefined) {
+      app.setLoginItemSettings({ openAtLogin: patch.launchAtLogin });
+    }
+    return c.settings;
+  });
+
+  register('app:revealInFolder', async (payload) => {
+    const { path } = payload as { path: string };
+    await shell.showItemInFolder(path);
+  });
+
+  register('app:openUrl', async (payload) => {
+    const { url } = payload as { url: string };
+    // Only https URLs to our own repo/docs are allowed through the shell.
+    if (/^https:\/\/(github\.com\/SudhirDevOps1\/recast(\/.*)?|recast\.dev(\/.*)?)$/.test(url)) {
+      await shell.openExternal(url);
+    }
+  });
+
+  // ---------------- permissions ----------------
+  register('permissions:get', () => permissionStatus());
+  register('permissions:request', async (payload) => {
+    const { kind } = payload as { kind: 'microphone' | 'camera' };
+    await requestAccess(kind);
+    return permissionStatus();
+  });
+  register('permissions:openSystemSettings', async (payload) => {
+    const { kind } = payload as { kind: 'screen' | 'microphone' | 'camera' };
+    await openPermissionSettings(kind);
+  });
+
+  // ---------------- sources ----------------
+  register('sources:list', async (): Promise<ListSourcesResponse> => {
+    const sources = await desktopCapturer.getSources({
+      types: ['screen', 'window'],
+      thumbnailSize: { width: 320, height: 180 },
+      fetchWindowIcons: true,
+    });
+    const displays = screen.getAllDisplays();
+    const primary = screen.getPrimaryDisplay();
+    const screens = displays.map((d, i) => {
+      const match = sources.find((s) => s.display_id === String(d.id));
+      return {
+        id: match?.id ?? `screen:${d.id}`,
+        displayId: d.id,
+        name: `Display ${i + 1} (${d.size.width}×${d.size.height})`,
+        width: d.size.width,
+        height: d.size.height,
+        scaleFactor: d.scaleFactor,
+        isPrimary: d.id === primary.id,
+      };
+    });
+    const windows = sources
+      .filter((s) => s.id.startsWith('window:'))
+      .map((s) => ({
+        id: s.id,
+        name: s.name || 'Untitled window',
+        app: 'Window',
+        width: s.thumbnail.getSize().width,
+        height: s.thumbnail.getSize().height,
+      }));
+    const mics = await listAudioDevices('audioinput');
+    const cameras = await listAudioDevices('videoinput');
+    return { screens, windows, mics, cameras };
+  });
+
+  register('area:pick', async (payload) => {
+    const { displayId } = payload as { displayId: number };
+    const display = screen.getAllDisplays().find((d) => d.id === displayId) ?? screen.getPrimaryDisplay();
+    const { createAreaWindow } = await import('./windows');
+    const win = createAreaWindow({ id: display.id, bounds: { x: display.workArea.x, y: display.workArea.y, width: display.workArea.width, height: display.workArea.height } });
+    win.show();
+    const rect = await new Promise<{ x: number; y: number; w: number; h: number } | null>((resolve) => {
+      const timeout = setTimeout(() => {
+        areaResolver = null;
+        resolve(null);
+      }, 120_000);
+      void timeout;
+      areaResolver = resolve;
+    });
+    win.close();
+    return { rect };
+  });
+
+  register('area:selected', (payload) => {
+    const { rect } = payload as { rect: { x: number; y: number; w: number; h: number } | null };
+    areaResolver?.(rect);
+    areaResolver = null;
+  });
+
+  // ---------------- recorder ----------------
+  register('recorder:start', async (payload) => {
+    const req = payload as import('@recast/shared').RecorderStartRequest;
+    const sessionId = c.sessions.newSessionId();
+    const startEpochMs = Date.now();
+    c.sessionStartEpochMs = startEpochMs;
+    c.recorderRequest = req;
+    return { sessionId, startEpochMs };
+  });
+
+  register('recorder:pause', () => {
+    // Pauses the cursor sampler; the renderer pauses its own encoder handle.
+    c.inputSampler?.pause();
+  });
+  register('recorder:resume', () => {
+    c.inputSampler?.resume();
+  });
+  register('recorder:stop', async () => {
+    // The renderer stopped its capture handle first; this finalizes on disk:
+    // mark completed, build the project with auto-zoom, register in library.
+    const sessionId = c.activeSessionId;
+    if (!sessionId) return { projectId: null };
+    const manifest = c.sessions.closeSession(sessionId, 'completed');
+    c.inputSampler?.stop();
+    c.inputSampler = null;
+    const { renderStoppedMenu } = await import('./tray');
+    renderStoppedMenu();
+    if (!manifest) return { projectId: null };
+    const project = buildProjectFromSession({ sessionId, manifest });
+    saveProject(project);
+    upsertProjectMeta(project);
+    c.activeSessionId = null;
+    return { projectId: project.id };
+  });
+  register('recorder:getState', (): RecorderState => {
+    const stats = (c.recorderHandle?.stats() as { phase: string; elapsedUs: number; bytes: number; droppedFrames: number; totalFrames: number } | undefined) ?? undefined;
+    return {
+      phase: (stats?.phase as RecorderState['phase']) ?? (c.recorderHandle ? 'recording' : 'idle'),
+      sessionId: c.activeSessionId,
+      elapsedUs: stats?.elapsedUs ?? 0,
+      bytes: stats?.bytes ?? 0,
+      droppedFrames: stats?.droppedFrames ?? 0,
+      totalFrames: stats?.totalFrames ?? 0,
+      micMeterDb: c.lastMicMeterDb ?? null,
+      diskFreeMb: c.lastDiskFreeMb ?? 0,
+    };
+  });
+
+  // ---------------- library / projects ----------------
+  register('library:list', () => c.library.listProjects());
+  register('library:open', (payload) => {
+    const { id } = payload as { id: string };
+    return loadProject(id);
+  });
+  register('library:delete', async (payload) => {
+    const { id } = payload as { id: string };
+    c.library.deleteProject(id);
+    await fs.rm(join(projectsDir(), `${id}.recast`), { force: true }).catch(() => undefined);
+  });
+  register('library:createSample', async () => {
+    // The guided onboarding records a 10-second clip; when the user skips it,
+    // we do not fabricate a fake project — the Library shows a real empty state.
+    c.mainWindow?.webContents.send('recorder:hotkey', { action: 'toggle-record' });
+    c.mainWindow?.show();
+    return { projectId: null };
+  });
+  register('library:importMedia', async (payload) => {
+    const { path } = payload as { path: string };
+    const probe = await probeFile(path);
+    if (!probe) {
+      return { projectId: null, error: 'Could not read this file. FFmpeg is required to import existing media — install it in Settings → Media engine.' };
+    }
+    return { projectId: null, error: 'Importing existing media files lands with the next phase (see STATUS.md).' };
+  });
+  register('projects:save', (payload) => {
+    const { project } = payload as { project: import('@recast/shared').RecastProject };
+    saveProject(project);
+    upsertProjectMeta(project);
+  });
+  register('projects:generateThumbnails', async (payload) => {
+    const { projectId } = payload as { projectId: string };
+    const project = loadProject(projectId);
+    if (!project || project.media.segments.length === 0) return { thumbnails: [] };
+    const { runner } = await ffmpegState();
+    const out: Array<{ segmentId: string; dataUrl: string }> = [];
+    const first = project.media.segments[0]!;
+    const source = join(project.media.dir, first.file);
+    if (runner) {
+      try {
+        const tmp = join(project.media.dir, `thumb-${projectId}.png`);
+        await runner.thumbnail(source, 1.0, tmp, 320);
+        const buf = await fs.readFile(tmp);
+        out.push({ segmentId: first.id, dataUrl: `data:image/png;base64,${buf.toString('base64')}` });
+        await fs.rm(tmp, { force: true }).catch(() => undefined);
+      } catch {
+        /* thumbnails are best-effort */
+      }
+    } else {
+      out.push({ segmentId: first.id, dataUrl: mediaUrlFor(source) });
+    }
+    return { thumbnails: out };
+  });
+  register('projects:waveform', async (payload) => {
+    const { audioFile } = payload as { audioFile: string };
+    const { runner } = await ffmpegState();
+    if (!runner) return { peaks: [], durationUs: 0 };
+    const peaks = await runner.peaks(audioFile, 1200);
+    const probe = await runner.probe(audioFile);
+    return { peaks, durationUs: probe?.durationUs ?? 0 };
+  });
+
+  // ---------------- styles ----------------
+  register('styles:import', async () => {
+    const { canceled, filePaths } = await dialog.showOpenDialog({
+      filters: [{ name: 'Recast style preset', extensions: ['recaststyle'] }],
+      properties: ['openFile'],
+    });
+    if (canceled || filePaths.length === 0) return { preset: null };
+    try {
+      const raw = await fs.readFile(filePaths[0]!, 'utf8');
+      const parsed = await import('@recast/editor').then((m) => m.parseStyle(raw));
+      return { preset: parsed.preset, error: parsed.error };
+    } catch (e) {
+      return { preset: null, error: (e as Error).message };
+    }
+  });
+  register('styles:export', async (payload) => {
+    const { preset, targetPath } = payload as { preset: import('@recast/shared').StylePreset; targetPath?: string };
+    const fileName = `${preset.id || preset.name.toLowerCase().replace(/\s+/g, '-')}.recaststyle`;
+    const { canceled, filePath } = await dialog.showSaveDialog({
+      defaultPath: targetPath ?? join(exportsDir(), fileName),
+      filters: [{ name: 'Recast style preset', extensions: ['recaststyle'] }],
+    });
+    if (canceled || !filePath) return { path: null };
+    await fs.writeFile(filePath, JSON.stringify(preset, null, 2), 'utf8');
+    return { path: filePath };
+  });
+
+  // ---------------- export ----------------
+  register('export:estimate', async (payload) => {
+    const { projectId, format, resolution, fps } = payload as { projectId: string; format: string; resolution: string; fps: number };
+    const project = loadProject(projectId);
+    if (!project) throw new Error('Project not found');
+    const shortEdge = resolution === 'source' ? Math.min(project.media.height || 1080, 2160) : Number.parseInt(resolution, 10);
+    const bitrateMbps = { 720: 6, 1080: 12, 1440: 20, 2160: 40 }[shortEdge] ?? 12;
+    const factor = format === 'gif' ? 0.35 : format === 'webm' ? 0.75 : format === 'prores' ? 4 : 1;
+    const seconds = project.timeline.durationUs / 1_000_000;
+    return {
+      durationUs: project.timeline.durationUs,
+      estimatedBytes: Math.round((bitrateMbps * 1_000_000 * factor * seconds) / 8),
+      estimatedSeconds: Math.round(seconds * (format === 'prores' ? 3 : format === 'gif' ? 2 : 0.8) * (fps / 30)),
+    };
+  });
+  register('export:run', async (payload, event) => {
+    const { destination, exportId } = payload as { destination: string; exportId: string };
+    beginChunkedExport(exportId, destination);
+    void event;
+    c.activeExportIds.add(exportId);
+    return { exportId };
+  });
+  register('export:writeChunkAt', async (payload) => {
+    const { exportId, position, data } = payload as { exportId: string; position: number; data: ArrayBuffer | Uint8Array };
+    await writeExportChunkAt(exportId, position, new Uint8Array(data instanceof ArrayBuffer ? new Uint8Array(data) : data));
+  });
+  register('export:finalize', async (payload) => {
+    const { exportId } = payload as { exportId: string };
+    await finalizeExport(exportId);
+    c.activeExportIds.delete(exportId);
+  });
+  register('export:discard', async (payload) => {
+    const { exportId } = payload as { exportId: string };
+    c.activeExportIds.delete(exportId);
+    await discardExport(exportId);
+  });
+  register('export:readFile', async (payload) => {
+    const { path } = payload as { path: string };
+    // Only files inside the recordings tree may be read into the renderer.
+    if (!path.startsWith(recordingsDir())) throw new Error('Path outside recordings is not readable.');
+    return readUserFile(path);
+  });
+  register('export:tempFrameDir', async () => makeTempFrameDir());
+  register('export:writeFrameImage', async (payload) => {
+    const { dir, index, png } = payload as { dir: string; index: number; png: ArrayBuffer };
+    await writeFrameImage(dir, index, new Uint8Array(png));
+  });
+  register('export:cleanupDir', async (payload) => {
+    const { dir } = payload as { dir: string };
+    await cleanupFrameDir(dir);
+  });
+  register('export:ffmpegGif', async (payload) => {
+    const { frameDir, fps, width, outFile } = payload as { frameDir: string; fps: number; width: number; outFile: string };
+    return runFfmpegGif(frameDir, fps, width, outFile);
+  });
+  register('export:ffmpegProres', async (payload) => {
+    const { frameDir, fps, outFile } = payload as { frameDir: string; fps: number; outFile: string };
+    return runFfmpegProres(frameDir, fps, outFile);
+  });
+  register('export:ffmpegLoudnorm', async (payload) => {
+    const { file, targetLufs } = payload as { file: string; targetLufs: number };
+    return runLoudnorm(file, targetLufs);
+  });
+  register('export:probeDuration', async (payload) => {
+    const { file } = payload as { file: string };
+    const probe = await probeFile(file);
+    return probe?.durationUs ?? null;
+  });
+  register('export:cancel', async (payload) => {
+    const { exportId } = payload as { exportId: string };
+    c.activeExportIds.delete(exportId);
+    await discardExport(exportId);
+  });
+  register('export:suggestFilename', async (payload) => {
+    const { projectId, format } = payload as { projectId: string; format: 'mp4' | 'webm' | 'hevc' | 'prores' | 'gif' };
+    const project = loadProject(projectId);
+    if (!project) throw new Error('Project not found');
+    const dir = settingsStore().exportDir || exportsDir();
+    let existing: string[] = [];
+    try {
+      existing = await fs.readdir(dir);
+    } catch {
+      existing = [];
+    }
+    const name = suggestExportName(project, format, existing);
+    return { name, dir, exists: existing.includes(name) };
+  });
+  register('export:pickDestination', async (payload) => {
+    const { defaultName } = payload as { defaultName: string };
+    const { canceled, filePath } = await dialog.showSaveDialog({
+      defaultPath: join(settingsStore().exportDir || exportsDir(), defaultName),
+    });
+    return { path: canceled || !filePath ? null : filePath };
+  });
+
+  // ---------------- captions ----------------
+  register('captions:models', async () => {
+    const status = await whisperStatus();
+    return status.models;
+  });
+  register('captions:downloadModel', async (payload) => {
+    const { id } = payload as { id: string };
+    void downloadWhisperModel(id, (pct) => broadcastEvent('whisper:download', { modelId: id, pct, done: pct >= 100 }))
+      .then((r) => broadcastEvent('whisper:download', { modelId: id, pct: 100, done: true, error: r.error }));
+  });
+  register('captions:transcribe', async (payload) => {
+    const { projectId, modelId, language } = payload as { projectId: string; modelId: string; language: string };
+    const project = loadProject(projectId);
+    if (!project || !project.media.audio) return { ok: false, error: 'This project has no audio track.' };
+    const { runner } = await ffmpegState();
+    const whisper = await whisperStatus();
+    if (!runner) return { ok: false, error: 'FFmpeg is required for audio extraction — install it in Settings → Media engine.' };
+    if (!whisper.whisperBin) {
+      return { ok: false, error: 'No whisper.cpp binary found. Install it (`brew install whisper-cpp` / `scoop install whisper-cpp`) or see docs/captions — captions degrade honestly, never silently.' };
+    }
+    const modelDef = whisper.models.find((m) => m.id === modelId);
+    if (!modelDef) return { ok: false, error: 'Model not downloaded yet.' };
+    const modelFile = join((await import('./paths')).modelsDir(), `${modelId}.bin`);
+    const audioPath = join(project.media.dir, project.media.audio.file);
+    const result = await transcribe(
+      {
+        audioFile: audioPath,
+        modelFile,
+        language,
+        onProgress: (stage, pct) => broadcastEvent('whisper:progress', { projectId, stage: stage as 'extracting', pct }),
+      },
+      whisper.whisperBin,
+      runner,
+    );
+    if (!result.ok || !result.srt) return { ok: false, error: result.error };
+    const cues = parseSrt(result.srt);
+    const srtPath = `${audioPath}.srt`;
+    await fs.writeFile(srtPath, toSrt(cues), 'utf8');
+    project.captions = { file: srtPath, language: language === 'auto' ? 'auto' : language, source: 'whisper' };
+    saveProject(project);
+    upsertProjectMeta(project);
+    return { ok: true };
+  });
+  register('captions:import', async (payload) => {
+    const { projectId } = payload as { projectId: string };
+    const project = loadProject(projectId);
+    if (!project) return { ok: false, error: 'Project not found' };
+    const { canceled, filePaths } = await dialog.showOpenDialog({
+      filters: [{ name: 'Subtitles', extensions: ['srt', 'vtt'] }],
+      properties: ['openFile'],
+    });
+    if (canceled || filePaths.length === 0) return { ok: false };
+    const raw = await fs.readFile(filePaths[0]!, 'utf8');
+    const cues = filePaths[0]!.endsWith('.vtt') ? parseVtt(raw) : parseSrt(raw);
+    const srtPath = `${project.media.dir}/imported.srt`;
+    await fs.writeFile(srtPath, toSrt(cues), 'utf8');
+    project.captions = { file: srtPath, language: 'import', source: 'import' };
+    saveProject(project);
+    return { ok: true };
+  });
+  register('captions:exportFile', async (payload) => {
+    const { projectId, kind } = payload as { projectId: string; kind: 'srt' | 'vtt' };
+    const project = loadProject(projectId);
+    if (!project?.captions) return { path: null };
+    const raw = await fs.readFile(project.captions.file, 'utf8');
+    const cues = parseSrt(raw);
+    const { canceled, filePath } = await dialog.showSaveDialog({
+      defaultPath: join(exportsDir(), `${project.name}.${kind}`),
+    });
+    if (canceled || !filePath) return { path: null };
+    await fs.writeFile(filePath, kind === 'vtt' ? toVtt(cues) : toSrt(cues), 'utf8');
+    return { path: filePath };
+  });
+
+  // ---------------- ffmpeg ----------------
+  register('ffmpeg:status', async (): Promise<FfmpegStatus> => {
+    const { status } = await ffmpegState();
+    return status;
+  });
+  register('ffmpeg:install', async () => {
+    void installFfmpeg((pct) => broadcastFfmpegProgress(pct, pct >= 100))
+      .then((r) => broadcastFfmpegProgress(100, true, r.ok ? undefined : r.error));
+    return { started: true };
+  });
+
+  // ---------------- updater ----------------
+  register('updater:check', async () => {
+    if (!settingsStore().autoCheckUpdates) {
+      return { available: false, version: null };
+    }
+    return checkForUpdates();
+  });
+  register('updater:download', () => downloadUpdate());
+  register('updater:install', () => installUpdate());
+
+  // ---------------- internal (capture host → disk) ----------------
+  register('capture:createSession', (payload) => {
+    const { sessionId, manifest } = payload as { sessionId: string; manifest: SessionManifest };
+    c.activeSessionId = sessionId;
+    c.sessions.createSession(manifest);
+    c.library.registerSession(sessionId, 'active');
+  });
+  register('capture:writeSegment', (payload) => {
+    const { sessionId, file, data } = payload as { sessionId: string; file: string; data: ArrayBuffer };
+    c.sessions.writeSegment(sessionId, file, new Uint8Array(data));
+  });
+  register('capture:appendInput', (payload) => {
+    const { sessionId, events } = payload as { sessionId: string; events: Array<import('@recast/shared').InputEvent> };
+    c.sessions.appendInput(sessionId, events);
+  });
+  register('capture:writeManifest', (payload) => {
+    const { sessionId, manifest } = payload as { sessionId: string; manifest: SessionManifest };
+    c.sessions.updateManifest(sessionId, manifest);
+  });
+  register('capture:diskFreeMb', async () => {
+    const { checkDiskSpace } = await import('./disk');
+    return checkDiskSpace();
+  });
+  register('capture:attachAudio', (payload) => {
+    const { sessionId, file, data } = payload as { sessionId: string; file: string; data: ArrayBuffer };
+    c.sessions.attachAudio(sessionId, 'audio', file, new Uint8Array(data));
+  });
+
+  register('capture:readCursor', (payload) => {
+    const { sessionId } = payload as { sessionId: string };
+    // Project ids are `prj-<sessionId>`; media.dir is the authoritative path.
+    const project = loadProject(`prj-${sessionId}`);
+    if (!project) return { samples: [], clicks: [] };
+    return readCursorJsonl(project.media.dir, project.media.cursor?.file ?? 'cursor.jsonl');
+  });
+  register('capture:readCaptions', async (payload) => {
+    const { path } = payload as { path: string };
+    if (!/\.(srt|vtt|jsonl)$/i.test(path)) return null;
+    try {
+      return await fs.readFile(path, 'utf8');
+    } catch {
+      return null;
+    }
+  });
+
+  // ---------------- attach everything to ipcMain ----------------
+  for (const [channel, handler] of handlers) {
+    ipcMain.handle(channel, async (event, payload) => {
+      try {
+        return await handler(payload, event);
+      } catch (e) {
+        // Errors cross the bridge as plain strings; the renderer surfaces them.
+        return { __error: (e as Error).message };
+      }
+    });
+  }
+}
+
+async function listAudioDevices(kind: 'audioinput' | 'videoinput'): Promise<Array<{ id: string; label: string; default: boolean }>> {
+  // Device enumeration happens in the renderer (getUserMedia permissions);
+  // here we return the current session labels when available.
+  void kind;
+  return [];
+}
+
+function upsertProjectMeta(project: import('@recast/shared').RecastProject): void {
+  const c = context();
+  c.library.upsertProject({
+    id: project.id,
+    name: project.name,
+    createdAt: project.createdAt,
+    updatedAt: project.updatedAt,
+    durationUs: project.timeline.durationUs,
+    width: project.media.width,
+    height: project.media.height,
+    hasCaptions: Boolean(project.captions),
+    thumbnailFile: null,
+  });
+}
+
+export { broadcastEvent };
+void readCursorJsonl;

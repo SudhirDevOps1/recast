@@ -1,133 +1,43 @@
-# FFmpeg
+# FFmpeg — the safety net and utility layer
 
-Status: specification. Implementation starts in Phase 1.
+Recast's core record → edit → export path runs on WebCodecs and never shells out. FFmpeg is used for:
 
-Recast ships FFmpeg. Not as the primary engine — as the **safety net and utility layer**.
+- probing (`ffprobe`) and post-export verification
+- crash-recovery remux (`-f concat -c copy`)
+- thumbnails / filmstrips
+- Whisper audio extraction (16 kHz mono WAV)
+- GIF encode (`palettegen` → `paletteuse`, bayer dither)
+- ProRes encode (`prores_ks`, frame pipe)
+- two-pass `loudnorm` (−14 LUFS)
 
-## Why it exists
+## Resolution order (launch time)
 
-| Job | Why FFmpeg |
-|---|---|
-| Probe media | `ffprobe` is the only reliable way to read real container/stream metadata |
-| Recover a crashed recording | Remux fragmented segments with `-c copy` — no quality loss, no re-encode |
-| Thumbnails and filmstrip | Fast keyframe extraction for the library and timeline |
-| Proxy generation | 4K → 720p proxy once, so scrubbing stays at 60 fps |
-| Audio extraction | 16 kHz mono WAV for Whisper |
-| GIF export | Palette optimization that no browser API does well |
-| Software fallback | `libx264` when hardware encode is unavailable |
-| Loudness | `loudnorm` two-pass for −14 LUFS normalization |
+1. `RECAST_FFMPEG` / `RECAST_FFPROBE` env overrides
+2. bundled `resources/ffmpeg/<platform>-<arch>/`
+3. `<userData>/bin/ffmpeg/` (in-app download)
+4. system `PATH`
 
-The default record → edit → export path uses **WebCodecs** and never shells out. FFmpeg is invoked only when it is the correct tool, or when something else failed.
+Validation: `ffmpeg -version` with a **2 s timeout** at launch. A missing or broken binary never crashes the app — the status surfaces in Settings → Media engine, affected features show a precise message and a **Repair** button.
 
-## What is bundled
+## Bundling
 
-Per platform and architecture:
+- `scripts/fetch-ffmpeg.mjs` downloads per `ffmpeg.lock.json` (pinned version + URL + SHA-256 + member list), verifies hashes **before** the binary is used, quarantines mismatches as `.unverified`, and writes a `manifest.json` next to the binaries.
+- ffprobe binaries come from the `ffprobe-static@3.1.0` npm tarball, additionally verified against the registry's official `dist.integrity` sha512 before extraction.
+- Hash pinning is TOFU: `node scripts/fetch-ffmpeg.mjs --pin` records the first verified SHA-256 into the lockfile; every later fetch (and CI) verifies against it. linux-x64 is pinned already.
+- CI caches `resources/ffmpeg/<target>` keyed by `hashFiles('ffmpeg.lock.json')`.
+- electron-builder ships only the current target's folder via `extraResources` and marks it `asarUnpack` so binaries stay executable.
+- `win32-arm64` and `linux-arm64` (ffprobe) have no prebuilt sources yet — the app degrades to the in-app downloader there, stated in docs/platform-support.md.
 
-```
-resources/ffmpeg/
-  win32-x64/      ffmpeg.exe  ffprobe.exe
-  win32-arm64/    ffmpeg.exe  ffprobe.exe
-  darwin-arm64/   ffmpeg      ffprobe
-  darwin-x64/     ffmpeg      ffprobe
-  linux-x64/      ffmpeg      ffprobe
-  linux-arm64/    ffmpeg      ffprobe
-```
+## In-app download (only when bundled copy is missing/corrupt)
 
-- Binaries are **never committed** to git. They are fetched at build time.
-- electron-builder copies only the current target's folder and marks it `asarUnpack`, so the executables stay runnable.
-- Binaries are stripped before packaging. Target: ≤ 45 MB added per platform (compressed installer delta is smaller).
+Explains why it's needed → shows size and license → downloads with resume → verifies SHA-256 against the pinned manifest → atomically installs → never executes an unverified binary → rolls back (deletes `.part`) on any failure.
 
-## The lockfile
+## Security
 
-`ffmpeg.lock.json` pins everything:
-
-```json
-{
-  "version": "7.1",
-  "license": "GPL-3.0",
-  "builds": {
-    "win32-x64": {
-      "url": "https://.../ffmpeg-7.1-win64-gpl.zip",
-      "sha256": "…",
-      "binaries": ["ffmpeg.exe", "ffprobe.exe"]
-    }
-  }
-}
-```
-
-Rules:
-
-- A version bump is its own PR, with the upstream changelog linked.
-- The SHA-256 is verified **before** extraction; a mismatch aborts the build.
-- CI caches the downloaded archive keyed by URL + hash.
-- The provenance URL and license text ship in `resources/ffmpeg/LICENSE.txt`.
-
-## Build script
-
-`scripts/fetch-ffmpeg.mjs`:
-
-1. Reads `ffmpeg.lock.json` and the current `process.platform` / `process.arch`.
-2. Skips if the target directory already matches the recorded hash.
-3. Downloads with retry and resume into `.cache/`.
-4. Verifies SHA-256, extracts only the needed binaries, strips them.
-5. Writes `resources/ffmpeg/<platform>-<arch>/.manifest.json` with version, hash, and `ffmpeg -version` output.
-6. Fails the build loudly if anything is missing.
-
-Runs automatically from `prebuild`, `predist:*`, and CI.
-
-## Runtime resolution
-
-```
-1. RECAST_FFMPEG                  (developer / power-user override)
-2. <resources>/ffmpeg/<os>-<arch>/ (bundled)
-3. <userData>/bin/ffmpeg/          (previously downloaded)
-4. in-app download offer           (consent required)
-```
-
-- On launch, main validates the binary: exists, executable, `ffmpeg -version` succeeds within 2 s.
-- A failed validation does not crash the app. Affected features show a precise message and a "Repair" button.
-- Every invocation uses `spawn(binary, args)` with `shell: false`, an argument array, a timeout, and cancellation that kills the process tree.
-- Never interpolate user filenames into a shell string.
-
-## In-app download
-
-When the bundled binary is missing (trimmed build, corrupted install, unsupported arch):
-
-1. Explain what is needed and why, with the license and size.
-2. Download to `<userData>/bin/ffmpeg.download` with resume support.
-3. Verify SHA-256 against the signed manifest.
-4. Atomically rename into place; delete the previous copy only after success.
-5. If verification fails, discard the file and offer a retry — never run an unverified binary.
-
-The download is **optional**. Without it, Recast still records and exports via WebCodecs; only utility features degrade.
+`spawn(binary, args)` with `shell: false`, argument arrays, timeouts, and process-tree kill on cancel (`taskkill /T /F` on Windows, `kill(-pid)` on POSIX process groups). Filenames are never interpolated into shell strings.
 
 ## Licensing
 
-This is the part people get wrong.
+The pinned builds (ffmpeg-static b6.0) are GPL builds including libx264/libx265. Shipping them alongside Recast makes **Recast GPL-3.0-or-later** (`LICENSE` at the repo root; notice also shipped as `resources/ffmpeg/LICENSE.txt` next to the binaries).
 
-- FFmpeg builds that include **libx264 / libx265** are **GPL**. Linking or bundling them with the app makes the combined work GPL.
-- **Recast therefore ships as GPL-3.0-or-later.** That is a deliberate, documented choice: it keeps `libx264` available as a software fallback and keeps distribution simple.
-- The alternative — an **MIT/Apache app** — requires an **LGPL FFmpeg build without libx264/libx265**, hardware encoders for H.264, and a separately licensed software encoder such as Cisco OpenH264. That path is more complex and is documented here so nobody "accidentally" relicenses.
-
-If the license ever changes:
-
-1. Update `LICENSE`, `README.md`, `package.json`, and this document in the same PR.
-2. Rebuild the FFmpeg matrix with the correct configure flags.
-3. Re-check every bundled dependency for compatibility.
-4. Note the change in `CHANGELOG.md` with the date and reason.
-
-## Update policy
-
-- FFmpeg is pinned, not floating. No "latest" URLs.
-- Review quarterly, or immediately for a security advisory.
-- A bump must pass the full export matrix and the golden-frame test before merge.
-- The version is surfaced in **Settings → About → Media engine**.
-
-## Verification checklist
-
-- [ ] `ffmpeg -version` and `ffprobe -version` run from the packaged app on all six targets.
-- [ ] A recording recovered after a forced crash remuxes with `-c copy` and plays.
-- [ ] Export still works after deleting the bundled binaries (WebCodecs path).
-- [ ] Deleting bundled binaries triggers the download prompt, not a stack trace.
-- [ ] Tampered binary hash is rejected.
-- [ ] Installer size stays within budget.
+If you redistribute Recast **without** the GPL FFmpeg binaries (WebCodecs-only paths, hardware encoders, OpenH264), your build can carry a different license per your own GPL-compliance analysis — FFmpeg's LGPL build options are documented upstream. What you may not do is ship the bundled GPL binaries under a different license.

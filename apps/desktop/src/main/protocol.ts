@@ -1,0 +1,60 @@
+import { protocol, net } from 'electron';
+import { createReadStream, existsSync, statSync } from 'node:fs';
+import path from 'node:path';
+import { recordingsDir, projectsDir } from './paths';
+
+/**
+ * `recast-media://` — read-only file streaming for recordings, thumbnails and
+ * exports. The renderer sandbox never gets direct fs access; it asks for a
+ * media URL and the main process streams it with correct MIME types.
+ */
+
+export function registerMediaProtocol(): void {
+  protocol.registerSchemesAsPrivileged([
+    {
+      scheme: 'recast-media',
+      privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true },
+    },
+  ]);
+}
+
+const ALLOWED_ROOTS = [recordingsDir(), projectsDir()];
+
+export function mediaUrlFor(absolutePath: string): string {
+  return `recast-media://local/${absolutePath.split(path.sep).map(encodeURIComponent).join('/')}`;
+}
+
+export function handleMediaProtocol(): void {
+  protocol.handle('recast-media', (request) => {
+    const url = new URL(request.url);
+    const relative = decodeURIComponent(url.pathname.replace(/^\/+/, ''));
+    const filePath = path.resolve(relative.startsWith('/') ? relative.slice(1) : relative);
+
+    const allowed = ALLOWED_ROOTS.some((root) => filePath.startsWith(root));
+    if (!allowed) {
+      return new Response('Forbidden', { status: 403 });
+    }
+    if (!existsSync(filePath) || !statSync(filePath).isFile()) {
+      return new Response('Not found', { status: 404 });
+    }
+    const ext = path.extname(filePath).toLowerCase();
+    const mime =
+      ext === '.mp4' ? 'video/mp4'
+      : ext === '.webm' ? 'video/webm'
+      : ext === '.png' ? 'image/png'
+      : ext === '.jpg' || ext === '.jpeg' ? 'image/jpeg'
+      : ext === '.json' ? 'application/json'
+      : 'application/octet-stream';
+    const stat = statSync(filePath);
+    const stream = createReadStream(filePath);
+    return new Response(stream as unknown as ReadableStream, {
+      status: 200,
+      headers: {
+        'Content-Type': mime,
+        'Content-Length': String(stat.size),
+        'Accept-Ranges': 'none',
+      },
+    });
+  });
+  void net;
+}

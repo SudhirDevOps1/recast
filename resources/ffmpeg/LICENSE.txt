@@ -1,0 +1,25 @@
+Recast ships FFmpeg binaries as a safety-net layer (remux, thumbnails, GIF/ProRes
+encode, loudnorm, Whisper audio extraction).
+
+Licensing
+=========
+The builds referenced by `ffmpeg.lock.json` (ffmpeg-static b6.0 / ffprobe-static
+b3.0) are compiled WITH libx264/libx265, which makes these FFmpeg binaries
+GPL-licensed. Because they are distributed alongside Recast, Recast itself is
+licensed GPL-3.0-or-later — the full text is in the repository root `LICENSE`.
+
+FFmpeg is copyright by the FFmpeg developers — https://ffmpeg.org
+This binary set also includes code from many libraries; their notices apply and
+can be inspected with `ffmpeg -version` / `-buildconf`.
+
+The MIT/LGPL alternative
+========================
+Recast's own code can be built and used WITHOUT these GPL binaries:
+  - Recording and export run on WebCodecs (Chromium's OpenH264/VP9) and never
+    shell out to FFmpeg on the default path.
+  - Without FFmpeg you lose: crash-recovery remux, thumbnails/filmstrips,
+    GIF export, ProRes export, −14 LUFS normalization, and Whisper audio
+    extraction. The app degrades honestly and shows a Repair button.
+  - A re-distribution that strips these binaries and ships only WebCodecs
+    paths could be MIT-licensed (the source remains GPL-3.0-or-later as
+    published; relicensing your own fork is your decision under GPL terms).

@@ -1,50 +1,42 @@
-# Security policy
-
-## Reporting a vulnerability
-
-Do **not** open a public issue. Use GitHub's private vulnerability reporting:
-
-1. Go to the **Security** tab of this repository.
-2. Click **Report a vulnerability**.
-3. Include reproduction steps, affected version, OS, and impact.
-
-You can expect an acknowledgement within 72 hours and a status update within 7 days. Please give us 90 days before public disclosure, or less if a fix ships sooner.
-
-## Scope
-
-In scope:
-
-- Electron hardening bypasses (context isolation, sandbox, CSP, IPC validation).
-- Path traversal or arbitrary file write through project files, presets, or media imports.
-- Command injection through FFmpeg invocation or shell usage.
-- Update pipeline compromise (unsigned or unverified payloads).
-- Malicious `.recast` / `.recaststyle` files that execute code or exfiltrate data.
-- Permission-handling bugs that capture more than the user approved.
-
-Out of scope:
-
-- Attacks requiring an already-compromised machine.
-- Denial of service by recording a very large screen for a very long time.
-- Issues in third-party codecs or drivers with no Recast-specific trigger.
-- Social engineering.
-
-## Design commitments
-
-- No account, no telemetry, no uploads. The only outbound requests are opt-in model downloads and update checks.
-- `contextIsolation: true`, `sandbox: true`, `nodeIntegration: false`, strict CSP.
-- All IPC validated with zod on both ends; privileged channels check the calling window.
-- FFmpeg is invoked with `spawn` and argument arrays, never a shell.
-- Downloaded binaries and update payloads are checksum-verified; unsigned payloads are rejected.
-- User files are opened read-only unless the user explicitly saves over them.
+# Security Policy
 
 ## Supported versions
 
-| Version | Supported |
+| Version | Support |
 |---|---|
-| Latest stable | Yes |
-| Latest beta | Fixes only |
-| Older | No |
+| latest release | ✅ |
+| older releases | upgrade — we do not backport |
 
-## Credit
+## Reporting a vulnerability
 
-Reporters are credited in the release notes unless they prefer to stay anonymous.
+**Do not open a public issue for security reports.**
+
+Use GitHub's private vulnerability reporting on
+[github.com/SudhirDevOps1/recast/security/advisories](https://github.com/SudhirDevOps1/recast/security/advisories).
+You will get an acknowledgment within 5 days, and a fix or a stated timeline
+within 30 days. Credit in the changelog unless you ask otherwise.
+
+## Threat model (what we defend, what we don't)
+
+Recast is a local-first desktop app. Trust boundaries:
+
+1. **Renderer ↔ main (IPC).** The renderer runs web content and is fully sandboxed (`contextIsolation: true`, `sandbox: true`, `nodeIntegration: false`). Every IPC channel is declared in `packages/shared/src/ipc.ts` with zod schemas validated on **both** ends. Main-process handlers treat renderer input as hostile:
+   - `app:revealInFolder` / `app:openUrl` are allowlisted (only repo URLs through `shell.openExternal`).
+   - `export:readFile` / `capture:readCaptions` only serve paths inside the recordings tree with known extensions.
+   - `recast-media://` protocol serves only files under the recordings/projects roots.
+2. **Child processes.** FFmpeg/whisper are spawned with `shell: false`, argument arrays, timeouts, and process-tree kill on cancel. Filenames are never interpolated into a shell string. Downloaded binaries are verified against pinned SHA-256 hashes before they can execute (`ffmpeg.lock.json` + `scripts/fetch-ffmpeg.mjs`); an unverified download is quarantined, never run.
+3. **Files on disk.** Recording sessions and projects live under the user's data dir with the platform default permissions. Recast does not encrypt at rest — if your threat model includes local disk access, full-disk encryption is the right tool.
+4. **Network.** Default state makes **zero** network requests. Opt-in only: update checks (off by default), Whisper model download, FFmpeg in-app download. All downloads are TLS + pinned-hash verified.
+5. **Recorded content.** Screen recordings can contain sensitive data. Recast offers blur/pixelate redaction applied at composition time (before encoding) but **does not** auto-redact; the user is responsible for what they record.
+
+Out of scope: attacks requiring local code execution already, malicious devices plugged into the machine, and OS-level compromises.
+
+## Automated scanning
+
+- Dependabot (npm + actions) weekly; grouped minor/patch updates.
+- CI runs the full verify gate on every push.
+- Report known CVEs in dependencies to the same private channel.
+
+## Secrets hygiene for contributors
+
+Never commit tokens or certificates. The GitHub token used for CI/release management is referenced via `secrets.*` only. If a credential is accidentally pasted into an issue/PR/chat, **revoke it immediately** — rotation is the fix, not history edits.

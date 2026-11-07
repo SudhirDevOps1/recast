@@ -1,71 +1,45 @@
 # Contributing to Recast
 
-Thanks for helping. Recast is a local-first, GPL-3.0 desktop app, and the bar is "would I install this on my own machine?"
-
-## Before you start
-
-1. Read [AGENTS.md](AGENTS.md) — the engineering rules apply to humans too.
-2. Read [docs/roadmap.md](docs/roadmap.md) and pick something in the current phase.
-3. Open an issue or comment on an existing one before starting anything larger than a typo.
-
-Unsolicited large PRs usually get rejected for scope, not quality. A five-minute conversation saves a week.
+Thanks for helping build a genuinely free, local-first screen recorder.
 
 ## Setup
 
 ```bash
-git clone https://github.com/SudhirDevOps1/recast.git
+git clone https://github.com/SudhirDevOps1/recast
 cd recast
-corepack enable
 pnpm install
-pnpm ffmpeg:fetch
+pnpm fetch:ffmpeg        # optional — bundles the media-engine safety net
+pnpm verify              # typecheck + lint + tests + build
 pnpm dev
 ```
 
-## Making a change
+Requirements: Node ≥ 20.11, pnpm 9 (corepack). Linux contributors: `libfuse2` for AppImage dev runs.
 
-1. Branch from `main`: `feat/zoom-dead-zone`, `fix/wayland-portal-crash`.
-2. Keep the diff focused. One logical change per PR.
-3. Write the test with the feature. Timing, zoom math, serialization, and IPC schemas are not optional.
-4. Run `pnpm verify` before pushing.
-5. Include a screenshot or a short capture for any UI change.
+## PR checklist
+
+- [ ] `pnpm verify` green
+- [ ] New logic in `packages/editor` (zoom/spring/time) has unit tests
+- [ ] Any new IPC channel is declared in `packages/shared/src/ipc.ts` with zod schemas on both ends
+- [ ] UI follows the design tokens (`packages/ui/src/tokens.css`); no hardcoded colors, no emoji icons
+- [ ] STATUS.md and the relevant `docs/*.md` updated — a feature without docs is not done
+- [ ] No secrets, no placeholder text, no "coming soon" buttons
+- [ ] Performance-relevant changes note their effect in the PR (numbers, not vibes)
 
 ## Commit style
 
-Conventional commits:
+Conventional commits: `feat:`, `fix:`, `docs:`, `refactor:`, `chore:`, `perf:`, `test:`. Scope optional (`feat(editor): …`).
 
-```
-feat(editor): add follow-cursor dead zone
-fix(capture): finalize segments when the display is unplugged
-docs(ffmpeg): document the LGPL alternative
-perf(export): reuse encoder between chunks
-```
+## Where to work
 
-## Pull request checklist
+| Area | Location |
+|---|---|
+| Capture pipeline | `packages/capture` |
+| Compositor, zoom math | `packages/editor` |
+| Export | `packages/export` |
+| Design system | `packages/ui` |
+| IPC contract, schemas | `packages/shared` |
+| Main process | `apps/desktop/src/main` |
+| Renderer app | `apps/desktop/src/renderer` |
+| Packaging | `apps/desktop/electron-builder.yml`, `packaging/` |
 
-- [ ] Works on the OSes I claim (say which, and which I could not test).
-- [ ] `pnpm verify` passes.
-- [ ] Tests added or updated.
-- [ ] Docs updated (`docs/`, `README.md`, or `AGENTS.md`).
-- [ ] No secrets, no large binaries, no committed media.
-- [ ] `STATUS.md` updated if the feature's reality changed.
-- [ ] Screenshots for UI changes.
-
-## What gets rejected
-
-- Mock data or placeholder buttons on core paths.
-- Silent platform degradation ("it just doesn't work on Wayland" with no UI explanation).
-- Features that require an account, a cloud service, or telemetry.
-- Enormous refactors bundled with a feature.
-- Dependencies with unclear licenses or no stated reason.
-
-## Reporting bugs
-
-Use the issue template. Include version, OS, display server, scaling, and the last session's `session.json`. Never attach personal recordings — a synthetic 5-second capture is enough.
-
-## Security
-
-Do not open a public issue. Follow [SECURITY.md](SECURITY.md).
-
-## License
-
-By contributing you agree your work is licensed under GPL-3.0-or-later, and you have the right to submit it.
+See AGENTS.md for the working rules that govern this repo (crash-safe recording, compositor-as-contract, honest STATUS).

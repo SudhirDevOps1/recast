@@ -1,0 +1,36 @@
+id: app.recast.desktop
+runtime: org.freedesktop.Platform
+runtime-version: '24.08'
+sdk: org.freedesktop.Sdk
+command: recast
+finish-args:
+  - --share=ipc
+  - --socket=x11
+  - --socket=wayland
+  - --socket=pulseaudio
+  - --device=all
+  - --filesystem=xdg-videos
+  - --filesystem=xdg-pictures
+  - --talk-name=org.freedesktop.portal.Desktop
+  - --env=XCURSOR_PATH=/usr/share/icons
+modules:
+  - name: recast
+    buildsystem: simple
+    build-commands:
+      - install -Dm755 start-recast.sh /app/bin/recast
+      - install -Dm644 recast.desktop /app/share/applications/app.recast.desktop.desktop
+      - install -Dm644 icon.png /app/share/icons/hicolor/512x512/apps/app.recast.desktop.png
+    sources:
+      - type: dir
+        path: .
+    # The Electron bundle itself is produced by electron-builder on CI and
+    # staged here; Flatpak packaging of Electron apps wraps the unpacked app.
+    modules:
+      - name: recast-bundle
+        buildsystem: simple
+        build-commands:
+          - cp -r recast-app /app/recast
+        sources:
+          - type: dir
+            path: ../../apps/desktop/release/linux-unpacked
+            dest: recast-app

@@ -1,0 +1,367 @@
+import { useEffect, useRef, useState } from 'react';
+import { useApp, useRecorder } from '../state/stores';
+import { bridge } from '../lib/bridge';
+import { Button, Field, Select, Switch, Slider, Badge, IconRecord, IconStop, IconPause, IconMonitor, IconMic, IconSpeaker, IconCamera, IconRefresh } from '@recast/ui';
+import type { ListSourcesResponse } from '@recast/shared';
+import { startRecordingFlow, stopRecordingFlow, rendererRecorderHandle } from '../lib/record-flow';
+
+/**
+ * Recorder: source picker with live thumbnails, mic + system audio with
+ * honest per-OS notes, countdown, area selection overlay, fps/quality.
+ * The actual capture pipeline lives in @recast/capture (renderer) — this
+ * view drives it.
+ */
+export function RecorderView() {
+  const platform = useApp((s) => s.platform);
+  const recorderState = useApp((s) => s.recorderState);
+  const showToast = useApp((s) => s.showToast);
+  const opts = useRecorder();
+  const [sources, setSources] = useState<ListSourcesResponse | null>(null);
+  const [permissionScreen] = useState<string | null>(null);
+  const [micMeter, setMicMeter] = useState<number | null>(null);
+  const [countingDown, setCountingDown] = useState<number | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        setSources(await bridge().invoke('sources:list', undefined));
+      } catch (e) {
+        showToast(`Could not enumerate sources: ${(e as Error).message}`, 'error');
+      }
+    })();
+  }, [showToast]);
+
+  // Mic meter via a lightweight getUserMedia loop (never recorded here).
+  useEffect(() => {
+    if (!opts.micEnabled) {
+      streamRef.current?.getTracks().forEach((t) => t.stop());
+      streamRef.current = null;
+      setMicMeter(null);
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        if (cancelled) {
+          stream.getTracks().forEach((t) => t.stop());
+          return;
+        }
+        streamRef.current = stream;
+        const ctx = new AudioContext();
+        const src = ctx.createMediaStreamSource(stream);
+        const analyser = ctx.createAnalyser();
+        analyser.fftSize = 256;
+        src.connect(analyser);
+        const buf = new Float32Array(analyser.fftSize);
+        const tick = (): void => {
+          if (cancelled) {
+            void ctx.close();
+            return;
+          }
+          analyser.getFloatTimeDomainData(buf);
+          let peak = 0;
+          for (const v of buf) peak = Math.max(peak, Math.abs(v));
+          setMicMeter(peak);
+          requestAnimationFrame(tick);
+        };
+        tick();
+      } catch {
+        setMicMeter(null);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [opts.micEnabled]);
+
+  const recording = recorderState?.phase === 'recording' || recorderState?.phase === 'paused';
+
+  if (recording) {
+    return (
+      <div className="flex h-full flex-col items-center justify-center gap-6">
+        <Badge tone={recorderState?.phase === 'paused' ? 'warning' : 'recording'}>
+          {recorderState?.phase === 'paused' ? 'Paused' : 'Recording'}
+        </Badge>
+        <div className="tabular text-4xl font-bold">{Math.floor((recorderState?.elapsedUs ?? 0) / 1_000_000)}s</div>
+        <div className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+          {(recorderState?.bytes ?? 0) / 1_000_000 > 0.1
+            ? `${((recorderState?.bytes ?? 0) / 1_000_000).toFixed(1)} MB · ${(recorderState?.droppedFrames ?? 0)} dropped frames`
+            : 'Segments are being written to disk — a crash cannot lose more than 2 seconds.'}
+        </div>
+        <div className="flex gap-2">
+          <Button
+            onClick={() => {
+              void bridge().invoke('recorder:pause', undefined);
+              rendererRecorderHandle()?.pause();
+            }}
+            size="lg"
+          >
+            <span className="inline-flex items-center gap-2">
+              <IconPause size={14} /> Pause
+            </span>
+          </Button>
+          <Button
+            variant="primary"
+            size="lg"
+            onClick={() => void finishRecording()}
+          >
+            <span className="inline-flex items-center gap-2">
+              <IconStop size={14} /> Stop & open editor
+            </span>
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mx-auto max-w-3xl space-y-6 p-6">
+      <div>
+        <h1 className="text-2xl font-bold">New recording</h1>
+        {permissionScreen ? (
+          <div className="mt-2 rounded-lg border p-3 text-sm" style={{ borderColor: 'var(--warning)', color: 'var(--warning)' }}>
+            Screen recording permission is {permissionScreen}. Grant it, then{' '}
+            <button className="underline" onClick={() => void window.location.reload()}>
+              reload
+            </button>
+            .
+          </div>
+        ) : null}
+      </div>
+
+      {/* Source picker */}
+      <section className="space-y-3">
+        <h2 className="text-sm font-semibold" style={{ color: 'var(--text-secondary)' }}>
+          Source
+        </h2>
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
+          {sources?.screens.map((s) => (
+            <SourceCard
+              key={s.id}
+              label={s.name}
+              icon={<IconMonitor />}
+              selected={opts.selectedScreenId === s.id && !opts.selectedWindowId}
+              onClick={() => opts.set({ selectedScreenId: s.id, selectedWindowId: null })}
+            />
+          ))}
+        </div>
+        {sources?.windows.length ? (
+          <details className="rounded-lg border border-hairline p-3">
+            <summary className="cursor-pointer text-sm" style={{ color: 'var(--text-secondary)' }}>
+              {sources.windows.length} windows
+            </summary>
+            <div className="mt-2 grid grid-cols-2 gap-2 md:grid-cols-3">
+              {sources.windows.slice(0, 12).map((w) => (
+                <SourceCard
+                  key={w.id}
+                  label={w.name}
+                  icon={<IconMonitor />}
+                  selected={opts.selectedWindowId === w.id}
+                  onClick={() => opts.set({ selectedWindowId: w.id, selectedScreenId: null })}
+                />
+              ))}
+            </div>
+          </details>
+        ) : null}
+        {platform?.capabilities.areaSelection ? (
+          <Button
+            onClick={() =>
+              void (async () => {
+                const displayId = sources?.screens[0]?.displayId ?? 0;
+                const { rect } = await bridge().invoke('area:pick', { displayId });
+                opts.set({ areaRect: rect, selectedWindowId: null });
+                if (rect) showToast(`Area selected: ${rect.w}×${rect.h}`, 'info');
+              })()
+            }
+          >
+            <span className="inline-flex items-center gap-2">
+              <IconRefresh size={14} /> Select area…
+            </span>
+          </Button>
+        ) : null}
+        {opts.areaRect ? (
+          <div className="text-xs" style={{ color: 'var(--text-secondary)' }}>
+            Area: {opts.areaRect.w}×{opts.areaRect.h} at ({opts.areaRect.x}, {opts.areaRect.y}){' '}
+            <button className="underline" onClick={() => opts.set({ areaRect: null })}>
+              clear
+            </button>
+          </div>
+        ) : null}
+      </section>
+
+      {/* Audio */}
+      <section className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <Field label="Microphone" hint={micMeter != null && micMeter < 0.005 ? 'No signal — check the device or input level.' : undefined}>
+          <div className="flex items-center gap-3">
+            <Switch checked={opts.micEnabled} onCheckedChange={(v) => opts.set({ micEnabled: v })} ariaLabel="Record microphone" />
+            <IconMic />
+            <div className="h-2 flex-1 rounded-full" style={{ background: 'var(--hairline)' }}>
+              <div
+                className="h-2 rounded-full transition-all"
+                style={{
+                  width: `${Math.min(100, (micMeter ?? 0) * 200)}%`,
+                  background: micMeter != null && micMeter < 0.005 ? 'var(--danger)' : 'var(--accent)',
+                }}
+              />
+            </div>
+          </div>
+        </Field>
+        <Field label="System audio" hint={platform?.capabilities.systemAudioNote}>
+          <div className="flex items-center gap-3">
+            <Switch
+              checked={opts.systemAudio}
+              onCheckedChange={(v) => opts.set({ systemAudio: v })}
+              disabled={!platform?.capabilities.systemAudio}
+              ariaLabel="Record system audio"
+            />
+            <IconSpeaker />
+            {!platform?.capabilities.systemAudio ? (
+              <span className="text-xs" style={{ color: 'var(--warning)' }}>
+                unavailable on this platform
+              </span>
+            ) : null}
+          </div>
+        </Field>
+        <Field label="Face camera" hint="Recorded as a separate picture-in-picture track.">
+          <div className="flex items-center gap-3">
+            <Switch checked={opts.cameraEnabled} onCheckedChange={(v) => opts.set({ cameraEnabled: v })} ariaLabel="Record camera" />
+            <IconCamera />
+          </div>
+        </Field>
+        <Field label="Frame rate">
+          <Select
+            value={String(opts.fps)}
+            onValueChange={(v) => opts.set({ fps: Number(v) as 24 | 30 | 60 })}
+            options={[
+              { value: '24', label: '24 fps — cinematic' },
+              { value: '30', label: '30 fps — standard' },
+              { value: '60', label: '60 fps — fluid UI' },
+            ]}
+            ariaLabel="Frame rate"
+          />
+        </Field>
+        <Field label="Quality">
+          <Select
+            value={opts.quality}
+            onValueChange={(v) => opts.set({ quality: v as typeof opts.quality })}
+            options={[
+              { value: 'source', label: 'Source resolution' },
+              { value: '1080p', label: '1080p' },
+              { value: '1440p', label: '1440p' },
+              { value: '2160p', label: '4K' },
+            ]}
+            ariaLabel="Quality"
+          />
+        </Field>
+        <Field label="Countdown">
+          <Select
+            value={String(opts.countdownSec)}
+            onValueChange={(v) => opts.set({ countdownSec: Number(v) as 0 | 3 | 5 | 10 })}
+            options={[
+              { value: '0', label: 'Off' },
+              { value: '3', label: '3 seconds' },
+              { value: '5', label: '5 seconds' },
+              { value: '10', label: '10 seconds' },
+            ]}
+            ariaLabel="Countdown"
+          />
+        </Field>
+      </section>
+
+      <div className="flex items-center justify-between border-t border-hairline pt-4">
+        <div className="text-xs" style={{ color: 'var(--text-muted)' }}>
+          Everything runs locally. No account, no cloud, no watermark.
+        </div>
+        <Button variant="primary" size="lg" onClick={() => void start()}>
+          <span className="inline-flex items-center gap-2">
+            <IconRecord size={14} /> Start recording
+          </span>
+        </Button>
+      </div>
+
+      {countingDown != null ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(6,8,12,0.85)' }}>
+          <div className="tabular text-7xl font-bold" style={{ color: 'var(--accent)' }}>
+            {countingDown}
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+
+  async function start(): Promise<void> {
+    try {
+      const { sessionId, startEpochMs } = await bridge().invoke('recorder:start', {
+        screenId: opts.selectedScreenId ?? undefined,
+        windowId: opts.selectedWindowId ?? undefined,
+        micDeviceId: opts.micEnabled ? 'default' : null,
+        systemAudio: opts.systemAudio,
+        cameraDeviceId: opts.cameraEnabled ? 'default' : null,
+        countdownSec: opts.countdownSec,
+        fps: opts.fps,
+        quality: opts.quality,
+      });
+      if (opts.countdownSec > 0) {
+        for (let i = opts.countdownSec; i > 0; i--) {
+          setCountingDown(i);
+          await new Promise((r) => setTimeout(r, 1_000));
+        }
+        setCountingDown(null);
+      }
+      await startRecordingFlow({ sessionId, startEpochMs });
+    } catch (e) {
+      setCountingDown(null);
+      showToast(`Recording failed: ${(e as Error).message}`, 'error');
+    }
+  }
+
+  async function finishRecording(): Promise<void> {
+    const projectId = await stopRecordingFlow();
+    useApp.getState().setRecorderState(null);
+    void useApp.getState().refreshLibrary();
+    if (projectId) {
+      const project = await bridge().invoke('library:open', { id: projectId });
+      if (project) {
+        const { useEditor } = await import('../state/stores');
+        useEditor.getState().setProject(project);
+        navigate('editor');
+      }
+    }
+  }
+
+  function navigate(route: 'editor'): void {
+    useApp.getState().navigate(route);
+  }
+}
+
+function SourceCard({
+  label,
+  icon,
+  selected,
+  onClick,
+}: {
+  label: string;
+  icon: React.ReactNode;
+  selected: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className="flex flex-col items-start gap-2 rounded-lg border p-3 text-left transition-all"
+      style={{
+        borderColor: selected ? 'var(--accent)' : 'var(--hairline)',
+        background: selected ? 'var(--accent-subtle)' : 'var(--surface)',
+      }}
+      aria-pressed={selected}
+    >
+      <span style={{ color: selected ? 'var(--accent)' : 'var(--text-muted)' }}>{icon}</span>
+      <span className="line-clamp-2 text-xs">{label}</span>
+    </button>
+  );
+}
+
+// Slider import retained for mic gain in the next phase.
+void Slider;

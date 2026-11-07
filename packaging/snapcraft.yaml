@@ -1,0 +1,30 @@
+name: recast
+base: core24
+version: '0.1.0'
+summary: Cinematic screen recordings — recorded locally, edited instantly
+description: |
+  Recast turns raw screen recordings into cinematic demo and tutorial videos.
+  Auto-zoom follows your cursor, styles frame your content, captions are
+  generated fully offline. No account, no cloud, no watermark.
+grade: stable
+confinement: strict
+
+apps:
+  recast:
+    command: bin/recast
+    extensions: [gnome]
+    plugs:
+      - screen-inhibit-control
+      - audio-record
+      - camera
+      - home
+      - x11
+      - wayland
+      - network-observe  # interface name enumeration only
+
+parts:
+  recast:
+    plugin: dump
+    source: ../../apps/desktop/release/linux-unpacked
+    organize:
+      recast: bin/recast

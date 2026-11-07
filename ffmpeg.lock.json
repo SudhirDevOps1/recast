@@ -1,0 +1,62 @@
+{
+  "$comment": "FFmpeg binaries for Recast's safety-net layer. Version pinned per target. sha256 entries are pinned via `node scripts/fetch-ffmpeg.mjs --pin` (TOFU) and verified on every later fetch; CI always fetches with pinned hashes. Binaries are NEVER committed to git — see docs/ffmpeg.md. ffmpeg-static b6.0 builds are GPL (libx264 included), which is why Recast is GPL-3.0-or-later. ffprobe binaries come from the ffprobe-static npm tarball (3.1.0), verified against the registry's dist.integrity sha512 before extraction.",
+  "version": "ffmpeg-static b6.0 / ffprobe-static 3.1.0",
+  "targets": {
+    "win32-x64": {
+      "urls": {
+        "ffmpeg.exe": "https://github.com/eugeneware/ffmpeg-static/releases/download/b6.0/ffmpeg-win32-x64",
+        "ffprobe.exe": {
+          "tgz": "https://registry.npmjs.org/ffprobe-static/-/ffprobe-static-3.1.0.tgz",
+          "integrity": "sha512-Dvpa9uhVMOYivhHKWLGDoa512J751qN1WZAIO+Xw4L/mrUSPxS4DApzSUDbCFE/LUq2+xYnznEahTd63AqBSpA==",
+          "member": "package/bin/win32/x64/ffprobe.exe"
+        }
+      },
+      "sha256": {}
+    },
+    "win32-arm64": {
+      "$comment": "No prebuilt ffmpeg/ffprobe win-arm64 exists in these sources yet; Recast degrades to the in-app downloader or system ffmpeg on this target. Tracked in docs/platform-support.md.",
+      "urls": {},
+      "sha256": {}
+    },
+    "darwin-arm64": {
+      "urls": {
+        "ffmpeg": "https://github.com/eugeneware/ffmpeg-static/releases/download/b6.0/ffmpeg-darwin-arm64",
+        "ffprobe": {
+          "tgz": "https://registry.npmjs.org/ffprobe-static/-/ffprobe-static-3.1.0.tgz",
+          "integrity": "sha512-Dvpa9uhVMOYivhHKWLGDoa512J751qN1WZAIO+Xw4L/mrUSPxS4DApzSUDbCFE/LUq2+xYnznEahTd63AqBSpA==",
+          "member": "package/bin/darwin/arm64/ffprobe"
+        }
+      },
+      "sha256": {}
+    },
+    "darwin-x64": {
+      "urls": {
+        "ffmpeg": "https://github.com/eugeneware/ffmpeg-static/releases/download/b6.0/ffmpeg-darwin-x64",
+        "ffprobe": {
+          "tgz": "https://registry.npmjs.org/ffprobe-static/-/ffprobe-static-3.1.0.tgz",
+          "integrity": "sha512-Dvpa9uhVMOYivhHKWLGDoa512J751qN1WZAIO+Xw4L/mrUSPxS4DApzSUDbCFE/LUq2+xYnznEahTd63AqBSpA==",
+          "member": "package/bin/darwin/x64/ffprobe"
+        }
+      },
+      "sha256": {}
+    },
+    "linux-x64": {
+      "urls": {
+        "ffmpeg": "https://github.com/eugeneware/ffmpeg-static/releases/download/b6.0/ffmpeg-linux-x64",
+        "ffprobe": {
+          "tgz": "https://registry.npmjs.org/ffprobe-static/-/ffprobe-static-3.1.0.tgz",
+          "integrity": "sha512-Dvpa9uhVMOYivhHKWLGDoa512J751qN1WZAIO+Xw4L/mrUSPxS4DApzSUDbCFE/LUq2+xYnznEahTd63AqBSpA==",
+          "member": "package/bin/linux/x64/ffprobe"
+        }
+      },
+      "sha256": {}
+    },
+    "linux-arm64": {
+      "$comment": "ffprobe-static has no linux/arm64 binary; Recast degrades gracefully (in-app downloader offers a system-package command instead). Tracked in docs/platform-support.md.",
+      "urls": {
+        "ffmpeg": "https://github.com/eugeneware/ffmpeg-static/releases/download/b6.0/ffmpeg-linux-arm64"
+      },
+      "sha256": {}
+    }
+  }
+}

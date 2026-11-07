@@ -1,0 +1,18 @@
+PackageIdentifier: SudhirDevOps1.Recast
+PackageVersion: 0.1.0
+PackageLocale: en-US
+Publisher: Recast contributors
+PackageName: Recast
+PackageUrl: https://github.com/SudhirDevOps1/recast
+License: GPL-3.0-or-later
+LicenseUrl: https://github.com/SudhirDevOps1/recast/blob/main/LICENSE
+ShortDescription: Free, open-source, local-first screen recorder and cinematic editor.
+Description: Record, auto-zoom, caption, export — 100% offline. No account, no cloud, no watermark.
+Installers:
+  - Architecture: x64
+    InstallerType: nullsoft
+    Scope: user
+    InstallerUrl: https://github.com/SudhirDevOps1/recast/releases/download/v0.1.0/Recast-Setup-0.1.0.exe
+    InstallerSha256: REPLACE_AT_RELEASE
+ManifestType: singleton
+ManifestVersion: 1.6.0

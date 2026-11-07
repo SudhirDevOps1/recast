@@ -1,71 +1,41 @@
 # Keyboard shortcuts
 
-Status: specification. The shortcut map ships in-app under **Settings → Shortcuts** and is searchable from the command palette.
+## Global (system-wide)
 
-`⌘` on macOS, `Ctrl` elsewhere unless noted.
+| Action | Keys | Notes |
+|---|---|---|
+| Start / stop recording | `Ctrl+Alt+R` / `⌘⌥R` | Configurable |
+| Pause / resume | `Ctrl+Alt+P` / `⌘⌥P` | Configurable |
 
-## Global (work anywhere)
-
-| Shortcut | Action |
-|---|---|
-| `⌘/Ctrl + Shift + R` | Start recording (last used source) |
-| `⌘/Ctrl + Shift + S` | Stop recording |
-| `⌘/Ctrl + Shift + P` | Pause / resume |
-| `⌘/Ctrl + Shift + D` | Toggle drawing overlay |
-| `⌘/Ctrl + Shift + M` | Mute / unmute microphone |
-| `Esc` | Cancel countdown or selection |
-
-Global shortcuts are user-editable and must detect conflicts before saving.
+Unavailable on Wayland (stated in the UI when detected).
 
 ## App
 
-| Shortcut | Action |
+| Action | Keys |
 |---|---|
-| `⌘/Ctrl + K` | Command palette |
-| `⌘/Ctrl + N` | New recording |
-| `⌘/Ctrl + O` | Open project |
-| `⌘/Ctrl + ,` | Settings |
-| `⌘/Ctrl + Shift + E` | Export |
-| `⌘/Ctrl + Shift + P` | Toggle play/pause (editor only) |
-| `F1` | Shortcut cheatsheet |
+| Command palette | `Ctrl+K` / `⌘K` |
+| New recording | `Ctrl+N` / `⌘N` |
+
+## Recorder
+
+| Action | Keys |
+|---|---|
+| Confirm area selection | `Enter` |
+| Cancel area selection | `Esc` |
+| Nudge area edge | Arrow keys (1 px; `Shift` = 10 px) |
 
 ## Editor
 
-| Shortcut | Action |
+| Action | Keys |
 |---|---|
-| `Space` | Play / pause |
-| `J` / `K` / `L` | Reverse / pause / forward |
-| `I` / `O` | Set in / out point |
-| `←` / `→` | Step one frame |
-| `Shift + ←/→` | Step one second |
-| `Home` / `End` | Jump to start / end |
-| `S` | Split at playhead |
-| `Delete` | Delete selection |
-| `Shift + Delete` | Ripple delete |
-| `⌘/Ctrl + Z` | Undo |
-| `⌘/Ctrl + Shift + Z` | Redo |
-| `⌘/Ctrl + D` | Duplicate clip |
-| `+` / `-` | Zoom timeline in / out |
-| `F` | Fit timeline to window |
-| `M` | Add marker |
-| `Z` | Zoom tool |
-| `C` | Cursor tool |
-| `T` | Text annotation |
-| `B` | Blur / redact tool |
+| Play / pause | `Space` |
+| Shuttle reverse / stop / forward | `J` / `K` / `L` |
+| Split clip at playhead | `S` |
+| Ripple delete 1 s around playhead | `Delete` / `Backspace` |
+| Frame step | `←` / `→` |
+| 1 s jump | `Shift+←` / `Shift+→` |
+| Start / end of timeline | `Home` / `End` |
+| Undo / redo | `Ctrl+Z` / `Ctrl+Shift+Z` (`⌘Z` / `⇧⌘Z`) |
+| Save now | `Ctrl+S` / `⌘S` (autosave runs every 5 s regardless) |
 
-## Recording overlay
-
-| Shortcut | Action |
-|---|---|
-| `1` – `9` | Select drawing tool |
-| `[` / `]` | Decrease / increase brush size |
-| `⌘/Ctrl + Z` | Undo last stroke |
-| `H` | Toggle highlighter |
-| `Space` | Toggle spotlight |
-
-## Rules
-
-- Never bind a shortcut that the OS reserves. Check conflicts on startup and surface them.
-- Users can remap everything except `Esc` and the stop-recording shortcut.
-- Shortcuts must work when focus is in the timeline or canvas, but not while typing in a text field.
-- Every action in the UI shows its shortcut in the tooltip.
+Additions land here in the same PR as the feature — a shortcut that exists but isn't listed here is treated as a docs bug.

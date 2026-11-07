@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Chocolatey package. The install script downloads the pinned NSIS installer
+     from GitHub releases and installs per-user (no UAC required). -->
+<package xmlns="http://schemas.microsoft.com/packaging/2015/nuspec.xsd">
+  <metadata>
+    <id>recast</id>
+    <version>0.1.0</version>
+    <title>Recast</title>
+    <authors>Recast contributors</authors>
+    <projectUrl>https://github.com/SudhirDevOps1/recast</projectUrl>
+    <licenseUrl>https://github.com/SudhirDevOps1/recast/blob/main/LICENSE</licenseUrl>
+    <description>Free, open-source, local-first screen recorder and cinematic editor. Record, auto-zoom, caption, export. No account, no cloud, no watermark.</description>
+    <tags>screen-recorder video editor electron</tags>
+  </metadata>
+</package>

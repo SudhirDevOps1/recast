@@ -1,84 +1,44 @@
 # Export
 
-Status: specification. Implementation starts in Phase 1 (MP4 only), Phase 2 (presets).
+## The frame clock
 
-## Pipeline
+Export steps time deterministically: `tUs = frame × 1_000_000 / fps`, from 0 to the timeline duration. Never `requestAnimationFrame` — rAF belongs to interactive preview only. Each step:
 
-```
-project.json
-   ↓  frame clock (t = i / fps, integer)
-compositor (WebGL2 / OffscreenCanvas)
-   ↓  VideoFrame
-WebCodecs VideoEncoder (hardware if available)
-   ↓  EncodedVideoChunk
-muxer worker (mp4-muxer / webm-muxer)
-   ↓
-<output>.mp4  →  verify (ffprobe)  →  reveal in folder
-```
+1. `timelineToSource` maps tUs to the active clip's source time.
+2. The matching hidden `<video>` element is seeked (sample-exact; a 1.5 s watchdog prevents hangs).
+3. `computeComposition` + `drawComposition` render the frame to an offscreen canvas — the same code path as preview.
+4. `new VideoFrame(canvas, { timestamp, duration })` → `encoder.encode(frame, { keyFrame })` (keyframe every 2 s).
+5. When the encoder queue exceeds 8 frames, the loop waits — backpressure instead of memory growth.
 
-Audio is rendered separately with an `OfflineAudioContext` at 48 kHz, encoded as AAC (MP4) or Opus (WebM), then interleaved by the muxer.
+## Encoder chain
 
-## Formats
+Resolved once per export via `VideoEncoder.isConfigSupported`, in order:
 
-| Container | Video | Audio | Use |
-|---|---|---|---|
-| MP4 | H.264 (default), HEVC | AAC 192 kbps | Universal sharing |
-| MP4 | H.264 High | AAC | High quality |
-| MOV | ProRes 422 | PCM | Handoff to a full NLE |
-| WebM | VP9 / AV1 | Opus | Open formats, small files |
-| GIF | — | — | Short clips, palette-optimized |
+1. Hardware H.264 (`avc1.640028`, `prefer-hardware`, avcc bitstream for MP4)
+2. Software H.264 (`avc1.42E01F`, no-preference)
+3. VP9 → WebM container
+4. HEVC (`hvc1…`, hw then sw) — only offered when the platform provides it
+5. GIF / ProRes — rendered through the FFmpeg frame pipe (PNG sequence → `palettegen/paletteuse` or `prores_ks`); requires the FFmpeg safety net
 
-## Determinism
+The resolved path is displayed in the export UI and in the progress events — the user always sees what encoded their file.
 
-- Frame index drives time. No `performance.now()`, no `requestAnimationFrame`, no CSS animation in the raster path.
-- Springs are evaluated analytically, not integrated per frame, so results don't depend on the encoder's pacing.
-- Random-free: any procedural element uses a seeded PRNG stored in the project.
-- Acceptance: SSIM ≥ 0.995 between a preview frame and the exported frame at the same timestamp.
+## Muxing & disk safety
 
-## Fallback chain
+- MP4: `mp4-muxer` `StreamTarget` with positional `onData` writes; the main process writes at file offsets into `<destination>.part` (one open file handle per export, fsync + close at finalize).
+- WebM: `webm-muxer` buffer target, flushed through the same positional write.
+- Finalize = fsync → rename `.part` → final name. **Cancel = never rename** — no partial files, ever.
+- Verification: `ffprobe` reads back the duration; a result below 90 % of the timeline duration is reported as unverified.
 
-1. WebCodecs hardware H.264 (VideoToolbox / Media Foundation / VAAPI).
-2. WebCodecs hardware HEVC.
-3. WebCodecs software H.264 (OpenH264 where available).
-4. FFmpeg with libx264 (GPL build).
-5. `MediaRecorder` (last resort, variable frame rate, clearly labeled "compatibility mode").
+## Audio
 
-The user sees which path was used, and a warning only when quality or speed is affected.
-
-## Quality presets
-
-| Preset | Resolution | Bitrate (1080p) | Notes |
-|---|---|---|---|
-| Draft | 720p30 | 3 Mbps | Fast iteration |
-| Standard | 1080p30 | 8 Mbps | Default for tutorials |
-| High | 1080p60 | 14 Mbps | Product demos |
-| Max | Source (up to 4K) | CRF 18 equivalent | Archival |
-
-Bitrate adapts to content complexity; a static screen should not burn 14 Mbps.
-
-## UX
-
-- Pre-flight estimate: file size ±15 %, time estimate based on a 2-second benchmark.
-- Progress with ETA, frame counter, and current stage (render / encode / mux / verify).
-- Cancel leaves no partial file in the destination; temp files are cleaned on startup.
-- On success: reveal in folder, copy path, and a "Share" hint (no upload, ever).
-- Presets remembered per project; a global default lives in settings.
+- Decoded once via `AudioContext.decodeAudioData`, then processed in order: noise gate (optional, −48 dB default with 50 ms hold) → gain → fades (in/out).
+- Encoded AAC when the platform provides it, Opus otherwise, muxed into the same container.
+- `normalizeLufs` runs a two-pass `loudnorm` (measured values from pass 1 applied in pass 2) as a post-step with `-c:v copy`.
 
 ## Naming
 
-Default filename pattern: `recast-{project}-{yyyyMMdd-HHmm}.mp4`, sanitized per OS and de-duplicated rather than overwritten.
+`recast-{project}-{yyyyMMdd-HHmm}.{ext}` — sanitized (`sanitizeFilename`), lowercased, de-duplicated against existing files in the destination (`-2`, `-3`…). ProRes uses `.mov`, HEVC uses `.mp4`.
 
-## Verification
+## Determinism
 
-After muxing:
-
-1. `ffprobe` confirms container, duration (±1 frame), stream count, and codecs.
-2. Duration is compared against the project timeline.
-3. A failure here marks the export as failed rather than reporting success.
-
-## What "done" means
-
-- Export of a 5-minute 1080p60 project completes without dropping a frame or desyncing audio.
-- Cancelling at 90 % leaves the destination clean.
-- Exporting the same project twice produces identical durations and matching golden frames.
-- The reported "used path" is accurate.
+Same project + same settings + same decoder → same frames in the same order, encoded with the same resolved config. The golden-frame SSIM harness (preview vs exported frame ≥ 0.995) is planned to lock this; until it runs in CI, determinism is a design property, not a measured claim.

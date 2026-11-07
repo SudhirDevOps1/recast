@@ -1,0 +1,47 @@
+{
+  "name": "@recast/desktop",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Recast desktop app",
+  "main": "out/main/index.js",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "smoke": "playwright test",
+    "dist:win": "electron-vite build && electron-builder --win --x64",
+    "dist:win:arm64": "electron-vite build && electron-builder --win --arm64",
+    "dist:mac": "electron-vite build && electron-builder --mac --universal",
+    "dist:mac:arm64": "electron-vite build && electron-builder --mac --arm64",
+    "dist:linux": "electron-vite build && electron-builder --linux AppImage deb rpm tar.gz",
+    "dist:linux:appimage": "electron-vite build && electron-builder --linux AppImage"
+  },
+  "dependencies": {
+    "@recast/capture": "workspace:*",
+    "@recast/editor": "workspace:*",
+    "@recast/export": "workspace:*",
+    "@recast/shared": "workspace:*",
+    "@recast/ui": "workspace:*",
+    "better-sqlite3": "^11.10.0",
+    "electron-updater": "^6.3.9",
+    "uiohook-napi": "^1.5.5",
+    "zod": "^3.24.1",
+    "zustand": "^5.0.2"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.65.0",
+    "@tailwindcss/vite": "^4.0.0",
+    "@types/better-sqlite3": "^7.6.12",
+    "@types/react": "^19.0.2",
+    "@types/react-dom": "^19.0.2",
+    "@vitejs/plugin-react": "^4.3.4",
+    "electron": "^45.2.3",
+    "electron-builder": "^26.18.0",
+    "electron-vite": "^4.0.1",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "tailwindcss": "^4.0.0",
+    "typescript": "^5.7.2"
+  }
+}

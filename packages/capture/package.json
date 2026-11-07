@@ -1,0 +1,22 @@
+{
+  "name": "@recast/capture",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Recast capture engine: segmented WebCodecs recorder, audio mixer, recovery planning",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@recast/shared": "workspace:*",
+    "mp4-muxer": "^5.2.2",
+    "webm-muxer": "^5.1.4"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}
