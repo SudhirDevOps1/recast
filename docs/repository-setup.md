@@ -34,6 +34,9 @@ Add rule) for `main`:
   - `Docs integrity`
   - `Lint, types, tests (ubuntu-22.04)`
   - `Lint, types, tests (windows-latest)`
+  - `Lint, types, tests (windows-11-arm)`
+  - `Lint, types, tests (macos-14)`
+  - `Lint, types, tests (macos-15)`
   - `Smoke (ubuntu-22.04)`
 - Block force pushes: **on**
 - Require linear history: **on**
@@ -50,6 +53,9 @@ curl -X PUT -H "Authorization: Bearer $GH_TOKEN" \
       "Docs integrity",
       "Lint, types, tests (ubuntu-22.04)",
       "Lint, types, tests (windows-latest)",
+      "Lint, types, tests (windows-11-arm)",
+      "Lint, types, tests (macos-14)",
+      "Lint, types, tests (macos-15)",
       "Smoke (ubuntu-22.04)"
     ]},
     "enforce_admins": false,

@@ -138,7 +138,11 @@ async function fetchTarget(key, spec) {
     results.push({ binary, dest, bytes: statSync(dest).size, verified: Boolean(pinned || PIN) });
   }
   // Manifest next to the binaries so the app can display what shipped.
-  if (results.length > 0) {
+  // Written even when a target has no binaries yet (e.g. win32-arm64 has no
+  // static FFmpeg source pinned) so the packaging directory exists and
+  // electron-builder's extraResources copy succeeds; the app then reports the
+  // missing binary honestly and offers the in-app Repair download.
+  if (results.length > 0 || args.has('--skip') === false) {
     mkdirSync(outDir, { recursive: true });
     writeFileSync(
       join(outDir, 'manifest.json'),

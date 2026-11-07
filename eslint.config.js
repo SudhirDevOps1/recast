@@ -11,6 +11,10 @@ export default tseslint.config(
       '**/release/**',
       '**/*.d.ts',
       'resources/**',
+      // apps/website is a dependency-free static site (plain browser JS); it is
+      // not part of the TypeScript workspace and is verified by the Website
+      // workflow, not by Node-targeted lint rules.
+      'apps/website/**',
     ],
   },
   eslint.configs.recommended,
