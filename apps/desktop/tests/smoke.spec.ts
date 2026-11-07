@@ -30,12 +30,12 @@ test('record synthetic source → library → export', async () => {
   // The app shell mounted and the bridge is present.
   await window.waitForFunction(() => Boolean((window as unknown as { recast?: unknown }).recast));
   const info = await window.evaluate(() =>
-    (window as unknown as { recast: { invoke(c: string): Promise<{ app: string }> } }).recast.invoke('app:getPlatformInfo'),
+    (window as unknown as { recast: { invoke(c: string): Promise<{ platform: string }> } }).recast.invoke('app:getPlatformInfo'),
   );
-  expect(info.app.length).toBeGreaterThan(0);
+  expect(info.platform.length).toBeGreaterThan(0);
 
   // Library route renders (empty state on a fresh profile — honest empty state).
-  await expect(window.getByText(/Record now|No recordings yet/)).toBeVisible();
+  await expect(window.getByText('No recordings yet')).toBeVisible();
 
   await app.close();
 });

@@ -1,5 +1,5 @@
 import { autoUpdater } from 'electron-updater';
-import { BrowserWindow } from 'electron';
+import { app, BrowserWindow } from 'electron';
 import { context } from './context';
 
 /**
@@ -16,6 +16,11 @@ function broadcast(phase: Phase, version: string | null, message: string | null)
 }
 
 export function setupUpdater(): void {
+  // electron-updater reads app.getVersion() in its constructor and requires a
+  // valid semver. Dev launches (electron out/main/index.js) report "0.0",
+  // which would throw; update wiring is only meaningful for packaged builds.
+  if (!app.isPackaged) return;
+
   autoUpdater.autoDownload = false;
   autoUpdater.autoInstallOnAppQuit = true;
   autoUpdater.logger = null;

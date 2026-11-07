@@ -80,7 +80,7 @@ export default function App() {
         style={{ height: 'var(--titlebar-height)', WebkitAppRegion: 'drag' } as React.CSSProperties}
       >
         <div className="flex items-center gap-3" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
-          <span className="text-[15px] font-bold tracking-tight" style={{ marginLeft: process.platform === 'darwin' ? 64 : 0 }}>
+          <span className="text-[15px] font-bold tracking-tight" style={{ marginLeft: platform?.platform === 'darwin' ? 64 : 0 }}>
             Recast
           </span>
           {useApp.getState().recorderState ? (
