@@ -126,6 +126,13 @@ jobs:
       - name: Rebuild native modules for the Electron ABI
         run: pnpm --filter @recast/desktop exec electron-builder install-app-deps
 
+      # Playwright auto-downloads the Electron binary inside the test when it
+      # is missing, which eats the firstWindow timeout — make sure the binary
+      # exists before the test runs.
+      - name: Ensure Electron binary is present
+        run: node node_modules/electron/install.js
+        working-directory: apps/desktop
+
       - name: Run smoke test (launch → bridge → library)
         run: xvfb-run -a --server-args="-screen 0 1280x1024x24" pnpm smoke
         env:

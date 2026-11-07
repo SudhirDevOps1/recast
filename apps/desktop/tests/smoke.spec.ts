@@ -24,7 +24,7 @@ test('record synthetic source → library → export', async () => {
     },
   });
 
-  const window = await app.firstWindow();
+  const window = await app.firstWindow({ timeout: 90_000 });
   await window.waitForLoadState('domcontentloaded');
 
   // The app shell mounted and the bridge is present.
