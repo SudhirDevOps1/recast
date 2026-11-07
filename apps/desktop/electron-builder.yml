@@ -5,7 +5,7 @@ appId: app.recast.desktop
 productName: Recast
 copyright: Copyright © 2025 Recast contributors
 directories:
-  output: release
+  output: ../../release
   buildResources: build
 files:
   - out/**
