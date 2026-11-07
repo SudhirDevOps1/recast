@@ -23,7 +23,7 @@
     "@recast/export": "workspace:*",
     "@recast/shared": "workspace:*",
     "@recast/ui": "workspace:*",
-    "better-sqlite3": "^11.10.0",
+    "better-sqlite3": "^13.0.3",
     "electron-updater": "^6.3.9",
     "uiohook-napi": "^1.5.5",
     "zod": "^3.24.1",
