@@ -20,7 +20,7 @@ jobs:
     outputs:
       has_app: ${{ steps.check.outputs.has_app }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - id: check
         name: Detect application code
         run: |
@@ -36,7 +36,7 @@ jobs:
     name: Docs integrity
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Required files exist
         run: |
@@ -65,7 +65,7 @@ jobs:
     if: needs.preflight.outputs.has_app == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: pnpm/action-setup@v4
         with:
@@ -95,7 +95,7 @@ jobs:
             script: dist:linux
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: pnpm/action-setup@v4
         with:
