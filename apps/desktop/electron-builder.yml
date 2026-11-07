@@ -48,11 +48,11 @@ win:
       to: ffmpeg/LICENSE.txt
   target:
     - target: nsis
-      arch: [x64]
     - target: msi
-      arch: [x64]
     - target: portable
-      arch: [x64]
+# Per-target arch lists are intentionally absent: the build matrix drives arch
+# per job via the CLI (--x64 / --arm64). A config-level arch list overrides the
+# CLI and makes the arm64 leg produce x64 artifacts.
 nsis:
   oneClick: false
   perMachine: false
@@ -87,11 +87,12 @@ mac:
       to: ffmpeg/LICENSE.txt
   target:
     - target: dmg
-      arch: [arm64, x64]
-    - target: pkg
-      arch: [arm64, x64]
     - target: zip
-      arch: [arm64, x64]
+# The `pkg` (MDM) target is temporarily removed from the build: electron-builder
+# 26.18 fails it at the final productbuild step ("ENOENT ... unlink
+# app.recast.desktop.pkg") on unsigned CI builds. Re-add alongside signing
+# (docs/code-signing.md) and verify on a real macOS pass. The config block below
+# stays for that re-enable.
 dmg:
   artifactName: Recast-${version}-${arch}.${ext}
   title: Recast ${version}

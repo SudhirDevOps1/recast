@@ -20,8 +20,8 @@ Configs live in `apps/desktop/electron-builder.yml` (artifacts land in the repo-
 | Artifact | Notes |
 |---|---|
 | `Recast-x.y.z-arm64.dmg` | hardened runtime, entitlements (audio, camera, JIT) |
-| `Recast-x.y.z-x64.dmg` | macos-13 runner |
-| `Recast-x.y.z.pkg` | MDM installs |
+| `Recast-x.y.z-x64.dmg` | cross-compiled on arm64 CI (Intel runners retired) |
+| `Recast-x.y.z.pkg` | MDM installs — **temporarily out of CI**: electron-builder 26.18 fails the unsigned productbuild step (`ENOENT … unlink app.recast.desktop.pkg`); re-enables with signing (docs/code-signing.md) |
 | `Recast-x.y.z-<arch>-mac.zip` + `latest-mac.yml` | electron-updater feed |
 | Homebrew cask | submitted after notarized releases exist |
 | Universal DMG | ❌ not built yet (two slices shipped instead) |
