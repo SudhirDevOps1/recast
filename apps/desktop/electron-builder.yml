@@ -46,7 +46,6 @@ nsis:
   oneClick: false
   perMachine: false
   allowToChangeInstallationDirectory: true
-  perUser: true
   deleteAppDataOnUninstall: false
   shortcutName: Recast
   artifactName: Recast-Setup-${version}${env.ARCH_SUFFIX}.${ext}
@@ -86,7 +85,7 @@ pkg:
 linux:
   artifactName: Recast-${version}-${arch}.${ext}
   category: Video
-  desktop:
+  desktopEntry:
     Name: Recast
     Comment: Record, auto-zoom, caption, export — locally.
     StartupWMClass: Recast
