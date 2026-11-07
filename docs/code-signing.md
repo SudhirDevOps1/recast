@@ -26,3 +26,27 @@ Status first: **no release is signed today** — certificates are not yet in pla
 - Channels: `stable` and `beta` (Settings → About). Update checks are **opt-in** (off by default).
 - Never restart mid-recording: the install path checks for an active session and refuses with a precise reason.
 - Rollback: previous installers remain attached to each GitHub release; the update feed only points forward.
+
+## CI signing environment
+
+Until certificates exist, `build.yml` and `release.yml` set
+`CSC_IDENTITY_AUTO_DISCOVERY: 'false'` and do **not** map signing secrets to
+env — GitHub injects empty strings for absent secrets and electron-builder
+treats `CSC_LINK=''` as a file path, failing the build with
+`<project dir> not a file`. When certificates arrive, add this block to the
+`env:` of both workflows' build job, flip the flag to `'true'`, and set
+`notarize: true` in `apps/desktop/electron-builder.yml`:
+
+```yaml
+      CSC_LINK: ${{ secrets.CSC_LINK }}
+      CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+      WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
+      WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
+      APPLE_ID: ${{ secrets.APPLE_ID }}
+      APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+```
+
+electron-builder publishing is disabled (`--publish never` everywhere);
+releases are published by `release.yml` from uploaded artifacts plus
+`SHA256SUMS`.
