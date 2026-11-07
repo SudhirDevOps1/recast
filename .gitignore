@@ -1,0 +1,76 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+.pnpm-debug.log*
+
+# Builds
+dist/
+out/
+build/
+release/
+apps/desktop/dist/
+packages/*/dist/
+*.tsbuildinfo
+
+# Electron
+*.asar
+*.asar.unpacked/
+.electron/
+.electron-builder-cache/
+app-update.yml
+latest*.yml
+*.blockmap
+
+# Generated binaries (downloaded at build time, verified by lockfile)
+resources/ffmpeg/
+resources/bin/
+vendor/ffmpeg/
+*.exe.tmp
+
+# Media — never commit recordings or renders
+*.recast
+*.recaststyle
+*.mp4
+*.mov
+*.webm
+*.mkv
+*.gif
+*.srt
+*.vtt
+*.wav
+*.m4a
+!docs/**/*.mp4
+!docs/**/*.gif
+
+# Test artifacts
+coverage/
+test-results/
+playwright-report/
+golden-frames/
+tmp/
+.tmp/
+
+# Env and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.p12
+*.pfx
+*.cer
+*.mobileprovision
+*.provisionprofile
+credentials.json
+
+# Editors / OS
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.example.json
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs
+*.log
+logs/

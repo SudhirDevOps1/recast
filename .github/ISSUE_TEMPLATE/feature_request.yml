@@ -1,0 +1,56 @@
+name: Feature request
+description: Suggest something Recast should do
+title: "[feat] "
+labels: ["enhancement", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Recast stays fast by saying no. Please describe the job you are trying to do, not just the feature.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What are you trying to accomplish, and where does Recast get in the way?
+      placeholder: I record 30-minute tutorials and want to cut the "um" pauses without leaving the app.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+    validations:
+      required: false
+
+  - type: dropdown
+    id: phase
+    attributes:
+      label: Where does this fit?
+      options:
+        - Phase 1 — recording basics
+        - Phase 2 — editor and zoom
+        - Phase 3 — audio and captions
+        - Phase 4 — distribution
+        - Not sure
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: constraints
+    attributes:
+      label: Constraints
+      description: Recast is local-first and offline by default.
+      options:
+        - label: This works fully offline
+          required: false
+        - label: This does not require an account or upload
+          required: false

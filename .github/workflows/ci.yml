@@ -1,0 +1,98 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  docs:
+    name: Docs integrity
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Required files exist
+        run: |
+          set -e
+          required="README.md LICENSE AGENTS.md CONTRIBUTING.md SECURITY.md docs/README.md docs/architecture.md docs/recording.md docs/editing.md docs/export.md docs/ffmpeg.md docs/platform-support.md docs/build.md docs/packaging.md docs/code-signing.md docs/keyboard-shortcuts.md docs/troubleshooting.md docs/roadmap.md prompts/build-prompt.md"
+          missing=0
+          for f in $required; do
+            if [ ! -f "$f" ]; then echo "::error::missing $f"; missing=1; fi
+          done
+          exit $missing
+
+      - name: No placeholder names
+        run: |
+          if grep -rInE "(my-app|electron-app|TODO: APP NAME|ChangeMe)" --include="*.md" . ; then
+            echo "::error::placeholder name found"; exit 1
+          fi
+          echo "ok"
+
+  verify:
+    name: Lint, types, tests
+    needs: docs
+    runs-on: ubuntu-latest
+    if: ${{ hashFiles('package.json') != '' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm verify
+
+  build:
+    name: Build ${{ matrix.os }}
+    needs: verify
+    if: ${{ hashFiles('package.json') != '' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            script: dist:win
+          - os: macos-14
+            script: dist:mac
+          - os: ubuntu-22.04
+            script: dist:linux
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm ffmpeg:fetch
+      - run: pnpm ${{ matrix.script }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: recast-${{ matrix.os }}
+          path: release/*
+          if-no-files-found: error
+          retention-days: 7
