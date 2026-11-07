@@ -42,7 +42,7 @@ jobs:
       - name: Required files exist
         run: |
           set -e
-          required="README.md LICENSE AGENTS.md CONTRIBUTING.md SECURITY.md STATUS.md PERFORMANCE.md CHANGELOG.md \
+          required="README.md LICENSE AGENTS.md CONTRIBUTING.md SECURITY.md STATUS.md PERFORMANCE.md SPIKE-RESULTS.md CHANGELOG.md \
             docs/README.md docs/architecture.md docs/recording.md docs/editing.md docs/export.md docs/ffmpeg.md \
             docs/platform-support.md docs/build.md docs/packaging.md docs/code-signing.md docs/keyboard-shortcuts.md \
             docs/troubleshooting.md docs/roadmap.md prompts/build-prompt.md apps/website/index.html"

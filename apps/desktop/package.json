@@ -11,11 +11,13 @@
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "smoke": "playwright test",
     "dist:win": "electron-vite build && electron-builder --win --x64",
-    "dist:win:arm64": "electron-vite build && electron-builder --win --arm64",
+    "dist:win:arm64": "electron-vite build && electron-builder --win nsis portable --arm64",
     "dist:mac": "electron-vite build && electron-builder --mac --universal",
     "dist:mac:arm64": "electron-vite build && electron-builder --mac --arm64",
+    "dist:mac:x64": "electron-vite build && electron-builder --mac --x64",
     "dist:linux": "electron-vite build && electron-builder --linux AppImage deb rpm tar.gz",
-    "dist:linux:appimage": "electron-vite build && electron-builder --linux AppImage"
+    "dist:linux:appimage": "electron-vite build && electron-builder --linux AppImage",
+    "dist:linux:extras": "electron-vite build && electron-builder --linux flatpak snap"
   },
   "dependencies": {
     "@recast/capture": "workspace:*",

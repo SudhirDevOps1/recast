@@ -44,12 +44,18 @@ Configs live in `apps/desktop/electron-builder.yml` (artifacts land in the repo-
 
 ```bash
 pnpm dist:win        # NSIS + MSI + portable (x64)
-pnpm dist:win:arm64  # arm64 suffix
+pnpm dist:win:arm64  # arm64 NSIS + portable (MSI is x64-only)
 pnpm dist:mac:arm64  # macos-14 runner
-pnpm dist:mac        # universal build via macos-13 + macos-14 jobs
+pnpm dist:mac:x64    # macos-13 runner
+pnpm dist:mac        # universal build
 pnpm dist:linux      # AppImage + deb + rpm + tar.gz
+pnpm dist:linux:extras # Flatpak + Snap (best-effort; also on nightly manual dispatch)
 ```
 
 ## CI
 
-`.github/workflows/build.yml`: five runner jobs (win x64, win arm64, mac arm64, mac x64, linux x64/arm64), FFmpeg caches keyed by the lockfile hash, AppImage smoke, then a release job that collects artifacts, writes `SHA256SUMS`, and publishes release notes on `v*` tags. Nightly on `main`.
+`.github/workflows/build.yml`: five runner jobs (win x64, win arm64, mac arm64, mac x64, linux x64), Electron + FFmpeg caches keyed by lockfile hashes, AppImage extract smoke, then a release job that collects artifacts, writes `SHA256SUMS`, and publishes the **nightly prerelease** (scheduled nightly on `main`, or manual dispatch — the dispatch input also enables the Flatpak/Snap legs). `.github/workflows/release.yml` runs the same matrix on `v*` tags and publishes a stable release with auto-generated notes.
+
+## Website
+
+`apps/website/` deploys to GitHub Pages via `.github/workflows/website.yml` and lists real release assets per OS (GitHub API, with a graceful fallback link).

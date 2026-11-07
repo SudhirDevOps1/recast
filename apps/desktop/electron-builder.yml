@@ -3,7 +3,7 @@
 # and are asar-unpacked so they stay executable. Never commit those binaries.
 appId: app.recast.desktop
 productName: Recast
-copyright: Copyright © 2025 Recast contributors
+copyright: Copyright © 2025-2026 Recast contributors
 directories:
   output: ../../release
   buildResources: build

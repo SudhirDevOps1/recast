@@ -1,0 +1,169 @@
+name: Nightly installers
+
+on:
+  schedule:
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+    inputs:
+      publish_nightly:
+        description: 'Publish the nightly prerelease after building'
+        type: boolean
+        default: true
+      build_linux_extras:
+        description: 'Also build Flatpak/Snap targets (best-effort, slow)'
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: nightly-build
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: ${{ matrix.name }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: windows-latest, name: win-x64, script: dist:win, arch_suffix: '' }
+          - { os: windows-11-arm, name: win-arm64, script: dist:win:arm64, arch_suffix: '-arm64' }
+          - { os: macos-14, name: mac-arm64, script: dist:mac:arm64, arch_suffix: '' }
+          - { os: macos-13, name: mac-x64, script: dist:mac:x64, arch_suffix: '' }
+          - { os: ubuntu-22.04, name: linux-x64, script: dist:linux, arch_suffix: '' }
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # Signing is a no-op until these secrets exist (see docs/code-signing.md).
+      CSC_LINK: ${{ secrets.CSC_LINK }}
+      CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+      WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
+      WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
+      APPLE_ID: ${{ secrets.APPLE_ID }}
+      APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Cache Electron binaries
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.os == 'Linux' && '~/.cache/electron' || (runner.os == 'macOS' && '~/Library/Caches/electron' || '%LOCALAPPDATA%\electron\Cache') }}
+          key: electron-cache-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+
+      - name: Cache FFmpeg binaries
+        uses: actions/cache@v4
+        with:
+          path: resources/ffmpeg
+          key: ffmpeg-${{ runner.os }}-${{ hashFiles('ffmpeg.lock.json') }}
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm ffmpeg:fetch
+      - run: pnpm --filter @recast/desktop build
+
+      - name: Build installers (${{ matrix.script }})
+        run: pnpm ${{ matrix.script }}
+        env:
+          ARCH_SUFFIX: ${{ matrix.arch_suffix }}
+
+      - name: AppImage smoke (extract + FFmpeg payload check)
+        if: runner.os == 'Linux'
+        run: |
+          cd release
+          APPIMAGE=$(ls Recast-*.AppImage | head -1)
+          "$APPIMAGE" --appimage-extract >/dev/null
+          test -f squashfs-root/resources/ffmpeg/linux-x64/ffmpeg
+          echo "AppImage smoke OK: $APPIMAGE (FFmpeg payload present)"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: installers-${{ matrix.name }}
+          path: release/*
+          if-no-files-found: error
+          retention-days: 14
+
+  linux-extras:
+    name: linux-extras (Flatpak / Snap, best-effort)
+    runs-on: ubuntu-22.04
+    continue-on-error: true
+    if: github.event_name == 'workflow_dispatch' && inputs.build_linux_extras
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install Flatpak tooling
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends flatpak flatpak-builder
+          flatpak remote-add --user --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
+
+      - name: Install snapcraft
+        run: sudo snap install snapcraft --classic
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm ffmpeg:fetch --skip || pnpm ffmpeg:fetch
+      - run: pnpm --filter @recast/desktop build
+      - run: pnpm --filter @recast/desktop dist:linux:extras
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: installers-linux-extras
+          path: release/*
+          if-no-files-found: warn
+          retention-days: 14
+
+  nightly-release:
+    name: Publish nightly prerelease
+    needs: [build]
+    if: ${{ (github.event_name == 'schedule') || (github.event_name == 'workflow_dispatch' && inputs.publish_nightly) }}
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Generate SHA256SUMS
+        run: |
+          cd artifacts
+          sha256sum * > SHA256SUMS
+          echo "Checksums:"
+          cat SHA256SUMS
+
+      - name: Replace nightly prerelease
+        run: |
+          gh release delete nightly --yes --cleanup-tag --repo "$GITHUB_REPOSITORY" || true
+          sleep 3
+          gh release create nightly \
+            --repo "$GITHUB_REPOSITORY" \
+            --prerelease \
+            --title "Recast nightly $(date -u +%Y-%m-%d)" \
+            --notes "Automated nightly build of \`main\` @ ${{ github.sha }}.
+
+          Installers are **unsigned** until signing certificates are configured (see docs/code-signing.md). Windows may show SmartScreen; macOS requires right-click → Open on first launch.
+
+          Verify downloads: \`sha256sum -c SHA256SUMS\`" \
+            artifacts/*

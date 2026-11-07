@@ -1,0 +1,118 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: ${{ matrix.name }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: windows-latest, name: win-x64, script: dist:win, arch_suffix: '' }
+          - { os: windows-11-arm, name: win-arm64, script: dist:win:arm64, arch_suffix: '-arm64' }
+          - { os: macos-14, name: mac-arm64, script: dist:mac:arm64, arch_suffix: '' }
+          - { os: macos-13, name: mac-x64, script: dist:mac:x64, arch_suffix: '' }
+          - { os: ubuntu-22.04, name: linux-x64, script: dist:linux, arch_suffix: '' }
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # Signing is a no-op until these secrets exist (see docs/code-signing.md).
+      CSC_LINK: ${{ secrets.CSC_LINK }}
+      CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+      WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
+      WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
+      APPLE_ID: ${{ secrets.APPLE_ID }}
+      APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Cache Electron binaries
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.os == 'Linux' && '~/.cache/electron' || (runner.os == 'macOS' && '~/Library/Caches/electron' || '%LOCALAPPDATA%\electron\Cache') }}
+          key: electron-cache-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+
+      - name: Cache FFmpeg binaries
+        uses: actions/cache@v4
+        with:
+          path: resources/ffmpeg
+          key: ffmpeg-${{ runner.os }}-${{ hashFiles('ffmpeg.lock.json') }}
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm ffmpeg:fetch
+      - run: pnpm --filter @recast/desktop build
+
+      - name: Build installers (${{ matrix.script }})
+        run: pnpm ${{ matrix.script }}
+        env:
+          ARCH_SUFFIX: ${{ matrix.arch_suffix }}
+
+      - name: AppImage smoke (extract + FFmpeg payload check)
+        if: runner.os == 'Linux'
+        run: |
+          cd release
+          APPIMAGE=$(ls Recast-*.AppImage | head -1)
+          "$APPIMAGE" --appimage-extract >/dev/null
+          test -f squashfs-root/resources/ffmpeg/linux-x64/ffmpeg
+          echo "AppImage smoke OK: $APPIMAGE (FFmpeg payload present)"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: installers-${{ matrix.name }}
+          path: release/*
+          if-no-files-found: error
+          retention-days: 30
+
+  publish:
+    name: Publish release
+    needs: [build]
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Generate SHA256SUMS
+        run: |
+          cd artifacts
+          sha256sum * > SHA256SUMS
+          echo "Checksums:"
+          cat SHA256SUMS
+
+      - name: Publish GitHub release
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          gh release create "$TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --generate-notes \
+            --title "Recast ${TAG#v}" \
+            --notes "Download the installer for your platform below. \`latest.yml\` / \`latest-mac.yml\` are the electron-updater feeds.
+
+          Installers are **unsigned** until signing certificates are configured (see docs/code-signing.md). Windows may show SmartScreen; macOS requires right-click → Open on first launch.
+
+          Verify downloads: \`sha256sum -c SHA256SUMS\`" \
+            artifacts/*

@@ -6,7 +6,21 @@ updates:
       interval: weekly
     groups:
       minor-and-patch:
-        update-types: [minor, patch]
+        update-types:
+          - minor
+          - patch
+    # Deliberate holds — these majors break the verified build and are tracked
+    # for a dedicated dependency-refresh pass (see STATUS.md). Remove entries
+    # from this list when that refresh lands.
+    ignore:
+      - dependency-name: zod
+        update-types: [version-update:semver-major]
+      - dependency-name: electron-vite
+        update-types: [version-update:semver-major]
+      - dependency-name: "@vitejs/plugin-react"
+        update-types: [version-update:semver-major]
+      - dependency-name: "@types/node"
+        update-types: [version-update:semver-major]
   - package-ecosystem: github-actions
     directory: /
     schedule:

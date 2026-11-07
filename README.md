@@ -1,10 +1,18 @@
 # Recast
 
+[![CI](https://github.com/SudhirDevOps1/recast/actions/workflows/ci.yml/badge.svg)](https://github.com/SudhirDevOps1/recast/actions/workflows/ci.yml)
+[![Nightly installers](https://github.com/SudhirDevOps1/recast/actions/workflows/build.yml/badge.svg)](https://github.com/SudhirDevOps1/recast/actions/workflows/build.yml)
+[![CodeQL](https://github.com/SudhirDevOps1/recast/actions/workflows/codeql.yml/badge.svg)](https://github.com/SudhirDevOps1/recast/actions/workflows/codeql.yml)
+[![License: GPL-3.0-or-later](https://img.shields.io/badge/license-GPL--3.0--or--later-blue.svg)](LICENSE)
+[![Website](https://img.shields.io/badge/website-sudhirdevops1.github.io%2Frecast-7C5CFF)](https://sudhirdevops1.github.io/recast/)
+
 **Free, open-source, local-first screen recorder and cinematic editor for macOS, Windows and Linux.**
 
 Record, auto-zoom, caption, export. No account, no cloud, no telemetry, no watermark, no feature gates. Everything runs 100% offline on your machine.
 
 *Screen Studio's polish, Cap's simplicity, Cursorful's shareability — zero subscription.*
+
+**Website & downloads:** [sudhirdevops1.github.io/recast](https://sudhirdevops1.github.io/recast/)
 
 ## How it works
 
@@ -20,13 +28,13 @@ Record, auto-zoom, caption, export. No account, no cloud, no telemetry, no water
 | Windows | `Recast-x.y.z.msi` | Enterprise / GPO, per-machine |
 | Windows | `Recast-Portable-x.y.z.exe` | Settings live next to the exe when writable |
 | Windows | `Recast-Setup-x.y.z-arm64.exe` | ARM64 |
-| macOS | `Recast-x.y.z-arm64.dmg` | Apple Silicon, signed + notarized |
-| macOS | `Recast-x.y.z-x64.dmg` | Intel, signed + notarized |
+| macOS | `Recast-x.y.z-arm64.dmg` | Apple Silicon — **unsigned until certificates land** (docs/code-signing.md) |
+| macOS | `Recast-x.y.z-x64.dmg` | Intel — **unsigned until certificates land** |
 | macOS | `Recast-x.y.z.pkg` | MDM deployment |
 | Linux | `Recast-x.y.z-x64.AppImage` | X11 full support; Wayland via portal |
 | Linux | `.deb`, `.rpm`, `.tar.gz` | Also Flatpak, Snap, AUR |
 
-Download from [Releases](https://github.com/SudhirDevOps1/recast/releases). Signed installers and `SHA256SUMS` are published per release. Note: a fresh code-signing certificate may still trigger SmartScreen on Windows until reputation builds — see [docs/code-signing.md](docs/code-signing.md).
+Download from [Releases](https://github.com/SudhirDevOps1/recast/releases) or the [website](https://sudhirdevops1.github.io/recast/). `SHA256SUMS` is published per release; installers are **unsigned** for now — Windows may show SmartScreen and macOS needs right-click → Open on first launch. See [docs/code-signing.md](docs/code-signing.md) for the signing plan and the SmartScreen-reputation note.
 
 ## Build from source
 

@@ -2,6 +2,19 @@
 
 All notable changes to Recast are documented here. Format: Keep a Changelog; versioning: SemVer.
 
+## [Unreleased]
+
+### Added
+- CI/CD activated end-to-end: `ci.yml` (verify gate — typecheck/lint/tests/build on 5 runners: ubuntu-22.04, windows-latest, windows-11-arm, macos-14, macos-13 — plus an xvfb Playwright smoke job), `build.yml` (nightly installer matrix with FFmpeg/Electron caches, AppImage smoke, SHA256SUMS, nightly prerelease; Flatpak/Snap on manual dispatch), `release.yml` (on `v*` tags with auto-generated notes), `website.yml` (GitHub Pages), `codeql.yml` (weekly security analysis).
+- Website (`apps/website/`): landing page with feature showcase, honest beta markers, real release data from the GitHub API (per-OS asset lists, nightly toggle, star count, rate-limit fallback), OG image, JSON-LD, deployed to https://sudhirdevops1.github.io/recast/.
+- `SPIKE-RESULTS.md` — what was proven, how, and what still needs hardware.
+- Build scripts: `dist:mac:x64`, `dist:linux:extras` (Flatpak/Snap).
+
+### Fixed
+- `.github/dependabot.yml` group syntax (`update-types: inor, patch]` → `[minor, patch]`).
+- README install table no longer implies macOS builds are signed/notarized today — they are not, and say so.
+- Windows arm64 builds target NSIS + portable explicitly (MSI remains x64-only for enterprise/GPO).
+
 ## [0.1.0] — initial build
 
 ### Added
