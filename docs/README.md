@@ -14,3 +14,4 @@
 | [keyboard-shortcuts.md](keyboard-shortcuts.md) | Full map |
 | [troubleshooting.md](troubleshooting.md) | Real, confirmed issues only |
 | [roadmap.md](roadmap.md) | Phases + acceptance criteria |
+| [repository-setup.md](repository-setup.md) | One-time admin settings (Pages, branch protection, secrets) |
