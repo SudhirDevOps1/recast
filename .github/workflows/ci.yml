@@ -20,7 +20,8 @@ jobs:
     outputs:
       has_app: ${{ steps.check.outputs.has_app }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
+
       - id: check
         name: Detect application code
         run: |
@@ -36,12 +37,15 @@ jobs:
     name: Docs integrity
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Required files exist
         run: |
           set -e
-          required="README.md LICENSE AGENTS.md CONTRIBUTING.md SECURITY.md docs/README.md docs/architecture.md docs/recording.md docs/editing.md docs/export.md docs/ffmpeg.md docs/platform-support.md docs/build.md docs/packaging.md docs/code-signing.md docs/keyboard-shortcuts.md docs/troubleshooting.md docs/roadmap.md prompts/build-prompt.md"
+          required="README.md LICENSE AGENTS.md CONTRIBUTING.md SECURITY.md STATUS.md PERFORMANCE.md CHANGELOG.md \
+            docs/README.md docs/architecture.md docs/recording.md docs/editing.md docs/export.md docs/ffmpeg.md \
+            docs/platform-support.md docs/build.md docs/packaging.md docs/code-signing.md docs/keyboard-shortcuts.md \
+            docs/troubleshooting.md docs/roadmap.md prompts/build-prompt.md apps/website/index.html"
           missing=0
           for f in $required; do
             if [ ! -f "$f" ]; then
@@ -63,15 +67,21 @@ jobs:
     name: Lint, types, tests
     needs: [preflight, docs]
     if: needs.preflight.outputs.has_app == 'true'
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, windows-latest, windows-11-arm, macos-14, macos-13]
+    runs-on: ${{ matrix.os }}
+    env:
+      ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
         with:
           version: 9
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: pnpm
@@ -79,42 +89,33 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm verify
 
-  build:
-    name: Build ${{ matrix.os }}
+  smoke:
+    name: Smoke (ubuntu-22.04)
     needs: [preflight, verify]
     if: needs.preflight.outputs.has_app == 'true'
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: windows-latest
-            script: dist:win
-          - os: macos-14
-            script: dist:mac
-          - os: ubuntu-22.04
-            script: dist:linux
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
         with:
           version: 9
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: pnpm
 
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm ffmpeg:fetch
-      - run: pnpm ${{ matrix.script }}
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Install system dependencies for Electron
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libgtk-3-0 libnss3 libasound2 libgbm1 libxkbcommon0 xvfb
 
-      - uses: actions/upload-artifact@v4
-        with:
-          name: recast-${{ matrix.os }}
-          path: release/*
-          if-no-files-found: error
-          retention-days: 7
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+
+      - name: Run smoke test (launch → bridge → library)
+        run: xvfb-run -a --server-args="-screen 0 1280x1024x24" pnpm smoke
+        env:
+          RECAST_SMOKE: '1'
