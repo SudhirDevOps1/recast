@@ -51,7 +51,9 @@ Legend: ✅ implemented & verified · 🟡 implemented but not yet verified on d
 ## Packaging & distribution
 
 - ✅ `electron-builder.yml` with the full matrix: NSIS per-user (no UAC), MSI (per-machine), portable, arm64 suffix, DMG arm64/x64, pkg, zip (updater), AppImage/deb/rpm/tar.gz, `recast://` protocol, asarUnpack for native modules + FFmpeg.
-- 🟡 CI build matrix (`windows-latest`, `windows-11-arm`, `macos-14`, `macos-13`, `ubuntu-22.04` + arm) with caching by lockfile hash, smoke of the AppImage, SHA256SUMS + release job. **Workflows are written and committed locally (`ci.yml`, `build.yml`, `dependabot.yml`) but parked out of the pushed tree until the GitHub token gains the `workflow` scope — the repo currently runs its pre-existing adaptive `ci.yml` preflight.** One `git push` once the token is updated.
+- 🟡 CI build matrix (`windows-latest`, `windows-11-arm`, `macos-14`, `macos-13`, `ubuntu-22.04` + arm) with caching by lockfile hash, smoke of the AppImage, SHA256SUMS + release job. **Workflows are written and committed locally (`ci.yml`, `build.yml`, `dependabot.yml`) but parked out of the pushed tree until the GitHub token gains the `workflow` scope** (see `.github/CI-ACTIVATION.md` in the repo).
+  - **CI results as of 2026-11-07** (on the repo's pre-existing adaptive `ci.yml`): Preflight ✅ · Docs integrity ✅ · **Lint, types, tests (the full `pnpm verify` gate) ✅ on ubuntu-latest** · legacy build job ❌ until `build.yml` is activated (it predates this implementation).
+  - Dependabot is live and opened 8 PRs; the major bumps (zod 4, electron-vite 6, @vitejs/plugin-react 6, @types/node 26) fail CI on purpose and need a deliberate merge/reject.
 - ❌ Signing (Azure Trusted Signing / Developer ID + notarytool) — env-var plumbing done, real certificates not available yet. Until then, artifacts are unsigned and **stated as such**.
 - 🟠 Winget/Scoop/Chocolatey/Flatpak/Snap/AUR manifests authored, not yet submitted.
 - ❌ Auto-update feed live (`electron-updater` wired; generic GitHub provider; opt-in).
