@@ -33,7 +33,7 @@
     "ffmpeg:fetch": "node scripts/fetch-ffmpeg.mjs"
   },
   "devDependencies": {
-    "@types/node": "^22.10.2",
+    "@types/node": "^26.6.6",
     "eslint": "^9.17.0",
     "eslint-plugin-react-hooks": "^5.1.0",
     "prettier": "^3.4.2",
