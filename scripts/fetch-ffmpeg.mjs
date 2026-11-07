@@ -138,10 +138,13 @@ async function fetchTarget(key, spec) {
     results.push({ binary, dest, bytes: statSync(dest).size, verified: Boolean(pinned || PIN) });
   }
   // Manifest next to the binaries so the app can display what shipped.
-  writeFileSync(
-    join(outDir, 'manifest.json'),
-    JSON.stringify({ key, fetchedAt: new Date().toISOString(), files: results }, null, 2),
-  );
+  if (results.length > 0) {
+    mkdirSync(outDir, { recursive: true });
+    writeFileSync(
+      join(outDir, 'manifest.json'),
+      JSON.stringify({ key, fetchedAt: new Date().toISOString(), files: results }, null, 2),
+    );
+  }
   return results;
 }
 
