@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "description": "Recast desktop app",
+  "homepage": "https://sudhirdevops1.github.io/recast/",
   "main": "out/main/index.js",
   "scripts": {
     "dev": "electron-vite dev",

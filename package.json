@@ -27,7 +27,10 @@
     "fetch:ffmpeg": "node scripts/fetch-ffmpeg.mjs",
     "icons": "node scripts/make-icons.mjs",
     "dist:win": "pnpm --filter @recast/desktop dist:win",
+    "dist:win:arm64": "pnpm --filter @recast/desktop dist:win:arm64",
     "dist:mac": "pnpm --filter @recast/desktop dist:mac",
+    "dist:mac:arm64": "pnpm --filter @recast/desktop dist:mac:arm64",
+    "dist:mac:x64": "pnpm --filter @recast/desktop dist:mac:x64",
     "dist:linux": "pnpm --filter @recast/desktop dist:linux",
     "dist:all": "pnpm dist:win && pnpm dist:mac && pnpm dist:linux",
     "ffmpeg:fetch": "node scripts/fetch-ffmpeg.mjs"
