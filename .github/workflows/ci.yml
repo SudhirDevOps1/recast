@@ -14,6 +14,24 @@ permissions:
   contents: read
 
 jobs:
+  preflight:
+    name: Preflight
+    runs-on: ubuntu-latest
+    outputs:
+      has_app: ${{ steps.check.outputs.has_app }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: check
+        name: Detect application code
+        run: |
+          if [ -f package.json ]; then
+            echo "has_app=true" >> "$GITHUB_OUTPUT"
+            echo "Application code detected."
+          else
+            echo "has_app=false" >> "$GITHUB_OUTPUT"
+            echo "Specification-only repository — skipping app jobs."
+          fi
+
   docs:
     name: Docs integrity
     runs-on: ubuntu-latest
@@ -26,22 +44,26 @@ jobs:
           required="README.md LICENSE AGENTS.md CONTRIBUTING.md SECURITY.md docs/README.md docs/architecture.md docs/recording.md docs/editing.md docs/export.md docs/ffmpeg.md docs/platform-support.md docs/build.md docs/packaging.md docs/code-signing.md docs/keyboard-shortcuts.md docs/troubleshooting.md docs/roadmap.md prompts/build-prompt.md"
           missing=0
           for f in $required; do
-            if [ ! -f "$f" ]; then echo "::error::missing $f"; missing=1; fi
+            if [ ! -f "$f" ]; then
+              echo "::error file=$f::required document is missing"
+              missing=1
+            fi
           done
           exit $missing
 
-      - name: No placeholder names
+      - name: No placeholder branding
         run: |
           if grep -rInE "(my-app|electron-app|TODO: APP NAME|ChangeMe)" --include="*.md" . ; then
-            echo "::error::placeholder name found"; exit 1
+            echo "::error::placeholder branding found"
+            exit 1
           fi
-          echo "ok"
+          echo "branding ok"
 
   verify:
     name: Lint, types, tests
-    needs: docs
+    needs: [preflight, docs]
+    if: needs.preflight.outputs.has_app == 'true'
     runs-on: ubuntu-latest
-    if: ${{ hashFiles('package.json') != '' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -51,7 +73,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version-file: .nvmrc
+          node-version: 22
           cache: pnpm
 
       - run: pnpm install --frozen-lockfile
@@ -59,8 +81,8 @@ jobs:
 
   build:
     name: Build ${{ matrix.os }}
-    needs: verify
-    if: ${{ hashFiles('package.json') != '' }}
+    needs: [preflight, verify]
+    if: needs.preflight.outputs.has_app == 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -81,7 +103,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version-file: .nvmrc
+          node-version: 22
           cache: pnpm
 
       - run: pnpm install --frozen-lockfile
