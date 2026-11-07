@@ -137,3 +137,6 @@ jobs:
         run: xvfb-run -a --server-args="-screen 0 1280x1024x24" pnpm smoke
         env:
           RECAST_SMOKE: '1'
+          # Forward the Electron main-process console into the CI log so a
+          # silent startup failure is diagnosable in one round trip.
+          DEBUG: 'pw:electron'
