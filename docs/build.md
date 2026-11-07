@@ -3,7 +3,7 @@
 ## Prerequisites
 
 - Node ≥ 20.11 (22 recommended)
-- pnpm 9 (`corepack enable` or `npm i -g pnpm`)
+- pnpm 9 (`corepack enable` or `npm i -g pnpm`) — the repo does not pin `packageManager` because CI uses `pnpm/action-setup` with its own version input
 - Platform deps: Windows — nothing extra; macOS — Xcode CLT for native rebuilds; Linux — `build-essential`, `python3` for native modules, `libfuse2` for AppImage runs
 
 ## Setup

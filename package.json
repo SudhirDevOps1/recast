@@ -10,7 +10,6 @@
     "url": "https://github.com/SudhirDevOps1/recast"
   },
   "type": "module",
-  "packageManager": "pnpm@9.15.9",
   "engines": {
     "node": ">=20.11"
   },
