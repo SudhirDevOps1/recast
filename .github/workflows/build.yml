@@ -58,13 +58,13 @@ jobs:
           cache: pnpm
 
       - name: Cache Electron binaries
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ${{ runner.os == 'Linux' && '~/.cache/electron' || (runner.os == 'macOS' && '~/Library/Caches/electron' || '%LOCALAPPDATA%\electron\Cache') }}
           key: electron-cache-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
 
       - name: Cache FFmpeg binaries
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: resources/ffmpeg
           key: ffmpeg-${{ runner.os }}-${{ hashFiles('ffmpeg.lock.json') }}
