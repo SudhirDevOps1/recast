@@ -94,7 +94,12 @@ async function fetchTarget(key, spec) {
           `Existing ${key}/${binary} does not match the pinned hash.\n  expected ${pinned}\n  actual   ${existing}\nRe-run with --force to re-download.`,
         );
       }
-      results.push({ binary, dest, bytes: statSync(dest).size, verified: Boolean(pinned) });
+      if (!pinned && PIN) {
+        spec.sha256 ??= {};
+        spec.sha256[binary] = existing;
+        console.log(`📌 pinned existing ${key}/${binary}: ${existing}`);
+      }
+      results.push({ binary, dest, bytes: statSync(dest).size, verified: Boolean(pinned || PIN) });
       continue;
     }
     console.log(`⇣ ${key}/${binary}`);

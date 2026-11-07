@@ -49,7 +49,10 @@
           "member": "package/bin/linux/x64/ffprobe"
         }
       },
-      "sha256": {}
+      "sha256": {
+        "ffmpeg": "ed652b2f32e0851d1946894fb8333f5b677c1b2ce6b9d187910a67f8b99da028",
+        "ffprobe": "e3624d8ff953c7e2f1f3e3ee24bfa64399bcb3bd5c302b2216d3f794b31bbbf6"
+      }
     },
     "linux-arm64": {
       "$comment": "ffprobe-static has no linux/arm64 binary; Recast degrades gracefully (in-app downloader offers a system-package command instead). Tracked in docs/platform-support.md.",
