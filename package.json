@@ -29,8 +29,7 @@
     "dist:win": "pnpm --filter @recast/desktop dist:win",
     "dist:mac": "pnpm --filter @recast/desktop dist:mac",
     "dist:linux": "pnpm --filter @recast/desktop dist:linux",
-    "dist:all": "pnpm dist:win && pnpm dist:mac && pnpm dist:linux",
-    "ffmpeg:fetch": "node scripts/fetch-ffmpeg.mjs"
+    "dist:all": "pnpm dist:win && pnpm dist:mac && pnpm dist:linux"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",
