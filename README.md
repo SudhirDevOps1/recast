@@ -24,6 +24,15 @@ Everything runs 100% offline on your machine. macOS · Windows · Linux.
 
 ---
 
+## Demo
+
+60-second tour of the real app — nothing mocked: open a recording, watch the
+auto-zoom preview play, restyle live, then export and verify the file.
+
+![Recast demo — record, auto-zoom, restyle, export](docs/screenshots/demo.gif)
+
+*Regenerate: `xvfb-run -a -s "-screen 0 1600x1000x24" node scripts/capture-demo.mjs`*
+
 ## Screenshots
 
 Real UI, captured from the running app (nothing mocked). Regenerate anytime with
