@@ -17,6 +17,13 @@ on:
 permissions:
   contents: write
 
+# electron-builder fetches its packaging tools (AppImage runtime, NSIS,
+# winCodeSign) from electron-userland release assets; that CDN has been
+# intermittently returning 502/503/504. npmmirror hosts the exact same
+# artifacts and is fast from GitHub runners, so default to it.
+env:
+  ELECTRON_BUILDER_BINARIES_MIRROR: https://npmmirror.com/mirrors/electron-builder-binaries/
+
 concurrency:
   group: nightly-build
   cancel-in-progress: false
