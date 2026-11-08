@@ -7,6 +7,15 @@ import type { CaptureHost } from './host';
  * Segmented MP4 writing. Every ~2 s a new muxer is opened and the previous
  * one is finalized and handed to the host. A crash loses at most the current
  * segment; every closed segment is a complete, playable MP4.
+ *
+ * Concurrency note: the encoder's output callback fires synchronously per
+ * chunk, but segment rollover awaits an IPC write. Without ordering, two
+ * boundary chunks can race the muxer swap — one muxer gets replaced
+ * mid-flight (losing chunks) and an uninitialized one can be finalized
+ * without ever seeing the decoderConfig, which crashes mp4-muxer
+ * ("Cannot read properties of null (reading 'colorSpace')") and silently
+ * freezes the recording after the first segment. Every chunk is therefore
+ * routed through a strict promise tail.
  */
 
 interface SegmentMeta {
@@ -23,6 +32,8 @@ export class SegmentWriter {
   private segments: Segment[] = [];
   private segmentIndex = 0;
   private bytes = 0;
+  private chunksInSegment = 0;
+  private tail: Promise<void> = Promise.resolve();
 
   constructor(
     private readonly host: CaptureHost,
@@ -38,8 +49,22 @@ export class SegmentWriter {
     return this.segments;
   }
 
-  /** Route one encoded chunk into the active segment. */
-  async addVideoChunk(
+  /** Route one encoded chunk into the active segment (strictly ordered). */
+  addVideoChunk(
+    chunk: EncodedVideoChunk,
+    meta: EncodedVideoChunkMetadata | undefined,
+    timestampUs: number,
+    width: number,
+    height: number,
+  ): Promise<void> {
+    const run = this.tail.then(() => this.routeChunk(chunk, meta, timestampUs, width, height));
+    // Keep the tail unpoisoned; the returned promise still rejects so the
+    // caller can surface the error to the UI.
+    this.tail = run.catch(() => undefined);
+    return run;
+  }
+
+  private async routeChunk(
     chunk: EncodedVideoChunk,
     meta: EncodedVideoChunkMetadata | undefined,
     timestampUs: number,
@@ -57,6 +82,7 @@ export class SegmentWriter {
         height,
       };
       this.segmentIndex += 1;
+      this.chunksInSegment = 0;
       this.muxer = new Muxer({
         target: new ArrayBufferTarget(),
         video: {
@@ -70,14 +96,20 @@ export class SegmentWriter {
       });
     }
     this.muxer.addVideoChunk(chunk, meta, timestampUs);
+    this.chunksInSegment += 1;
   }
 
   async closeSegment(): Promise<void> {
     if (!this.muxer || !this.meta) return;
     const m = this.muxer;
     const meta = this.meta;
+    const chunks = this.chunksInSegment;
     this.muxer = null;
     this.meta = null;
+    this.chunksInSegment = 0;
+    // Never finalize an empty track: mp4-muxer requires the decoderConfig
+    // (delivered with the first chunk) to emit the sample description.
+    if (chunks === 0) return;
     m.finalize();
     const { buffer } = m.target as ArrayBufferTarget;
     if (!buffer || buffer.byteLength === 0) return;
@@ -94,6 +126,12 @@ export class SegmentWriter {
       height: meta.height,
       sizeBytes: size,
     });
+  }
+
+  /** Drain every queued chunk, then close the open segment. */
+  async flush(): Promise<void> {
+    await this.tail.catch(() => undefined);
+    await this.closeSegment();
   }
 
   /** True segment end times — fixed up by the recorder as frames land. */

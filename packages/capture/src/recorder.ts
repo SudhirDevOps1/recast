@@ -122,13 +122,35 @@ export async function startRecording(
   const captureTimeUs = (): number =>
     Math.round((Date.now() - clockStartMs - pausedTotalUs / 1000) * 1000);
 
+  // Chromium attaches the decoderConfig (with the AVC description) only to
+  // the FIRST output chunk of the stream. Every new segment muxer needs it:
+  // without it the muxer crashes on finalize (null colorSpace) and the
+  // recording silently freezes after the first ~2 s segment. Cache the first
+  // metadata and forward it whenever a chunk arrives without one.
+  let lastVideoMeta: EncodedVideoChunkMetadata | undefined;
+
   encoder = new VideoEncoder({
     output: (chunk, meta) => {
       const tUs = chunk.timestamp;
       if (Number.isFinite(tUs) && tUs >= 0) {
-        void writer.addVideoChunk(chunk, meta, tUs, encW, encH).then(() => {
-          writer.updateLastSegmentEnd(tUs + (chunk.duration ?? 0));
-        });
+        if (meta?.decoderConfig) lastVideoMeta = meta;
+        // Later chunks may still carry a metadata object WITHOUT a
+        // decoderConfig — only a decoderConfig-bearing metadata can
+        // initialize a fresh segment muxer, so fall back to the cached one.
+        const effectiveMeta = meta?.decoderConfig ? meta : lastVideoMeta;
+        // Never swallow mux/segment errors: a failed write must surface in the
+        // UI (and stop the byte counter from silently freezing).
+        writer
+          .addVideoChunk(chunk, effectiveMeta, tUs, encW, encH)
+          .then(() => {
+            writer.updateLastSegmentEnd(tUs + (chunk.duration ?? 0));
+          })
+          .catch((e: Error) => {
+            console.error('recast: segment write failed', e);
+            callbacks.onError(`Segment write failed: ${e.message}`);
+            void encoder?.flush().catch(() => undefined);
+            stopping = true;
+          });
         bytes = writer.totalBytes;
       }
     },
@@ -246,7 +268,8 @@ export async function startRecording(
         }
         await encoder?.flush();
         encoder?.close();
-        await writer.closeSegment();
+        // Drain the ordered chunk queue, then close the final segment.
+        await writer.flush();
         const audioFiles = await audio.stop();
         videoTrack.stop();
         clearInterval(statsTimer);
