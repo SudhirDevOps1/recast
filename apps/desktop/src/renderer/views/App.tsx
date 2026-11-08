@@ -139,9 +139,23 @@ export default function App() {
             color: toast.tone === 'error' ? 'var(--danger)' : 'var(--text-primary)',
           }}
         >
-          <span className="inline-flex items-center gap-2">
-            {toast.tone !== 'info' ? <IconX size={12} /> : null}
-            {toast.message}
+          <span className="inline-flex items-center gap-3">
+            <span className="inline-flex items-center gap-2">
+              {toast.tone !== 'info' ? <IconX size={12} /> : null}
+              {toast.message}
+            </span>
+            {toast.action ? (
+              <button
+                className="shrink-0 rounded-md border px-2 py-0.5 text-xs font-semibold transition-colors hover:opacity-80"
+                style={{ borderColor: 'currentColor' }}
+                onClick={() => {
+                  toast.action?.run();
+                  useApp.setState({ toast: null });
+                }}
+              >
+                {toast.action.label}
+              </button>
+            ) : null}
           </span>
         </div>
       ) : null}

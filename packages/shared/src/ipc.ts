@@ -58,6 +58,8 @@ export const ScreenSourceSchema = z.object({
   height: z.number(),
   scaleFactor: z.number(),
   isPrimary: z.boolean(),
+  /** Live desktopCapturer preview (PNG data URL), null when unavailable. */
+  thumbnailDataUrl: z.string().nullable(),
 });
 export type ScreenSource = z.infer<typeof ScreenSourceSchema>;
 
@@ -67,6 +69,8 @@ export const WindowSourceSchema = z.object({
   app: z.string(),
   width: z.number(),
   height: z.number(),
+  /** Live desktopCapturer preview (PNG data URL), null when unavailable. */
+  thumbnailDataUrl: z.string().nullable(),
 });
 export type WindowSource = z.infer<typeof WindowSourceSchema>;
 

@@ -152,6 +152,7 @@ export async function registerIpcHandlers(): Promise<void> {
         height: d.size.height,
         scaleFactor: d.scaleFactor,
         isPrimary: d.id === primary.id,
+        thumbnailDataUrl: match && !match.thumbnail.isEmpty() ? match.thumbnail.toDataURL() : null,
       };
     });
     const windows = sources
@@ -162,6 +163,7 @@ export async function registerIpcHandlers(): Promise<void> {
         app: 'Window',
         width: s.thumbnail.getSize().width,
         height: s.thumbnail.getSize().height,
+        thumbnailDataUrl: s.thumbnail.isEmpty() ? null : s.thumbnail.toDataURL(),
       }));
     const mics = await listAudioDevices('audioinput');
     const cameras = await listAudioDevices('videoinput');

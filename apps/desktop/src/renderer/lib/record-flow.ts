@@ -27,11 +27,31 @@ interface FlowArgs {
   startEpochMs: number;
 }
 
+/** Error that can carry a toast action button (e.g. "Open permissions"). */
+export class RecordingError extends Error {
+  readonly action?: { label: string; run: () => void };
+
+  constructor(message: string, action?: { label: string; run: () => void }) {
+    super(message);
+    this.name = 'RecordingError';
+    this.action = action;
+  }
+}
+
+function openScreenPermissions(): void {
+  void bridge()
+    .invoke('permissions:openSystemSettings', { kind: 'screen' } as never)
+    .catch(() => undefined);
+}
+
 /** Maps raw getDisplayMedia rejections to messages a user can act on. */
 function friendlyDisplayMediaError(e: unknown): Error {
   const name = (e as DOMException)?.name ?? '';
   if (name === 'NotAllowedError') {
-    return new Error('Screen capture was denied — grant the screen-recording permission (see Settings → Permissions) and try again.');
+    return new RecordingError(
+      'Screen capture was denied — grant the screen-recording permission and try again.',
+      { label: 'Open permissions', run: openScreenPermissions },
+    );
   }
   if (name === 'NotFoundError') {
     return new Error('No screen or window source is available to record.');

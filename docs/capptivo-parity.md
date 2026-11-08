@@ -28,14 +28,24 @@ open-source Screen Studio alternative — while keeping Recast's stack
   a platform rejects the audio constraint.
 - Human-readable errors for `NotAllowedError` / `NotFoundError` / unsupported.
 
-### Phase 2 — capture reliability & recorder UX
-- Source picker with live thumbnails at full size (thumbnails exist; add
-  refresh + "screen changed" detection).
-- Area picker: crosshair + size HUD + Escape cancel states (Capptivo-level).
-- Pause/resume indicator overlay; recorder error toasts carry a
-  "Open permissions" action button.
-- Smoke test extension: assert the display-media handler resolves a synthetic
-  request.
+### Phase 2 — capture reliability & recorder UX (shipped)
+- **Live thumbnails**: `sources:list` now returns `thumbnailDataUrl` for
+  screens and windows (previously desktopCapturer thumbnails were fetched and
+  discarded); the picker renders them full-card with an icon fallback.
+- **Refresh + screen-changed detection**: manual "Refresh" button on the
+  Source section, plus automatic re-enumeration whenever the app window
+  regains focus (the open picker no longer shows stale windows/displays).
+- **Pause/resume fixed**: the Pause button never toggled to Resume — a paused
+  recording could only be stopped. It now flips to Resume (with play icon),
+  calls `recorder:resume` + `handle.resume()`, and the badge carries a
+  pulsing red dot while recording / steady amber while paused.
+- **Actionable error toasts**: `showToast` accepts an action button; display
+  capture denials (`NotAllowedError`) surface an "Open permissions" button
+  that calls `permissions:openSystemSettings` directly from the toast.
+- Area picker already has crosshair, live size HUD, 4× magnifier, Enter
+  confirm, Escape cancel and arrow-key nudge (Capptivo-level).
+- Smoke coverage for the display-media handler + a full pick→record→stop→
+  library→export flow landed alongside the segment-freeze fix (`568baa2`).
 
 ### Phase 3 — creative parity (the "advanced" layer)
 - **Annotations engine**: text / image / shape overlays on the timeline

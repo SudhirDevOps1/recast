@@ -10,14 +10,20 @@ interface AppStore {
   route: 'library' | 'record' | 'editor' | 'export' | 'settings';
   projectId: string | null;
   recorderState: RecorderState | null;
-  toast: { message: string; tone: 'info' | 'error' | 'success' } | null;
+  toast: { message: string; tone: 'info' | 'error' | 'success'; action?: ToastAction } | null;
   setSettings: (patch: Partial<Settings>) => Promise<void>;
   refreshPlatform: () => Promise<void>;
   refreshFfmpeg: () => Promise<void>;
   refreshLibrary: () => Promise<void>;
   navigate: (route: AppStore['route'], projectId?: string) => void;
   setRecorderState: (s: RecorderState | null) => void;
-  showToast: (message: string, tone?: 'info' | 'error' | 'success') => void;
+  showToast: (message: string, tone?: 'info' | 'error' | 'success', action?: ToastAction) => void;
+}
+
+/** A button rendered inside a toast (e.g. "Open permissions" on capture denials). */
+export interface ToastAction {
+  label: string;
+  run: () => void;
 }
 
 export const useApp = create<AppStore>((set, get) => ({
@@ -59,9 +65,13 @@ export const useApp = create<AppStore>((set, get) => ({
   },
   navigate: (route, projectId) => set({ route, projectId: projectId ?? get().projectId }),
   setRecorderState: (s) => set({ recorderState: s }),
-  showToast: (message, tone = 'info') => {
-    set({ toast: { message, tone } });
-    setTimeout(() => set({ toast: null }), 4_000);
+  showToast: (message, tone = 'info', action) => {
+    set({ toast: { message, tone, action } });
+    setTimeout(() => {
+      // Only clear if this toast is still the newest one.
+      const cur = get().toast;
+      if (cur?.message === message) set({ toast: null });
+    }, action ? 8_000 : 4_000);
   },
 }));
 

@@ -1,9 +1,9 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useApp, useRecorder } from '../state/stores';
 import { bridge } from '../lib/bridge';
-import { Button, Field, Select, Switch, Slider, Badge, IconRecord, IconStop, IconPause, IconMonitor, IconMic, IconSpeaker, IconCamera, IconRefresh } from '@recast/ui';
+import { Button, Field, Select, Switch, Slider, Badge, IconRecord, IconStop, IconPause, IconPlay, IconMonitor, IconMic, IconSpeaker, IconCamera, IconRefresh } from '@recast/ui';
 import type { ListSourcesResponse } from '@recast/shared';
-import { startRecordingFlow, stopRecordingFlow, rendererRecorderHandle } from '../lib/record-flow';
+import { startRecordingFlow, stopRecordingFlow, rendererRecorderHandle, RecordingError } from '../lib/record-flow';
 
 /**
  * Recorder: source picker with live thumbnails, mic + system audio with
@@ -17,20 +17,40 @@ export function RecorderView() {
   const showToast = useApp((s) => s.showToast);
   const opts = useRecorder();
   const [sources, setSources] = useState<ListSourcesResponse | null>(null);
+  const [refreshingSources, setRefreshingSources] = useState(false);
   const [permissionScreen] = useState<string | null>(null);
   const [micMeter, setMicMeter] = useState<number | null>(null);
   const [countingDown, setCountingDown] = useState<number | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
 
-  useEffect(() => {
-    void (async () => {
-      try {
-        setSources(await bridge().invoke('sources:list', undefined));
-      } catch (e) {
-        showToast(`Could not enumerate sources: ${(e as Error).message}`, 'error');
-      }
-    })();
+  const refreshSources = useCallback(async (): Promise<void> => {
+    setRefreshingSources(true);
+    try {
+      setSources(await bridge().invoke('sources:list', undefined));
+    } catch (e) {
+      showToast(`Could not enumerate sources: ${(e as Error).message}`, 'error');
+    } finally {
+      setRefreshingSources(false);
+    }
   }, [showToast]);
+
+  useEffect(() => {
+    void refreshSources();
+  }, [refreshSources]);
+
+  const recorderStateRef = useRef(recorderState);
+  recorderStateRef.current = recorderState;
+
+  // Screen-changed detection: the set of windows/displays on screen drifts
+  // while the picker sits open, so re-enumerate (with fresh thumbnails)
+  // whenever the app window regains focus and when displays are reconfigured.
+  useEffect(() => {
+    const onFocus = (): void => {
+      if (recorderStateRef.current == null) void refreshSources();
+    };
+    window.addEventListener('focus', onFocus);
+    return () => window.removeEventListener('focus', onFocus);
+  }, [refreshSources]);
 
   // Mic meter via a lightweight getUserMedia loop (never recorded here).
   useEffect(() => {
@@ -77,29 +97,41 @@ export function RecorderView() {
   }, [opts.micEnabled]);
 
   const recording = recorderState?.phase === 'recording' || recorderState?.phase === 'paused';
+  const paused = recorderState?.phase === 'paused';
 
   if (recording) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-6">
-        <Badge tone={recorderState?.phase === 'paused' ? 'warning' : 'recording'}>
-          {recorderState?.phase === 'paused' ? 'Paused' : 'Recording'}
+        <Badge tone={paused ? 'warning' : 'recording'}>
+          <span
+            className={`inline-block h-2 w-2 rounded-full ${paused ? '' : 'animate-pulse'}`}
+            style={{ background: paused ? 'var(--warning)' : 'var(--recording)' }}
+          />
+          {paused ? 'Paused' : 'Recording'}
         </Badge>
         <div className="tabular text-4xl font-bold">{Math.floor((recorderState?.elapsedUs ?? 0) / 1_000_000)}s</div>
         <div className="text-sm" style={{ color: 'var(--text-secondary)' }}>
           {(recorderState?.bytes ?? 0) / 1_000_000 > 0.1
             ? `${((recorderState?.bytes ?? 0) / 1_000_000).toFixed(1)} MB · ${(recorderState?.droppedFrames ?? 0)} dropped frames`
-            : 'Segments are being written to disk — a crash cannot lose more than 2 seconds.'}
+            : paused
+              ? 'Paused — segments so far are safe on disk.'
+              : 'Segments are being written to disk — a crash cannot lose more than 2 seconds.'}
         </div>
         <div className="flex gap-2">
           <Button
             onClick={() => {
-              void bridge().invoke('recorder:pause', undefined);
-              rendererRecorderHandle()?.pause();
+              if (paused) {
+                void bridge().invoke('recorder:resume', undefined);
+                rendererRecorderHandle()?.resume();
+              } else {
+                void bridge().invoke('recorder:pause', undefined);
+                rendererRecorderHandle()?.pause();
+              }
             }}
             size="lg"
           >
             <span className="inline-flex items-center gap-2">
-              <IconPause size={14} /> Pause
+              {paused ? <IconPlay size={14} /> : <IconPause size={14} />} {paused ? 'Resume' : 'Pause'}
             </span>
           </Button>
           <Button
@@ -133,15 +165,23 @@ export function RecorderView() {
 
       {/* Source picker */}
       <section className="space-y-3">
-        <h2 className="text-sm font-semibold" style={{ color: 'var(--text-secondary)' }}>
-          Source
-        </h2>
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-semibold" style={{ color: 'var(--text-secondary)' }}>
+            Source
+          </h2>
+          <Button size="sm" onClick={() => void refreshSources()} disabled={refreshingSources} aria-label="Refresh sources">
+            <span className="inline-flex items-center gap-2">
+              <IconRefresh size={12} /> {refreshingSources ? 'Refreshing…' : 'Refresh'}
+            </span>
+          </Button>
+        </div>
         <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
           {sources?.screens.map((s) => (
             <SourceCard
               key={s.id}
               label={s.name}
               icon={<IconMonitor />}
+              thumbnail={s.thumbnailDataUrl}
               selected={opts.selectedScreenId === s.id && !opts.selectedWindowId}
               onClick={() => opts.set({ selectedScreenId: s.id, selectedWindowId: null })}
             />
@@ -158,6 +198,7 @@ export function RecorderView() {
                   key={w.id}
                   label={w.name}
                   icon={<IconMonitor />}
+                  thumbnail={w.thumbnailDataUrl}
                   selected={opts.selectedWindowId === w.id}
                   onClick={() => opts.set({ selectedWindowId: w.id, selectedScreenId: null })}
                 />
@@ -313,7 +354,11 @@ export function RecorderView() {
       await startRecordingFlow({ sessionId, startEpochMs });
     } catch (e) {
       setCountingDown(null);
-      showToast(`Recording failed: ${(e as Error).message}`, 'error');
+      if (e instanceof RecordingError && e.action) {
+        showToast(e.message, 'error', e.action);
+      } else {
+        showToast(`Recording failed: ${(e as Error).message}`, 'error');
+      }
     }
   }
 
@@ -339,26 +384,34 @@ export function RecorderView() {
 function SourceCard({
   label,
   icon,
+  thumbnail,
   selected,
   onClick,
 }: {
   label: string;
   icon: React.ReactNode;
+  thumbnail?: string | null;
   selected: boolean;
   onClick: () => void;
 }) {
   return (
     <button
       onClick={onClick}
-      className="flex flex-col items-start gap-2 rounded-lg border p-3 text-left transition-all"
+      className="flex flex-col items-start gap-2 overflow-hidden rounded-lg border p-0 text-left transition-all"
       style={{
         borderColor: selected ? 'var(--accent)' : 'var(--hairline)',
         background: selected ? 'var(--accent-subtle)' : 'var(--surface)',
       }}
       aria-pressed={selected}
     >
-      <span style={{ color: selected ? 'var(--accent)' : 'var(--text-muted)' }}>{icon}</span>
-      <span className="line-clamp-2 text-xs">{label}</span>
+      {thumbnail ? (
+        <img src={thumbnail} alt="" className="aspect-video w-full object-cover" draggable={false} />
+      ) : (
+        <span className="flex aspect-video w-full items-center justify-center" style={{ background: 'var(--hairline)', color: 'var(--text-muted)' }}>
+          {icon}
+        </span>
+      )}
+      <span className="line-clamp-2 px-3 pb-2 text-xs">{label}</span>
     </button>
   );
 }
