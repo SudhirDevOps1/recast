@@ -17,11 +17,14 @@ on:
 permissions:
   contents: write
 
-# electron-builder fetches its packaging tools (AppImage runtime, NSIS,
+# @electron/get (electron dist zips) and electron-builder both fetch
+# from GitHub release-asset CDNs that intermittently 502/503/504 (Nightly
+# #10 ×2, #11 mac-x64). npmmirror hosts the same artifacts. (AppImage runtime, NSIS,
 # winCodeSign) from electron-userland release assets; that CDN has been
 # intermittently returning 502/503/504. npmmirror hosts the exact same
 # artifacts and is fast from GitHub runners, so default to it.
 env:
+  ELECTRON_MIRROR: https://npmmirror.com/mirrors/electron/
   ELECTRON_BUILDER_BINARIES_MIRROR: https://npmmirror.com/mirrors/electron-builder-binaries/
 
 concurrency:
