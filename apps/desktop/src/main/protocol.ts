@@ -27,8 +27,14 @@ export function mediaUrlFor(absolutePath: string): string {
 export function handleMediaProtocol(): void {
   protocol.handle('recast-media', (request) => {
     const url = new URL(request.url);
-    const relative = decodeURIComponent(url.pathname.replace(/^\/+/, ''));
-    const filePath = path.resolve(relative.startsWith('/') ? relative.slice(1) : relative);
+    // Media URLs carry an absolute POSIX path in the pathname —
+    // `recast-media://local//home/u/recordings/x.mp4` yields pathname
+    // `//home/u/...` (leading double slash from the absolute path's empty
+    // first segment). Canonicalize to a rooted absolute path instead of
+    // resolving against the process cwd, which made the handler 403/404
+    // depending on how the app was launched.
+    const decoded = decodeURIComponent(url.pathname);
+    const filePath = path.resolve(`/${decoded.replace(/^\/+/, '')}`);
 
     const allowed = ALLOWED_ROOTS.some((root) => filePath.startsWith(root));
     if (!allowed) {
