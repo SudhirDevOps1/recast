@@ -55,8 +55,8 @@ Real UI, captured from the running app (nothing mocked). Regenerate anytime with
 | Windows | `Recast-Setup-x.y.z-arm64.exe` | ARM64 |
 | macOS | `Recast-x.y.z-arm64.dmg` | Apple Silicon — **unsigned until certificates land** (docs/code-signing.md) |
 | macOS | `Recast-x.y.z-x64.dmg` | Intel — **unsigned until certificates land** |
-| macOS | `Recast-x.y.z.pkg` | MDM deployment |
-| Linux | `Recast-x.y.z-x64.AppImage` | X11 full support; Wayland via portal |
+| macOS | `Recast-x.y.z.pkg` | MDM deployment — **planned, returns with code signing** (not in v0.1.0) |
+| Linux | `Recast-x.y.z-x86_64.AppImage` | X11 full support; Wayland via portal |
 | Linux | `.deb`, `.rpm`, `.tar.gz` | Also Flatpak, Snap, AUR |
 
 Download from [Releases](https://github.com/SudhirDevOps1/recast/releases) or the [website](https://sudhirdevops1.github.io/recast/). `SHA256SUMS` is published per release; installers are **unsigned** for now — Windows may show SmartScreen and macOS needs right-click → Open on first launch. See [docs/code-signing.md](docs/code-signing.md) for the signing plan and the SmartScreen-reputation note.
