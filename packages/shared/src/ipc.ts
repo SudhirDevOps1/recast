@@ -20,6 +20,10 @@ export const SettingsSchema = z.object({
   hotkeyRecordStop: z.string().default('CommandOrControl+Alt+R'),
   hotkeyPauseResume: z.string().default('CommandOrControl+Alt+P'),
   showKeystrokeHud: z.boolean().default(false),
+  /** Set once the first-run onboarding has been completed or dismissed —
+   *  without persisting it the Welcome dialog would reopen on every launch
+   *  and its modal overlay blocks all other clicks until dismissed. */
+  firstRunDone: z.boolean().default(false),
 });
 export type Settings = z.infer<typeof SettingsSchema>;
 

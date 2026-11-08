@@ -40,6 +40,7 @@ export const useApp = create<AppStore>((set, get) => ({
     hotkeyRecordStop: 'CommandOrControl+Alt+R',
     hotkeyPauseResume: 'CommandOrControl+Alt+P',
     showKeystrokeHud: false,
+    firstRunDone: false,
   },
   platform: null,
   ffmpeg: null,

@@ -27,10 +27,17 @@ export function Onboarding() {
     })();
   }, [startedAt]);
 
+  /** Every close path must persist firstRunDone, or the Welcome dialog
+   *  reopens on the next launch and its overlay blocks the app. */
+  const close = (): void => {
+    setOpen(false);
+    void bridge().invoke('app:setSettings', { firstRunDone: true } as never).catch(() => undefined);
+  };
+
   return (
     <Dialog
       open={open}
-      onOpenChange={setOpen}
+      onOpenChange={(next) => { if (!next) close(); else setOpen(true); }}
       title="Welcome to Recast"
       description="Three quick steps and you're recording. Everything stays on your machine."
       width={520}
@@ -39,8 +46,7 @@ export function Onboarding() {
           <Button
             onClick={async () => {
               await bridge().invoke('app:setSettings', { defaultPresetId: 'clean-dark' } as never);
-              setOpen(false);
-              void bridge().invoke('app:setSettings', { language: 'en' } as never);
+              close();
             }}
           >
             Skip
@@ -108,7 +114,7 @@ export function Onboarding() {
           <Button
             variant="primary"
             onClick={() => {
-              setOpen(false);
+              close();
               void bridge().invoke('library:createSample', undefined);
             }}
           >
