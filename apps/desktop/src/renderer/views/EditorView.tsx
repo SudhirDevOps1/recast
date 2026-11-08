@@ -279,6 +279,7 @@ function PreviewCanvas({
     for (const [segId, url] of mediaUrls) {
       if (videoRefs.current.has(segId)) continue;
       const v = document.createElement('video');
+      v.crossOrigin = 'anonymous'; // untainted canvas draws for preview compositing
       v.src = url;
       v.muted = true;
       v.preload = 'auto';

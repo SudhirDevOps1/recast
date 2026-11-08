@@ -14,6 +14,7 @@ import { context, settingsStore } from './context';
 import { saveSettings } from './store';
 import { buildProjectFromSession, loadProject, saveProject, readCursorJsonl, suggestExportName } from './projects';
 import { permissionStatus, openPermissionSettings, requestAccess } from './permissions';
+import { InputSampler } from './input-sampler';
 import { ffmpegState, installFfmpeg, broadcastFfmpegProgress } from './ffmpeg-service';
 import { whisperStatus, downloadWhisperModel, transcribe } from './whisper';
 import { checkForUpdates, downloadUpdate, installUpdate } from './updater';
@@ -216,9 +217,12 @@ export async function registerIpcHandlers(): Promise<void> {
     // mark completed, build the project with auto-zoom, register in library.
     const sessionId = c.activeSessionId;
     if (!sessionId) return { projectId: null };
-    const manifest = c.sessions.closeSession(sessionId, 'completed');
-    c.inputSampler?.stop();
+    // Stop the cursor sampler FIRST and flush its last batch — events drained
+    // after closeSession would land in a closed file.
+    const drained = c.inputSampler?.stop() ?? [];
+    if (drained.length > 0) c.sessions.appendInput(sessionId, drained);
     c.inputSampler = null;
+    const manifest = c.sessions.closeSession(sessionId, 'completed');
     const { renderStoppedMenu } = await import('./tray');
     renderStoppedMenu();
     if (!manifest) return { projectId: null };
@@ -353,6 +357,14 @@ export async function registerIpcHandlers(): Promise<void> {
     void event;
     c.activeExportIds.add(exportId);
     return { exportId };
+  });
+  // The renderer's chunked export path opens the .part file before writing
+  // frames — the handler was missing, so every export died at step 1 with
+  // "No handler registered for 'export:beginChunked'".
+  register('export:beginChunked', (payload) => {
+    const { exportId, destination } = payload as { exportId: string; destination: string };
+    beginChunkedExport(exportId, destination);
+    c.activeExportIds.add(exportId);
   });
   register('export:writeChunkAt', async (payload) => {
     const { exportId, position, data } = payload as { exportId: string; position: number; data: ArrayBuffer | Uint8Array };
@@ -526,8 +538,26 @@ export async function registerIpcHandlers(): Promise<void> {
   register('capture:createSession', (payload) => {
     const { sessionId, manifest } = payload as { sessionId: string; manifest: SessionManifest };
     c.activeSessionId = sessionId;
+    // The renderer cannot know the display's DPI factor; main resolved it at
+    // the display-media grant. Stamp it so cursor coords can be converted to
+    // video pixel space at project build (see readCursorJsonl).
+    manifest.displayScaleFactor = c.activeDisplayScaleFactor ?? 1;
     c.sessions.createSession(manifest);
     c.library.registerSession(sessionId, 'active');
+    // Cursor + click tracking runs entirely in main. The clock anchor MUST be
+    // sessionStartEpochMs (same as the capture pipeline's) so cursor events
+    // line up with video frames. Without this the sampler never ran and
+    // cursor.jsonl was never written — zoom-reactive cursor features starved.
+    if (!c.inputSampler) {
+      c.inputSampler = new InputSampler();
+      c.inputSampler.start(c.sessionStartEpochMs, (events) => {
+        try {
+          c.sessions.appendInput(c.activeSessionId ?? sessionId, events);
+        } catch {
+          /* session already closed — drop the batch */
+        }
+      });
+    }
   });
   register('capture:writeSegment', (payload) => {
     const { sessionId, file, data } = payload as { sessionId: string; file: string; data: ArrayBuffer };
@@ -555,7 +585,8 @@ export async function registerIpcHandlers(): Promise<void> {
     // Project ids are `prj-<sessionId>`; media.dir is the authoritative path.
     const project = loadProject(`prj-${sessionId}`);
     if (!project) return { samples: [], clicks: [] };
-    return readCursorJsonl(project.media.dir, project.media.cursor?.file ?? 'cursor.jsonl');
+    const factor = c.sessions.manifestFor(sessionId)?.displayScaleFactor ?? 1;
+    return readCursorJsonl(project.media.dir, project.media.cursor?.file ?? 'cursor.jsonl', factor);
   });
   register('capture:readCaptions', async (payload) => {
     const { path } = payload as { path: string };

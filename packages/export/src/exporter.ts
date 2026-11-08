@@ -70,23 +70,43 @@ export interface ExportProgress {
 }
 
 function seekTo(video: HTMLVideoElement, sourceSec: number): Promise<void> {
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
+    if (video.error) {
+      reject(new Error(`Segment media failed to load — export aborted. (video error ${video.error.code}: ${video.error.message || 'no detail'})`));
+      return;
+    }
     const target = Math.max(0, Math.min(sourceSec, (video.duration || 0) - 0.001));
-    if (Math.abs(video.currentTime - target) < 1 / 480) {
+    if (Math.abs(video.currentTime - target) < 1 / 480 && video.readyState >= 2) {
       resolve();
       return;
     }
     const onSeeked = () => {
-      video.removeEventListener('seeked', onSeeked);
+      cleanup();
       resolve();
     };
-    video.addEventListener('seeked', onSeeked);
-    video.currentTime = target;
-    // Safety timeout: never hang the export on a stuck seek.
-    setTimeout(() => {
+    const onErr = () => {
+      cleanup();
+      reject(new Error(`Segment media failed to load — export aborted. (video error ${video.error?.code ?? '?'} on seek)`));
+    };
+    const cleanup = (): void => {
       video.removeEventListener('seeked', onSeeked);
+      video.removeEventListener('error', onErr);
+    };
+    video.addEventListener('seeked', onSeeked);
+    video.addEventListener('error', onErr);
+    video.currentTime = target;
+    // Safety timeout: never hang the export on a stuck seek — but a timeout
+    // without metadata is a load failure, so fail loudly instead of crawling
+    // at 1.5 s/frame (the old behavior made broken exports look like hangs).
+    setTimeout(() => {
+      if (video.readyState < 2 && !video.error) {
+        cleanup();
+        reject(new Error('Segment video is not decodable — export aborted. If this persists, check the recast-media protocol or re-record.'));
+        return;
+      }
+      cleanup();
       resolve();
-    }, 1_500);
+    }, 3_000);
   });
 }
 
@@ -143,8 +163,44 @@ export async function runExport(
     choice = await resolveExportEncoder(outW, outH, fps, exportBitrate(outH, fps, req.format), req.format, deps.preferHardware);
   }
 
+  // Audio: decode + process FIRST (no encoding yet) — the muxer must declare
+  // the audio track at construction (mp4-muxer throws on chunks for an
+  // undeclared track, which silently dropped ALL audio before this fix).
+  let audioCtx: AudioContext | null = null;
+  let audio: {
+    config: AudioEncoderConfig;
+    mp4Codec: 'aac' | 'opus';
+    chunks: AudioData[];
+  } | null = null;
+  try {
+    if (project.media.audio && project.media.audio.file && deps.hasFfmpeg) {
+      const bytes = await host.readFile(`${project.media.dir}/${project.media.audio.file}`);
+      audioCtx = new AudioContext();
+      let buffer = await decodeAudioData(audioCtx, bytes);
+      const edits = project.audioEdits;
+      if (edits.noiseGateDb != null) buffer = applyNoiseGate(buffer, edits.noiseGateDb, buffer.sampleRate);
+      buffer = applyGain(buffer, edits.gainDb);
+      buffer = applyFades(buffer, { fadeInMs: edits.fadeInMs, fadeOutMs: edits.fadeOutMs, sampleRate: buffer.sampleRate });
+      const { codec } = await resolveAudioEncoder(buffer.sampleRate);
+      const channels = Math.max(1, Math.min(2, buffer.numberOfChannels));
+      const config: AudioEncoderConfig = {
+        codec: codec === 'aac' ? 'mp4a.40.2' : 'opus',
+        sampleRate: buffer.sampleRate,
+        numberOfChannels: channels,
+        bitrate: codec === 'aac' ? 192_000 : 160_000,
+      };
+      audio = { config, mp4Codec: codec, chunks: Array.from(audioChunks(buffer)) };
+    }
+  } catch {
+    // Audio is best-effort; video still exports without it.
+    audio = null;
+  } finally {
+    if (audioCtx) void audioCtx.close();
+  }
+
   // Muxer: incremental StreamTarget for MP4 (moov at end; a faststart remux
   // follows when ffmpeg is available), WebM via BufferTarget for small files.
+  // WebM is Opus-only (AAC is invalid in WebM); MP4 takes the resolved codec.
   let muxer: Mp4Muxer<StreamTarget> | WebMMuxer<WebMTarget> | null = null;
 
   if (req.format === 'mp4' || req.format === 'hevc') {
@@ -155,7 +211,12 @@ export async function runExport(
         },
         chunked: true,
       }),
-      video: { codec: 'avc', width: outW, height: outH },
+      // The VP9 fallback (machines without any H.264 encoder) must declare
+      // the actual codec in the MP4 track, not hardcode 'avc'.
+      video: { codec: choice.config?.codec?.startsWith('vp09') ? 'vp9' : 'avc', width: outW, height: outH },
+      ...(audio
+        ? { audio: { codec: audio.mp4Codec, numberOfChannels: audio.config.numberOfChannels, sampleRate: audio.config.sampleRate } }
+        : {}),
       fastStart: false,
       firstTimestampBehavior: 'offset',
     });
@@ -163,53 +224,52 @@ export async function runExport(
     muxer = new WebMMuxer({
       target: new WebMTarget(),
       video: { codec: 'V_VP9', width: outW, height: outH, frameRate: fps },
+      ...(audio
+        ? { audio: { codec: 'A_OPUS' as const, numberOfChannels: audio.config.numberOfChannels, sampleRate: audio.config.sampleRate } }
+        : {}),
       firstTimestampBehavior: 'offset',
     });
   }
 
+  // Encode the decoded audio into the (now audio-aware) muxer.
+  if (audio && muxer) {
+    try {
+      const audioEncoder = new AudioEncoder({
+        output: (chunk, meta) => muxer?.addAudioChunk(chunk, meta),
+        error: () => undefined,
+      });
+      audioEncoder.configure(audio.config);
+      for (const chunk of audio.chunks) {
+        audioEncoder.encode(chunk);
+        chunk.close();
+      }
+      await audioEncoder.flush();
+      audioEncoder.close();
+    } catch {
+      // Audio is best-effort — the muxed audio track simply stays shorter.
+    }
+  } else if (audio) {
+    for (const chunk of audio.chunks) chunk.close();
+  }
+
   let encoder: VideoEncoder | null = null;
+  let encoderFailure: string | null = null;
   if (req.format !== 'prores' && req.format !== 'gif') {
     encoder = new VideoEncoder({
       output: (chunk, meta) => {
         muxer?.addVideoChunk(chunk, meta);
       },
       error: (e) => {
-        throw new Error(`Export encoder error: ${e.message}`);
+        // Throwing inside a callback becomes an unhandled rejection the loop
+        // never sees — capture it and fail the loop explicitly instead.
+        encoderFailure = `Export encoder error: ${e.message}`;
       },
     });
     encoder.configure(choice.config);
   }
 
   // Audio: decode once, process, encode at export quality.
-  let audioCtx: AudioContext | null = null;
-  let audioEncoder: AudioEncoder | null = null;
-  try {
-    if (project.media.audio && project.media.audio.file && deps.hasFfmpeg) {
-      const bytes = await host.readFile(`${project.media.dir}/${project.media.audio.file}`);
-      audioCtx = new AudioContext();
-      let buffer = await decodeAudioData(audioCtx, bytes);
-      const edits = project.audioEdits;
-      if (edits.noiseGateDb != null) buffer = applyNoiseGate(buffer, edits.noiseGateDb, buffer.sampleRate);
-      buffer = applyGain(buffer, edits.gainDb);
-      buffer = applyFades(buffer, { fadeInMs: edits.fadeInMs, fadeOutMs: edits.fadeOutMs, sampleRate: buffer.sampleRate });
-      const { config } = await resolveAudioEncoder(buffer.sampleRate);
-      audioEncoder = new AudioEncoder({
-        output: (chunk, meta) => muxer?.addAudioChunk(chunk, meta),
-        error: () => undefined,
-      });
-      audioEncoder.configure(config);
-      for (const chunk of audioChunks(buffer)) {
-        audioEncoder.encode(chunk);
-        chunk.close();
-      }
-      await audioEncoder.flush();
-      audioEncoder.close();
-    }
-  } catch {
-    // Audio is best-effort; video still exports without it.
-  } finally {
-    if (audioCtx) void audioCtx.close();
-  }
+  // (moved above the muxer — see the audio plan block)
 
   // GIF/ProRes frame-pipe rendering.
   const framePipe = req.format === 'gif' || req.format === 'prores';
@@ -241,6 +301,7 @@ export async function runExport(
 
   try {
     for (let f = 0; f < totalFrames; f++) {
+      if (encoderFailure) throw new Error(encoderFailure);
       if (req.cancelCheck()) {
         onProgress({ frame: f, totalFrames, encodeFps: 0, stage: 'cancelled', usedPath: choice.path });
         if (frameDir) await host.cleanupDir(frameDir);
@@ -280,8 +341,26 @@ export async function runExport(
         encoder!.encode(frame, { keyFrame });
         frame.close();
         if (encoder!.encodeQueueSize > 8) {
-          await new Promise<void>((r) => {
-            const check = () => (encoder!.encodeQueueSize <= 2 ? r() : setTimeout(check, 4));
+          // Drain with a hard deadline AND the encoder's error flag — a dead
+          // encoder never drains, and an unbounded poll hangs the export
+          // silently (this used to spin forever after an encoder error).
+          await new Promise<void>((resolve, reject) => {
+            const started = Date.now();
+            const check = (): void => {
+              if (encoderFailure) {
+                reject(new Error(encoderFailure));
+                return;
+              }
+              if (encoder!.encodeQueueSize <= 2) {
+                resolve();
+                return;
+              }
+              if (Date.now() - started > 30_000) {
+                reject(new Error('Export encoder queue stalled — aborted.'));
+                return;
+              }
+              setTimeout(check, 4);
+            };
             check();
           });
         }
@@ -313,6 +392,11 @@ export async function runExport(
         muxer.finalize();
         const { buffer } = muxer.target as WebMTarget;
         if (buffer) await host.writeChunkAt(req.destination, 0, new Uint8Array(buffer));
+      } else if (muxer) {
+        // MP4 finalize writes the moov through the StreamTarget — without it
+        // no bytes ever reached the .part file and the rename in
+        // finalizeExport failed with ENOENT (export "succeeded" into nothing).
+        muxer.finalize();
       }
       await host.finalizeFile(req.destination);
     }

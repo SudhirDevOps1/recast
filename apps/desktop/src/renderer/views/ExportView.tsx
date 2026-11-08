@@ -74,6 +74,7 @@ export function ExportView() {
       const seg = proj.media.segments.find((s) => s.id === segmentId);
       if (!seg) return null;
       v = document.createElement('video');
+      v.crossOrigin = 'anonymous'; // untainted canvas draws — required by WebCodecs
       v.src = `recast-media://local/${proj.media.dir.split(/[\\/]/).map(encodeURIComponent).join('/')}/${encodeURIComponent(seg.file)}`;
       v.muted = true;
       v.preload = 'auto';
@@ -82,27 +83,32 @@ export function ExportView() {
     return v;
   }
 
-  async function pickDestination(): Promise<void> {
+  async function pickDestination(): Promise<string | null> {
     const suggested = await bridge().invoke('export:suggestFilename', { projectId: projectId!, format });
     const { path } = await bridge().invoke('export:pickDestination', { defaultName: suggested.name });
     setDestination(path);
+    return path;
   }
 
   async function run(): Promise<void> {
-    if (!destination) {
-      await pickDestination();
+    // Read the destination into a local: setState above does NOT update the
+    // closed-over variable in this invocation (the stale-closure bug made the
+    // first "Start export" click a silent no-op — export appeared broken).
+    let dest = destination;
+    if (!dest) {
+      dest = await pickDestination();
     }
-    if (!destination) return;
+    if (!dest) return;
     cancelRef.current = false;
     setProgress({ frame: 0, totalFrames: 0, encodeFps: 0, stage: 'rendering', usedPath: '' });
     // The render guard above doesn't narrow inside closures — re-guard here.
     const proj = project;
     if (!proj) return;
     try {
-      await beginChunkedExport(destination);
+      await beginChunkedExport(dest);
       const result = await runExport(
         {
-          destination,
+          destination: dest,
           format,
           fps,
           shortEdge: resolution === 'source' ? Math.min(proj.media.height || 1080, 2160) : Number.parseInt(resolution, 10),

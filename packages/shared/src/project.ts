@@ -185,6 +185,10 @@ export const SessionManifestSchema = z.object({
   camera: z.object({ segments: z.array(SegmentSchema) }).nullable(),
   screen: z.object({ segments: z.array(SegmentSchema) }),
   pausedUs: z.number(),
+  /** DIP → physical pixel factor of the recorded display. Cursor samples are
+   *  stored in DIP; multiplying by this converts them to video pixel space.
+   *  Optional: stamped by main at session creation; older manifests omit it. */
+  displayScaleFactor: z.number().optional(),
 });
 export type SessionManifest = z.infer<typeof SessionManifestSchema>;
 

@@ -20,6 +20,10 @@ export interface AppContext {
   activeSessionId: string | null;
   sessionStartEpochMs: number;
   recorderRequest: RecorderStartRequest | null;
+  /** Scale factor (DIP → physical px) of the display granted to getDisplayMedia.
+   *  Stamped into the session manifest so cursor coords can be converted to
+   *  video pixel space. Null until a display-media grant happens this run. */
+  activeDisplayScaleFactor: number | null;
   lastMicMeterDb: number | null;
   lastDiskFreeMb: number;
   activeExportIds: Set<string>;

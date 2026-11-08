@@ -36,7 +36,11 @@ export function saveProject(project: RecastProject): void {
   atomicWrite(projectFilePath(clean.id), JSON.stringify(clean, null, 2));
 }
 
-export function readCursorJsonl(sessionDir: string, file = 'cursor.jsonl'): {
+export function readCursorJsonl(
+  sessionDir: string,
+  file = 'cursor.jsonl',
+  displayScaleFactor = 1,
+): {
   samples: CursorSample[];
   clicks: Array<{ tUs: number; x: number; y: number }>;
 } {
@@ -44,16 +48,20 @@ export function readCursorJsonl(sessionDir: string, file = 'cursor.jsonl'): {
   const clicks: Array<{ tUs: number; x: number; y: number }> = [];
   const p = join(sessionDir, file);
   if (!existsSync(p)) return { samples, clicks };
+  // Cursor samples are recorded in Electron DIP coordinates; the video frames
+  // are physical pixels. Scale here so every consumer (auto-zoom, editor,
+  // compositor, export) works in one consistent pixel space.
+  const sf = Number.isFinite(displayScaleFactor) && displayScaleFactor > 0 ? displayScaleFactor : 1;
   const lines = readFileSync(p, 'utf8').split('\n');
   for (const line of lines) {
     if (!line.trim()) continue;
     try {
       const e = JSON.parse(line) as { tUs: number; type: string; x?: number; y?: number };
       if (e.type === 'move' && e.x != null && e.y != null) {
-        samples.push({ tUs: e.tUs, x: e.x, y: e.y });
+        samples.push({ tUs: e.tUs, x: e.x * sf, y: e.y * sf });
       } else if (e.type === 'down' && e.x != null && e.y != null) {
-        clicks.push({ tUs: e.tUs, x: e.x, y: e.y });
-        samples.push({ tUs: e.tUs, x: e.x, y: e.y });
+        clicks.push({ tUs: e.tUs, x: e.x * sf, y: e.y * sf });
+        samples.push({ tUs: e.tUs, x: e.x * sf, y: e.y * sf });
       }
     } catch {
       /* skip malformed line */
@@ -77,7 +85,11 @@ export function buildProjectFromSession(input: BuildProjectInput): RecastProject
   const project = makeEmptyProject(`prj-${sessionId}`, input.name ?? `Recording ${new Date().toLocaleString()}`, now, preset);
 
   project.media = {
-    dir: recordingsDir(),
+    // The SESSION directory, not the recordings root: every consumer joins a
+    // bare filename to this path (segments, audio, cursor.jsonl, thumbnails,
+    // recast-media URLs). With the root here none of those resolved — black
+    // previews, dead exports, and a silent zero-sample cursor track.
+    dir: join(recordingsDir(), sessionId),
     width: manifest.video.width,
     height: manifest.video.height,
     fps: manifest.video.fps,
@@ -104,9 +116,10 @@ export function buildProjectFromSession(input: BuildProjectInput): RecastProject
   t = manifest.screen.segments.reduce((acc, seg) => acc + (seg.endUs - seg.startUs), 0);
   project.timeline.durationUs = t;
 
-  // Cursor → auto-zoom keyframes.
+  // Cursor → auto-zoom keyframes. Samples are scaled from DIP to the video's
+  // physical pixel space with the display factor stamped at record time.
   if (project.media.cursor?.available) {
-    const { samples, clicks } = readCursorJsonl(project.media.dir);
+    const { samples, clicks } = readCursorJsonl(project.media.dir, 'cursor.jsonl', manifest.displayScaleFactor ?? 1);
     if (samples.length > 20) {
       project.zoom.autoKeyframes = computeAutoZoom(
         samples,

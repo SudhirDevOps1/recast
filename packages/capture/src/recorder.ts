@@ -73,6 +73,12 @@ export async function startRecording(
     bitrateForQuality(encW, encH, opts.fps),
     true,
   );
+  // The muxer and the manifest must tell the truth about the codec: the
+  // fallback chain can land on VP9 when the machine has no H.264 encoder,
+  // and mislabeled segments decode as garbage (black preview, dead export).
+  const isVp9Stream = config.codec.startsWith('vp09');
+  const muxerCodec: 'avc' | 'vp9' = isVp9Stream ? 'vp9' : 'avc';
+  const manifestCodec = isVp9Stream ? 'vp9' : 'avc1';
 
   const sessionId = opts.sessionId;
   const manifest: SessionManifest = {
@@ -80,7 +86,7 @@ export async function startRecording(
     id: sessionId,
     startedAtEpochMs: Date.now(),
     state: 'active',
-    video: { width: encW, height: encH, fps: opts.fps, codec: 'avc1' },
+    video: { width: encW, height: encH, fps: opts.fps, codec: manifestCodec },
     audio:
       audioSources.length > 0
         ? { codec: 'opus', sampleRate: RECORDING.SAMPLE_RATE, channels: 2, file: audioSources[0]!.label === 'mic' ? 'mic.webm' : 'system.webm' }
@@ -91,7 +97,7 @@ export async function startRecording(
   };
   await host.createSession(sessionId, manifest);
 
-  const writer = new SegmentWriter(host, sessionId, opts.fps);
+  const writer = new SegmentWriter(host, sessionId, opts.fps, muxerCodec);
   const audio = new AudioCapture();
   if (audioSources.length > 0) {
     try {

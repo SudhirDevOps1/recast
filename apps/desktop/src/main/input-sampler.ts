@@ -1,7 +1,48 @@
-import { uIOhook, type UiohookMouseEvent, type UiohookWheelEvent } from 'uiohook-napi';
 import { screen } from 'electron';
 import { RECORDING } from '@recast/shared';
 import type { InputEvent } from '@recast/shared';
+import type { UiohookMouseEvent, UiohookWheelEvent } from 'uiohook-napi';
+
+type UiohookModule = {
+  /** Subscribe to a global input event ('mousedown' | 'mouseup' | 'wheel').
+   * The handler parameter is `never` so concrete handlers stay assignable
+   * (contravariance) without casts at the call sites. */
+  on: (event: string, handler: (e: never) => void) => void;
+  start: () => void;
+  stop: () => void;
+};
+
+/**
+ * Lazy-load the global-input hook. Its native library (libXtst on X11) is
+ * missing on minimal systems, and a static import would crash the whole app
+ * at launch before any recording even starts. When the load fails, click and
+ * wheel events are lost but cursor MOVE polling below still works.
+ */
+async function loadUiohook(): Promise<UiohookModule | null> {
+  try {
+    const mod = (await import('uiohook-napi')) as unknown as {
+      uIOhook: {
+        on: (event: string, handler: (e: never) => void) => void;
+        start: () => void;
+        stop: () => void;
+      };
+    };
+    const hook = mod.uIOhook;
+    return {
+      on: (event, handler) => hook.on(event, handler),
+      start: () => hook.start(),
+      stop: () => {
+        try {
+          hook.stop();
+        } catch {
+          /* already gone */
+        }
+      },
+    };
+  } catch {
+    return null;
+  }
+}
 
 /**
  * 60 Hz cursor sampler + global input hooks, running in the main process.
@@ -15,7 +56,7 @@ import type { InputEvent } from '@recast/shared';
  * different processes.
  */
 export class InputSampler {
-  private hook: typeof uIOhook | null = null;
+  private hook: UiohookModule | null = null;
   private sampleTimer: NodeJS.Timeout | null = null;
   private flushTimer: NodeJS.Timeout | null = null;
   private pending: InputEvent[] = [];
@@ -35,29 +76,37 @@ export class InputSampler {
     const tUs = (): number =>
       Math.round((Date.now() - this.originMs - this.pausedTotalMs) * 1000);
 
-    try {
-      this.hook = uIOhook;
-      this.hook.on('mousedown', (e: UiohookMouseEvent) => {
-        if (!this.running || this.pausedAtMs != null) return;
-        const p = this.point(e.x, e.y);
-        this.pending.push({ tUs: tUs(), type: 'down', x: p.x, y: p.y, button: 'left' });
-      });
-      this.hook.on('mouseup', (e: UiohookMouseEvent) => {
-        if (!this.running || this.pausedAtMs != null) return;
-        const p = this.point(e.x, e.y);
-        this.pending.push({ tUs: tUs(), type: 'up', x: p.x, y: p.y, button: 'left' });
-      });
-      this.hook.on('wheel', (e: UiohookWheelEvent) => {
-        if (!this.running || this.pausedAtMs != null) return;
-        const p = this.point(e.x, e.y);
-        this.pending.push({ tUs: tUs(), type: 'wheel', x: p.x, y: p.y, wheelDy: e.rotation });
-      });
-      this.hook.start();
-    } catch {
-      // Hook failed (e.g. Wayland) — polling still works; the UI explains
-      // reduced capability. Never crash the recorder over this.
-      this.hook = null;
-    }
+    // Global click/wheel hooks load lazily and degrade gracefully — never
+    // block sampler startup (or the whole app) on a native library.
+    void loadUiohook().then((hook) => {
+      if (!hook || !this.running) return;
+      try {
+        this.hook = hook;
+        hook.on('mousedown', (_e: UiohookMouseEvent) => {
+          if (!this.running || this.pausedAtMs != null) return;
+          // Position ALWAYS comes from Electron's screen API (DIP space) —
+          // uiohook reports a different coordinate space on Windows (physical
+          // px), which would misalign clicks vs moves and the video frame.
+          const p = this.point();
+          this.pending.push({ tUs: tUs(), type: 'down', x: p.x, y: p.y, button: 'left' });
+        });
+        hook.on('mouseup', (_e: UiohookMouseEvent) => {
+          if (!this.running || this.pausedAtMs != null) return;
+          const p = this.point();
+          this.pending.push({ tUs: tUs(), type: 'up', x: p.x, y: p.y, button: 'left' });
+        });
+        hook.on('wheel', (e: UiohookWheelEvent) => {
+          if (!this.running || this.pausedAtMs != null) return;
+          const p = this.point();
+          this.pending.push({ tUs: tUs(), type: 'wheel', x: p.x, y: p.y, wheelDy: e.rotation });
+        });
+        hook.start();
+      } catch {
+        // Hook failed (e.g. Wayland) — polling still works; the UI explains
+        // reduced capability. Never crash the recorder over this.
+        this.hook = null;
+      }
+    });
 
     const sampleIntervalMs = 1000 / RECORDING.CURSOR_SAMPLE_HZ;
     this.sampleTimer = setInterval(() => {
@@ -93,8 +142,9 @@ export class InputSampler {
     }
   }
 
-  private point(x?: number, y?: number): { x: number; y: number } {
-    if (x != null && y != null) return { x, y };
+  /** All positions come from Electron's screen API (DIP), scaled to physical
+   *  video pixels at project build time via the manifest's displayScaleFactor. */
+  private point(): { x: number; y: number } {
     return screen.getCursorScreenPoint();
   }
 

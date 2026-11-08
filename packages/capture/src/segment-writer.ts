@@ -39,6 +39,10 @@ export class SegmentWriter {
     private readonly host: CaptureHost,
     private readonly sessionId: string,
     private readonly fps: number,
+    /** Actual encoded codec — the muxer must declare it truthfully or the
+     *  segment decodes as garbage (VP9 chunks into an 'avc' track produced
+     *  playable-looking MP4s that fail on the first decoded frame). */
+    private readonly videoCodec: 'avc' | 'vp9' = 'avc',
   ) {}
 
   get totalBytes(): number {
@@ -86,7 +90,7 @@ export class SegmentWriter {
       this.muxer = new Muxer({
         target: new ArrayBufferTarget(),
         video: {
-          codec: 'avc',
+          codec: this.videoCodec,
           width,
           height,
           frameRate: this.fps,

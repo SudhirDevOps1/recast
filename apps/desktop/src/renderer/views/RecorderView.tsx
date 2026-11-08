@@ -371,13 +371,15 @@ export function RecorderView() {
       if (project) {
         const { useEditor } = await import('../state/stores');
         useEditor.getState().setProject(project);
-        navigate('editor');
+        // Carry the id in the app store too — the Export view loads its project
+        // from useApp.projectId; without it export showed "No project selected".
+        navigate('editor', projectId);
       }
     }
   }
 
-  function navigate(route: 'editor'): void {
-    useApp.getState().navigate(route);
+  function navigate(route: 'editor', projectId?: string): void {
+    useApp.getState().navigate(route, projectId);
   }
 }
 

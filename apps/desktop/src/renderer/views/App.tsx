@@ -66,7 +66,8 @@ export default function App() {
     const project = await bridge().invoke('library:open', { id });
     if (project) {
       useEditor.getState().setProject(project);
-      navigate('editor');
+      // Set the app-store id too — Export reads useApp.projectId.
+      navigate('editor', id);
     }
   }
   void editorOpen;

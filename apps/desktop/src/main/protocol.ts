@@ -13,7 +13,16 @@ export function registerMediaProtocol(): void {
   protocol.registerSchemesAsPrivileged([
     {
       scheme: 'recast-media',
-      privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true },
+      privileges: {
+        standard: true,
+        secure: true,
+        supportFetchAPI: true,
+        stream: true,
+        // Required for crossOrigin='anonymous' media loads (canvas-drawn
+        // export frames): without it Chromium blocks the CORS-mode request
+        // before it ever reaches the handler.
+        corsEnabled: true,
+      },
     },
   ]);
 }
@@ -59,6 +68,10 @@ export function handleMediaProtocol(): void {
         'Content-Type': mime,
         'Content-Length': String(stat.size),
         'Accept-Ranges': 'none',
+        // The renderer draws these videos onto a canvas for export. Without
+        // CORS the canvas becomes tainted and WebCodecs rejects every frame
+        // with "VideoFrames can't be created from tainted sources".
+        'Access-Control-Allow-Origin': '*',
       },
     });
   });

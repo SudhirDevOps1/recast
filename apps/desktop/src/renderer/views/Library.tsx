@@ -23,7 +23,8 @@ export function Library() {
       const project = await bridge().invoke('library:open', { id });
       if (project) {
         useEditor.getState().setProject(project);
-        navigate('editor');
+        // Set the app-store id too — Export reads useApp.projectId.
+        navigate('editor', id);
       } else {
         showToast('This project could not be opened — its file is missing or invalid.', 'error');
       }

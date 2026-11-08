@@ -79,6 +79,22 @@ export async function resolveExportEncoder(
         path: 'Software H.264 baseline (WebCodecs)',
         container: 'mp4',
       },
+      // Some machines (no GPU, openh264 stripped) have no H.264 encoder at
+      // all while VP9 (libvpx) is always compiled in. MP4 can hold VP9, so
+      // the export still produces a playable .mp4 instead of failing.
+      {
+        config: {
+          codec: 'vp09.00.10.08',
+          width,
+          height,
+          bitrate,
+          framerate: fps,
+          hardwareAcceleration: 'no-preference',
+          latencyMode: 'quality',
+        },
+        path: 'Software VP9 in MP4 (WebCodecs fallback)',
+        container: 'mp4',
+      },
     );
   }
   if (format === 'webm') {

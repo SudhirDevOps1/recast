@@ -29,6 +29,16 @@ export function registerDisplayMediaHandler(): void {
 
       if (!pick) return; // deny — the renderer surfaces a clear error toast
 
+      // Remember the granted source's display scale factor: cursor samples are
+      // taken in Electron DIP coordinates while video frames are physical
+      // pixels. The factor is stamped into the session manifest so cursor
+      // coords can be converted at project build time (fixes the cursor
+      // rendering at the wrong spot on Windows 125–150 % / macOS Retina).
+      const grantedDisplay =
+        screen.getAllDisplays().find((d) => String(d.id) === (pick.display_id || '')) ??
+        screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
+      context().activeDisplayScaleFactor = grantedDisplay?.scaleFactor ?? 1;
+
       const response: Parameters<typeof callback>[0] = { video: pick };
       // System loopback audio is only reliably available on Windows; elsewhere
       // the request is video-only (record-flow falls back gracefully).
