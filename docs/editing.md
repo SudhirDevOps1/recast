@@ -60,7 +60,7 @@ Unit tests: `tests/easing.test.ts`, `tests/compositor.test.ts` (intro alpha/offs
 
 - Six built-ins (`BUILTIN_PRESETS` in `packages/shared/src/style.ts`), schema-validated.
 - `.recaststyle` files are JSON with `format: "recaststyle"` and `version: 1`; import parses + validates and applies as **one undo step**.
-- Style covers: aspect ratio, padding, radius, border, shadow level, background (solid/gradient/mesh/blurred echo/transparent/image), cursor style, caption style.
+- Style covers: aspect ratio (incl. custom width/height), padding, radius, border width + color, shadow level, background (solid / gradient with color pickers, angle and presets / mesh / blurred echo with blur-dim-scale sliders / transparent), cursor style (look, size, colors, outline, ripple color, press scale, idle fade), caption style.
 
 ## Captions
 

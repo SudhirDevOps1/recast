@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useApp, useEditor } from '../state/stores';
 import { bridge } from '../lib/bridge';
-import { Button, IconButton, Field, Select, Slider, Switch, Badge, ColorPicker, IconPlay, IconPause, IconScissors, IconTrash, IconDownload, IconUpload, IconUndo, IconRedo } from '@recast/ui';
+import { Button, IconButton, Field, Select, Badge, IconPlay, IconPause, IconScissors, IconTrash, IconDownload, IconUndo, IconRedo } from '@recast/ui';
 import {
   buildTimeMap,
   timelineToSource,
@@ -19,10 +19,10 @@ import {
   type FollowStep,
 } from '@recast/editor';
 import type { RecastProject } from '@recast/shared';
-import { BUILTIN_PRESETS } from '@recast/shared';
 import { TimelineStrip, relayoutProject } from './TimelineStrip';
 import { MotionPanel } from './MotionPanel';
 import { AudioPanel } from './AudioPanel';
+import { StylePanel } from './StylePanel';
 
 /**
  * The editor: compositor-driven preview (identical render path to export),
@@ -482,146 +482,6 @@ function ShortcutBar({ onUndo, onRedo }: { onUndo: () => void; onRedo: () => voi
 }
 
 // ---------------------------------------------------------------------------
-
-function StylePanel({ project, commit }: { project: RecastProject; commit: (p: RecastProject) => void }): React.ReactElement {
-  const showToast = useApp((s) => s.showToast);
-  const style = project.style;
-  return (
-    <div className="space-y-4">
-      <Field label="Preset">
-        <Select
-          value={BUILTIN_PRESETS.some((p) => p.id === style.id) ? style.id : 'custom'}
-          onValueChange={(v) => {
-            const preset = BUILTIN_PRESETS.find((p) => p.id === v);
-            if (preset) commit({ ...project, style: { ...preset } });
-          }}
-          options={[
-            ...BUILTIN_PRESETS.map((p) => ({ value: p.id, label: p.name })),
-            { value: 'custom', label: 'Custom', disabled: true },
-          ]}
-          ariaLabel="Style preset"
-        />
-      </Field>
-      <Field label="Aspect ratio">
-        <Select
-          value={style.aspect}
-          onValueChange={(v) => commit({ ...project, style: { ...style, aspect: v } })}
-          options={[
-            { value: 'source', label: 'Source' },
-            { value: '16:9', label: '16:9' },
-            { value: '9:16', label: '9:16 vertical' },
-            { value: '1:1', label: '1:1 square' },
-            { value: '4:5', label: '4:5 portrait' },
-            { value: '21:9', label: '21:9 wide' },
-          ]}
-          ariaLabel="Aspect ratio"
-        />
-      </Field>
-      <Field label={`Padding — ${style.frame.paddingPx}`}>
-        <Slider value={style.frame.paddingPx} min={0} max={120} ariaLabel="Padding" onValueChange={(v) => commit({ ...project, style: { ...style, frame: { ...style.frame, paddingPx: v } } })} />
-      </Field>
-      <Field label={`Corner radius — ${style.frame.radiusPx}`}>
-        <Slider value={style.frame.radiusPx} min={0} max={64} ariaLabel="Radius" onValueChange={(v) => commit({ ...project, style: { ...style, frame: { ...style.frame, radiusPx: v } } })} />
-      </Field>
-      <Field label="Shadow">
-        <Select
-          value={style.frame.shadow}
-          onValueChange={(v) => commit({ ...project, style: { ...style, frame: { ...style.frame, shadow: v as 'none' | 'soft' | 'medium' | 'large' } } })}
-          options={[
-            { value: 'none', label: 'None' },
-            { value: 'soft', label: 'Soft' },
-            { value: 'medium', label: 'Medium' },
-            { value: 'large', label: 'Large' },
-          ]}
-          ariaLabel="Shadow"
-        />
-      </Field>
-      <Field label="Background">
-        <Select
-          value={style.frame.background.type}
-          onValueChange={(v) =>
-            commit({
-              ...project,
-              style: {
-                ...style,
-                frame: {
-                  ...style.frame,
-                  background:
-                    v === 'gradient'
-                      ? { type: 'gradient', gradient: { from: '#1B2030', to: '#0E1015', angleDeg: 160 } }
-                      : v === 'solid'
-                        ? { type: 'solid', color: '#101418' }
-                        : v === 'echo'
-                          ? { type: 'echo', echo: { blurPx: 48, dim: 0.35, scale: 1.1 } }
-                          : v === 'mesh'
-                            ? { type: 'mesh' }
-                            : { type: 'transparent' },
-                },
-              },
-            })
-          }
-          options={[
-            { value: 'transparent', label: 'Transparent' },
-            { value: 'solid', label: 'Solid color' },
-            { value: 'gradient', label: 'Gradient' },
-            { value: 'mesh', label: 'Mesh gradient' },
-            { value: 'echo', label: 'Blurred echo' },
-          ]}
-          ariaLabel="Background"
-        />
-      </Field>
-      <Field label="Cursor look">
-        <Select
-          value={style.cursor.look}
-          onValueChange={(v) => commit({ ...project, style: { ...style, cursor: { ...style.cursor, look: v as 'native' | 'dot' | 'pointer' | 'circle' } } })}
-          options={[
-            { value: 'native', label: 'Native (as captured)' },
-            { value: 'pointer', label: 'Rendered pointer' },
-            { value: 'dot', label: 'Dot' },
-            { value: 'circle', label: 'Circle' },
-          ]}
-          ariaLabel="Cursor look"
-        />
-      </Field>
-      <Field label="Cursor color">
-        <ColorPicker value={style.cursor.color} onChange={(hex) => commit({ ...project, style: { ...style, cursor: { ...style.cursor, color: hex } } })} ariaLabel="Cursor color" />
-      </Field>
-      <Field label="Click ripple color">
-        <ColorPicker value={style.cursor.rippleColor} onChange={(hex) => commit({ ...project, style: { ...style, cursor: { ...style.cursor, rippleColor: hex } } })} ariaLabel="Ripple color" />
-      </Field>
-      <Field label="Click ripple">
-        <Switch checked={style.cursor.ripple} onCheckedChange={(v) => commit({ ...project, style: { ...style, cursor: { ...style.cursor, ripple: v } } })} ariaLabel="Click ripple" />
-      </Field>
-      <div className="flex gap-2 pt-2">
-        <Button
-          onClick={async () => {
-            const { preset, error } = await bridge().invoke('styles:import', undefined);
-            if (preset) {
-              commit({ ...project, style: preset }); // one undo step
-              showToast(`Imported preset “${preset.name}”.`, 'success');
-            } else if (error) {
-              showToast(error, 'error');
-            }
-          }}
-        >
-          <span className="inline-flex items-center gap-2">
-            <IconUpload size={14} /> Import .recaststyle
-          </span>
-        </Button>
-        <Button
-          onClick={async () => {
-            const { path } = await bridge().invoke('styles:export', { preset: style });
-            if (path) showToast(`Saved to ${path}`, 'success');
-          }}
-        >
-          <span className="inline-flex items-center gap-2">
-            <IconDownload size={14} /> Export
-          </span>
-        </Button>
-      </div>
-    </div>
-  );
-}
 
 function CaptionsPanel({
   project,
