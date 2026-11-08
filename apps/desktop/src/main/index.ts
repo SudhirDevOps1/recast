@@ -20,6 +20,12 @@ import { setupUpdater } from './updater';
  * everything crosses the typed, validated IPC bridge.
  */
 
+// Chromium buffers streaming media (the recast-media protocol, <video>
+// playback, WebCodecs decode) in /dev/shm, which is tiny on some Linux
+// setups, containers and VMs — exhausting it freezes the renderer mid-
+// playback. Redirect that shared memory to /tmp; no downside on desktops.
+app.commandLine.appendSwitch('disable-dev-shm-usage');
+
 const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) {
   app.quit();
