@@ -1,6 +1,7 @@
 import { clamp, ZOOM } from '@recast/shared';
 import type { ZoomKeyframe, ZoomIntensity } from '@recast/shared';
 import { springStep, type SpringState } from './spring';
+import { evalEase, lerp, type EaseName } from './easing';
 
 export interface CursorSample {
   tUs: number;
@@ -242,8 +243,15 @@ function readPose(st: Spring2): ZoomPose {
 /**
  * Build the smoothed zoom track for keyframes over [tStart, tEnd].
  *
- * The goal pose switches at `kf.tUs − preRoll` (anticipation) and the spring
- * carries its state continuously across switches, so there are no jumps.
+ * Two approach styles per keyframe:
+ * - `ease: 'out'` (default) — the goal pose switches at `kf.tUs − preRoll`
+ *   (anticipation) and a critically damped spring carries its state
+ *   continuously across switches, so there are no jumps.
+ * - any other ease — a deterministic blend from the pose at arm time to the
+ *   keyframe pose over the same anticipation window (`preRoll + postRoll`),
+ *   shaped by `evalEase`. The spring state is pinned to the blended pose so
+ *   consecutive keyframes stay continuous.
+ *
  * Output is a fixed-step (default 60 Hz) deterministic track; evaluation is
  * a binary search + linear interpolation, identical in preview and export.
  */
@@ -264,6 +272,14 @@ export function buildZoomTrack(
   const st: Spring2 = { scale: { x: 1, v: 0 }, cx: { x: sourceW / 2, v: 0 }, cy: { x: sourceH / 2, v: 0 } };
   const out: FollowStep[] = [];
 
+  interface BlendSeg {
+    pose0: ZoomPose;
+    target: ZoomPose;
+    t0: number;
+    dur: number;
+    ease: EaseName;
+  }
+  let blend: BlendSeg | null = null;
   let kfi = 0;
   let goal = identityPose(sourceW, sourceH);
   for (let t = 0; t <= endUs; t += stepUs) {
@@ -272,12 +288,32 @@ export function buildZoomTrack(
       const kf = sorted[kfi]!;
       const kfPose = clampCenterPose(kf, sourceW, sourceH);
       goal = kfPose;
+      if (kf.ease === 'out') {
+        blend = null; // silky spring approach (default)
+      } else {
+        blend = { pose0: readPose(st), target: kfPose, t0: t, dur: preUs + postUs, ease: kf.ease };
+      }
       kfi++;
     }
-    // After the last keyframe's post-roll, relax back to identity only if the
-    // project config says so — the compositor keeps the last pose here, and
-    // "hold last" is the expected demo-video behavior.
-    integrate(st, goal, omega, stepUs / 1e6);
+    if (blend) {
+      const f = Math.min(1, (t - blend.t0) / blend.dur);
+      const e = evalEase(blend.ease, f);
+      const pose: ZoomPose = {
+        scale: lerp(blend.pose0.scale, blend.target.scale, e),
+        cx: lerp(blend.pose0.cx, blend.target.cx, e),
+        cy: lerp(blend.pose0.cy, blend.target.cy, e),
+      };
+      // Pin the spring state to the blended pose so later segments stay continuous.
+      st.scale = { x: pose.scale, v: 0 };
+      st.cx = { x: pose.cx, v: 0 };
+      st.cy = { x: pose.cy, v: 0 };
+      if (f >= 1) blend = null;
+    } else {
+      // After the last keyframe's post-roll, relax back to identity only if the
+      // project config says so — the compositor keeps the last pose here, and
+      // "hold last" is the expected demo-video behavior.
+      integrate(st, goal, omega, stepUs / 1e6);
+    }
     out.push({ tUs: t, pose: readPose(st) });
   }
   return out;

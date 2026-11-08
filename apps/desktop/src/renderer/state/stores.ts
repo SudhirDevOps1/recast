@@ -72,11 +72,19 @@ export interface EditorStore {
   currentTimeUs: number;
   playing: boolean;
   zoomTrackReady: boolean;
+  /** Timeline selection: the clip being inspected (null = none). */
+  selectedClipId: string | null;
+  setSelectedClip: (id: string | null) => void;
   /** Undo/redo stacks of structural snapshots (capped at 50). */
   undoStack: RecastProject[];
   redoStack: RecastProject[];
   setProject: (p: RecastProject | null) => void;
+  /** Commit with one undo step. */
   commit: (next: RecastProject) => void;
+  /** Begin a drag gesture: push one undo entry for everything until endDrag. */
+  beginDrag: () => void;
+  /** Update the project during a drag WITHOUT pushing undo (call beginDrag first). */
+  patch: (next: RecastProject) => void;
   undo: () => void;
   redo: () => void;
   setTime: (t: number) => void;
@@ -92,14 +100,27 @@ export const useEditor = create<EditorStore>((set, get) => ({
   currentTimeUs: 0,
   playing: false,
   zoomTrackReady: false,
+  selectedClipId: null,
+  setSelectedClip: (id) => set({ selectedClipId: id }),
   undoStack: [],
   redoStack: [],
-  setProject: (p) => set({ project: p, currentTimeUs: 0, undoStack: [], redoStack: [] }),
+  setProject: (p) => set({ project: p, currentTimeUs: 0, undoStack: [], redoStack: [], selectedClipId: null }),
   commit: (next) => {
     const { project, undoStack } = get();
     if (!project) return;
     const undo = [...undoStack.slice(-49), project];
     set({ project: next, undoStack: undo, redoStack: [] });
+    if (saveTimer) clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => void get().save(), 5_000);
+  },
+  beginDrag: () => {
+    const { project, undoStack } = get();
+    if (!project) return;
+    set({ undoStack: [...undoStack.slice(-49), project], redoStack: [] });
+  },
+  patch: (next) => {
+    if (!get().project) return;
+    set({ project: next });
     if (saveTimer) clearTimeout(saveTimer);
     saveTimer = setTimeout(() => void get().save(), 5_000);
   },

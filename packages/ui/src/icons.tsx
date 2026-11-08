@@ -190,3 +190,65 @@ export const IconRefresh = (p: P) => (
     <path d="M4 10a8 8 0 0 1 14-3.5M20 14a8 8 0 0 1-14 3.5M18 3v4h-4M6 21v-4h4" />
   </Base>
 );
+
+export const IconKeyframe = (p: P) => (
+  <Base {...p}>
+    <path d="M12 4.5 19.5 12 12 19.5 4.5 12 12 4.5Z" fill="currentColor" fillOpacity={0.18} />
+  </Base>
+);
+
+export const IconWaveform = (p: P) => (
+  <Base {...p}>
+    <path d="M4 10.5v3M8 7v10M12 4.5v15M16 8.5v7M20 10.5v3" />
+  </Base>
+);
+
+export const IconUndo = (p: P) => (
+  <Base {...p}>
+    <path d="M8 6 4 10l4 4M4 10h10a5 5 0 0 1 0 10h-3" />
+  </Base>
+);
+
+export const IconRedo = (p: P) => (
+  <Base {...p}>
+    <path d="m16 6 4 4-4 4M20 10H10a5 5 0 0 0 0 10h3" />
+  </Base>
+);
+
+export const IconPlus = (p: P) => (
+  <Base {...p}>
+    <path d="M12 5.5v13M5.5 12h13" />
+  </Base>
+);
+
+export const IconMinus = (p: P) => (
+  <Base {...p}>
+    <path d="M5.5 12h13" />
+  </Base>
+);
+
+export const IconTarget = (p: P) => (
+  <Base {...p}>
+    <circle cx={12} cy={12} r={7.5} />
+    <circle cx={12} cy={12} r={2.5} fill="currentColor" stroke="none" />
+    <path d="M12 2v3.5M12 18.5V22M2 12h3.5M18.5 12H22" />
+  </Base>
+);
+
+export const IconChevronLeft = (p: P) => (
+  <Base {...p}>
+    <path d="m14.5 6-6 6 6 6" />
+  </Base>
+);
+
+export const IconChevronRight = (p: P) => (
+  <Base {...p}>
+    <path d="m9.5 6 6 6-6 6" />
+  </Base>
+);
+
+export const IconMaximize = (p: P) => (
+  <Base {...p}>
+    <path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" />
+  </Base>
+);

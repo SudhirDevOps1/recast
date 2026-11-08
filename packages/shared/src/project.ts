@@ -54,6 +54,10 @@ export const SegmentSchema = z.object({
 });
 export type Segment = z.infer<typeof SegmentSchema>;
 
+/** Intro animation applied to a clip when the playhead enters it. */
+export const TransitionKind = z.enum(['none', 'fade', 'slide-left', 'slide-up', 'zoom']);
+export type TransitionKind = z.infer<typeof TransitionKind>;
+
 export const ClipSchema = z.object({
   id: z.string(),
   segmentId: z.string(),
@@ -62,6 +66,10 @@ export const ClipSchema = z.object({
   sourceOutUs: z.number().min(0),
   timelineInUs: z.number().min(0),
   speed: z.number().min(0.25).max(4).default(1),
+  /** Motion intro played at the start of this clip (screen-studio style). */
+  transitionIn: TransitionKind.default('none'),
+  /** Intro duration in ms (clamped 120–1500). */
+  transitionMs: z.number().min(120).max(1500).default(450),
 });
 export type Clip = z.infer<typeof ClipSchema>;
 
@@ -72,9 +80,21 @@ export const ZoomKeyframeSchema = z.object({
   /** Anchor in source coordinates. */
   cx: z.number(),
   cy: z.number(),
-  ease: z.enum(['in', 'out', 'hold']).default('out'),
+  /**
+   * Approach curve toward this keyframe. 'out' is the default silky spring;
+   * 'linear'/'in'/'inout' are cubic ramps, 'pop' overshoots slightly, 'hold'
+   * snaps at the keyframe time.
+   */
+  ease: z.enum(['in', 'out', 'hold', 'linear', 'inout', 'pop']).default('out'),
 });
 export type ZoomKeyframe = z.infer<typeof ZoomKeyframeSchema>;
+
+/** Project-level motion: fade the whole composition in/out. */
+export const AnimationSchema = z.object({
+  fadeInMs: z.number().min(0).max(3_000).default(0),
+  fadeOutMs: z.number().min(0).max(3_000).default(0),
+});
+export type Animation = z.infer<typeof AnimationSchema>;
 
 export const AudioEditsSchema = z.object({
   gainDb: z.number().min(-24).max(12).default(0),
@@ -128,6 +148,8 @@ export const RecastProjectSchema = z.object({
   annotations: z.array(AnnotationSchema).default([]),
   redactions: z.array(RedactionSchema).default([]),
   audioEdits: AudioEditsSchema.default({}),
+  /** Whole-video motion (fades). Defaults keep old projects rendering as before. */
+  animation: AnimationSchema.default({ fadeInMs: 0, fadeOutMs: 0 }),
   captions: CaptionsSchema.nullable().default(null),
 });
 export type RecastProject = z.infer<typeof RecastProjectSchema>;
@@ -193,6 +215,7 @@ export function makeEmptyProject(
     annotations: [],
     redactions: [],
     audioEdits: { gainDb: 0, fadeInMs: 0, fadeOutMs: 0, normalizeLufs: false, duckMusic: false },
+    animation: { fadeInMs: 0, fadeOutMs: 0 },
     captions: null,
   };
 }

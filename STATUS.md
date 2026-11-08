@@ -1,6 +1,6 @@
 # STATUS — what is real, what is partial, what is not built
 
-Last updated: 2026-11-08 · Phase 1–2 implemented and verified in this repo's gate; CI/CD live and iterating on the first real gate findings. Pages/branch-protection need a one-time admin grant (docs/repository-setup.md). Device-level QA pending CI hardware.
+Last updated: 2026-11-08 · Motion 2.0 (easing, transitions, fades, cursor FX, timeline 2.0) landed and gated; Phase 1–2 implemented and verified in this repo's gate; CI/CD live and iterating on the first real gate findings. Pages/branch-protection need a one-time admin grant (docs/repository-setup.md). Device-level QA pending CI hardware.
 
 Legend: ✅ implemented & verified · 🟡 implemented but not yet verified on device/CI · 🟠 scaffolded, not complete · ❌ not built
 
@@ -8,7 +8,7 @@ Legend: ✅ implemented & verified · 🟡 implemented but not yet verified on d
 
 - ✅ `pnpm typecheck` — all 6 workspace projects green (tsc strict)
 - ✅ `pnpm lint` — ESLint flat config, 0 errors
-- ✅ `pnpm test` — 41/41 unit tests pass (zoom math, springs, clustering, time mapping, preset serialization, IPC schemas, filename sanitization, SRT/VTT)
+- ✅ `pnpm test` — 64/64 unit tests pass (zoom math, springs, clustering, time mapping, preset serialization, IPC schemas, filename sanitization, SRT/VTT)
 - ✅ `pnpm build` — electron-vite produces main (61.8 kB), preload and renderer bundles (3 entry points)
 - ✅ `scripts/fetch-ffmpeg.mjs` — downloads, verifies (registry integrity + SHA-256), pins hashes, stages into `resources/ffmpeg/<platform>-<arch>/`; linux-x64 fetched with real pinned hashes (ffmpeg 6.0-static 78.7 MB, ffprobe 4.0.2-static 64.5 MB); both binaries execute
 - ✅ Icons generated (icon.png 1024, icon.ico multi-size, tray templates)
@@ -29,13 +29,15 @@ Legend: ✅ implemented & verified · 🟡 implemented but not yet verified on d
 
 - ✅ Compositor as a pure function `(project, time) → draw plan`, shared by preview and export — deterministic zoom track (fixed 60 Hz grid, closed-form critically damped spring), golden-frame SSIM harness still TODO (see below).
 - ✅ Auto-zoom: interest detection → clustering (1.2 s window, 80 px @1080p) → fit-clamped keyframes → spring-smoothed track. Unit tests cover settle-without-overshoot, determinism, viewport clamping, follow dead-zone (18 %) and pan-speed clamp.
-- ✅ Timeline: build/split/ripple-delete/time-mapping with speed — unit covered.
+- ✅ Timeline 2.0 (2026-11-08): time ruler with tick marks, clip selection, drag-to-trim edges (ripple re-layout, min 200 ms, segment-bounded), draggable manual zoom-keyframe diamonds with snap, transition + speed badges, selected-clip delete — unit-covered engine, UI verified by typecheck/lint/build + smoke path.
+- ✅ Motion 2.0 engine (2026-11-08): easing module (linear/in/out/inout/hold/pop) applied per zoom keyframe (spring remains the default 'silky'), clip intro transitions (fade / slide-left / slide-up / zoom) rendered inside the shared compositor, whole-video fade in/out, cursor release-bounce + motion trail + exponential smoothing — all pure functions with unit tests (64/64 passing), preview and export render identically through compositor.ts.
+- ✅ Motion panel: per-clip intro transition + duration + speed (0.25–4×), per-keyframe easing select, video fades, cursor FX switches/sliders; "Keyframe at playhead" captures the live camera pose.
 - ✅ Presets: 6 built-ins, `.recaststyle` import/export with schema validation (one undo step via commit).
 - ✅ Command palette (⌘K), keyboard transport (Space/JKL/S/arrows/undo/redo).
 - ✅ Style system: aspect ratios, padding, radius, border, shadow levels, background (solid/gradient/mesh/blurred echo/transparent), cursor looks (native/dot/pointer/circle) with ripple/press-scale/idle-fade.
 - 🟠 Annotations in the editor (vector model + render path implemented; drawing UI not built).
 - 🟠 Redaction blur/pixelate — compositor implements static rects; tracked redaction not built.
-- ❌ Freeze frame, multi-range delete, speed UI (engine supports `speed`; UI panel pending).
+- 🟡 Speed UI shipped (per-clip slider, 2026-11-08); freeze frame and multi-range delete still ❌.
 
 ## Captions
 

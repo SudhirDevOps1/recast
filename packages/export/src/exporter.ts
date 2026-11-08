@@ -261,6 +261,8 @@ export async function runExport(
         cursorEvents: deps.cursorEvents,
         getCaptionsAt: deps.getCaptionsAt,
         showSafeGuides: false,
+        clipIn: clipIntroAt(map, currentTUs),
+        totalDurationUs: map.durationUs,
       });
       drawComposition(ctx, comp, project, drawDeps);
 
@@ -356,4 +358,22 @@ function interpPose(track: FollowStep[], tUs: number): { scale: number; cx: numb
     cx: a.pose.cx + (b.pose.cx - a.pose.cx) * f,
     cy: a.pose.cy + (b.pose.cy - a.pose.cy) * f,
   };
+}
+
+/** Intro transition of the clip active at tUs, or null when none applies. */
+function clipIntroAt(
+  map: ReturnType<typeof buildTimeMap>,
+  tUs: number,
+): { type: RecastProject['timeline']['clips'][number]['transitionIn']; progress: number } | null {
+  for (const { clip, tIn } of map.clips) {
+    const tOut = tIn + Math.max(0, Math.round((clip.sourceOutUs - clip.sourceInUs) / clip.speed));
+    if (tUs >= tIn && tUs < tOut) {
+      if (clip.transitionIn === 'none') return null;
+      const localUs = tUs - tIn;
+      const durUs = Math.max(1, clip.transitionMs) * 1_000;
+      const progress = Math.min(1, Math.max(0, localUs / durUs));
+      return { type: clip.transitionIn, progress };
+    }
+  }
+  return null;
 }

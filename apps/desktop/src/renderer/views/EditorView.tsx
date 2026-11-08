@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useApp, useEditor } from '../state/stores';
 import { bridge } from '../lib/bridge';
-import { Button, IconButton, Field, Select, Slider, Switch, Badge, IconPlay, IconPause, IconScissors, IconZoom, IconSparkle, IconTrash, IconDownload, IconUpload, IconStop, IconX } from '@recast/ui';
+import { Button, IconButton, Field, Select, Slider, Switch, Badge, ColorPicker, IconPlay, IconPause, IconScissors, IconTrash, IconDownload, IconUpload, IconUndo, IconRedo } from '@recast/ui';
 import {
   buildTimeMap,
   timelineToSource,
@@ -12,7 +12,6 @@ import {
   drawComposition,
   buildZoomTrack,
   buildProjectZoomTrack,
-  computeAutoZoom,
   cuesAt,
   parseSrt,
   type CursorSample,
@@ -21,11 +20,14 @@ import {
 } from '@recast/editor';
 import type { RecastProject } from '@recast/shared';
 import { BUILTIN_PRESETS } from '@recast/shared';
+import { TimelineStrip, relayoutProject } from './TimelineStrip';
+import { MotionPanel } from './MotionPanel';
+import { AudioPanel } from './AudioPanel';
 
 /**
  * The editor: compositor-driven preview (identical render path to export),
- * keyboard-first transport, zoom panel (auto/manual/follow), style panel,
- * captions, and the export dialog.
+ * keyboard-first transport, the Motion panel (camera, transitions, fades,
+ * cursor FX), the style panel, captions, and the export dialog.
  */
 
 export function EditorView() {
@@ -42,7 +44,7 @@ export function EditorView() {
   const [cursorSamples, setCursorSamples] = useState<CursorSample[]>([]);
   const [cursorClicks, setCursorClicks] = useState<Array<{ tUs: number; x: number; y: number }>>([]);
   const [captions, setCaptions] = useState<CaptionLine[]>([]);
-  const [panel, setPanel] = useState<'zoom' | 'style' | 'captions'>('zoom');
+  const [panel, setPanel] = useState<'motion' | 'style' | 'audio' | 'captions'>('motion');
 
   const timeMap = useMemo(() => (project ? buildTimeMap(project.timeline.clips) : { clips: [], durationUs: 0 }), [project]);
 
@@ -172,15 +174,20 @@ export function EditorView() {
             commit({ ...project, timeline: { ...project.timeline, clips: next } });
           }}
           onDeleteRange={() => {
-            const t = currentTimeUs;
-            const next = rippleDeleteRange(project.timeline.clips, t - 1_000_000, t);
-            commit({ ...project, timeline: { ...project.timeline, clips: next } });
+            const selId = useEditor.getState().selectedClipId;
+            if (selId) {
+              // Delete the selected clip and ripple the rest left.
+              commit(relayoutProject(project, project.timeline.clips.filter((c) => c.id !== selId)));
+              useEditor.getState().setSelectedClip(null);
+            } else {
+              const next = rippleDeleteRange(project.timeline.clips, currentTimeUs - 1_000_000, currentTimeUs);
+              commit(relayoutProject(project, next));
+            }
           }}
         />
         <TimelineStrip
           project={project}
           durationUs={timeMap.durationUs}
-          zoomTrack={zoomTrack}
           currentTimeUs={currentTimeUs}
           onSeek={setTime}
         />
@@ -190,21 +197,27 @@ export function EditorView() {
       {/* Right panel */}
       <aside className="w-80 shrink-0 overflow-auto border-l border-hairline p-4">
         <div className="mb-3 flex gap-1">
-          <PanelTab label="Zoom" active={panel === 'zoom'} onClick={() => setPanel('zoom')} />
+          <PanelTab label="Motion" active={panel === 'motion'} onClick={() => setPanel('motion')} />
           <PanelTab label="Style" active={panel === 'style'} onClick={() => setPanel('style')} />
-          <PanelTab label="Captions" active={panel === 'captions'} onClick={() => setPanel('captions')} />
+          <PanelTab label="Audio" active={panel === 'audio'} onClick={() => setPanel('audio')} />
+          <PanelTab label="CC" active={panel === 'captions'} onClick={() => setPanel('captions')} />
         </div>
 
-        {panel === 'zoom' && (
-          <ZoomPanel
-            project={project}
-            cursorSamples={cursorSamples}
-            cursorClicks={cursorClicks}
-            commit={commit}
-          />
-        )}
-        {panel === 'style' && <StylePanel project={project} commit={commit} />}
-        {panel === 'captions' && <CaptionsPanel project={project} captions={captions} commit={commit} onLoaded={setCaptions} />}
+        <div key={panel} className="panel-in">
+          {panel === 'motion' && (
+            <MotionPanel
+              project={project}
+              zoomTrack={zoomTrack}
+              currentTimeUs={currentTimeUs}
+              cursorSamples={cursorSamples}
+              cursorClicks={cursorClicks}
+              commit={commit}
+            />
+          )}
+          {panel === 'style' && <StylePanel project={project} commit={commit} />}
+          {panel === 'audio' && <AudioPanel project={project} commit={commit} />}
+          {panel === 'captions' && <CaptionsPanel project={project} captions={captions} commit={commit} onLoaded={setCaptions} />}
+        </div>
 
         <div className="mt-6 border-t border-hairline pt-4">
           <Button variant="primary" className="w-full" onClick={() => navigate('export')}>
@@ -228,7 +241,7 @@ function PanelTab({ label, active, onClick }: { label: string; active: boolean; 
   return (
     <button
       onClick={onClick}
-      className="rounded-md px-3 py-1.5 text-sm font-semibold"
+      className="rounded-md px-3 py-1.5 text-sm font-semibold transition-colors"
       style={{
         background: active ? 'var(--accent-subtle)' : 'transparent',
         color: active ? 'var(--accent)' : 'var(--text-muted)',
@@ -278,14 +291,24 @@ function PreviewCanvas({
     const canvas = canvasRef.current;
     const ctx = canvas?.getContext('2d');
     if (!canvas || !ctx) return;
-    const hit = timelineToSource(buildTimeMap(project.timeline.clips), currentTimeUs);
+    const map = buildTimeMap(project.timeline.clips);
+    const hit = timelineToSource(map, currentTimeUs);
     const pose =
       zoomTrack.length > 0 ? interpZoom(zoomTrack, currentTimeUs) : { scale: 1, cx: project.media.width / 2, cy: project.media.height / 2 };
+    // Intro transition of the active clip (preview must match export exactly).
+    let clipIn: { type: RecastProject['timeline']['clips'][number]['transitionIn']; progress: number } | null = null;
+    if (hit && hit.clip.transitionIn !== 'none') {
+      const entry = map.clips.find((e) => e.clip.id === hit.clip.id);
+      const localUs = Math.max(0, currentTimeUs - (entry?.tIn ?? 0));
+      clipIn = { type: hit.clip.transitionIn, progress: Math.min(1, localUs / Math.max(1, hit.clip.transitionMs * 1_000)) };
+    }
     const comp = computeComposition(project, currentTimeUs, canvas.width, canvas.height, {
       pose,
       cursorEvents: cursorSamples.map((s) => ({ tUs: s.tUs, x: s.x, y: s.y, type: s.type ?? 'move' })),
       getCaptionsAt: (t) => cuesAt(captions, t),
       showSafeGuides: false,
+      clipIn,
+      totalDurationUs: map.durationUs,
     });
     const activeVideo = hit ? videoRefs.current.get(hit.clip.segmentId) ?? null : null;
     drawComposition(ctx, comp, project, {
@@ -444,212 +467,21 @@ function Transport({
   );
 }
 
-function TimelineStrip({
-  project,
-  durationUs,
-  zoomTrack,
-  currentTimeUs,
-  onSeek,
-}: {
-  project: RecastProject;
-  durationUs: number;
-  zoomTrack: FollowStep[];
-  currentTimeUs: number;
-  onSeek: (t: number) => void;
-}): React.ReactElement {
-  const stripRef = useRef<HTMLDivElement | null>(null);
-  const [dragging, setDragging] = useState(false);
-
-  const posToTime = (clientX: number): number => {
-    const rect = stripRef.current?.getBoundingClientRect();
-    if (!rect) return 0;
-    const f = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
-    return Math.round(f * durationUs);
-  };
-
-  return (
-    <div className="border-t border-hairline px-4 py-3">
-      <div
-        ref={stripRef}
-        className="relative h-24 cursor-pointer rounded-lg border border-hairline"
-        style={{ background: 'var(--surface)' }}
-        onPointerDown={(e) => {
-          setDragging(true);
-          onSeek(posToTime(e.clientX));
-        }}
-        onPointerMove={(e) => {
-          if (dragging) onSeek(posToTime(e.clientX));
-        }}
-        onPointerUp={() => setDragging(false)}
-        onPointerLeave={() => setDragging(false)}
-        role="slider"
-        aria-label="Timeline"
-        aria-valuenow={Math.round(currentTimeUs / 1000)}
-        tabIndex={0}
-      >
-        {/* Zoom keyframe markers */}
-        {zoomTrack.length > 0 && project.zoom.enabled
-          ? project.zoom.autoKeyframes.map((kf) => (
-              <div
-                key={kf.id}
-                className="absolute top-1 h-3 w-1 rounded-sm"
-                style={{ left: `${(kf.tUs / Math.max(1, durationUs)) * 100}%`, background: 'var(--accent)' }}
-                title={`Zoom ${kf.zoom.toFixed(2)}× at ${formatClock(kf.tUs)}`}
-              />
-            ))
-          : null}
-        {/* Clips */}
-        {project.timeline.clips.map((clip) => (
-          <div
-            key={clip.id}
-            className="absolute bottom-0 h-16 rounded-md border"
-            style={{
-              left: `${(clip.timelineInUs / Math.max(1, durationUs)) * 100}%`,
-              width: `${((clip.sourceOutUs - clip.sourceInUs) / clip.speed / Math.max(1, durationUs)) * 100}%`,
-              background: 'var(--surface-raised)',
-              borderColor: 'var(--hairline-strong)',
-            }}
-          >
-            <span className="px-1 text-[10px] leading-4" style={{ color: 'var(--text-muted)' }}>
-              {clip.segmentId}
-            </span>
-          </div>
-        ))}
-        {/* Playhead */}
-        <div
-          className="absolute top-0 h-full w-0.5"
-          style={{ left: `${(currentTimeUs / Math.max(1, durationUs)) * 100}%`, background: 'var(--accent)' }}
-        />
-      </div>
-    </div>
-  );
-}
 
 function ShortcutBar({ onUndo, onRedo }: { onUndo: () => void; onRedo: () => void }): React.ReactElement {
   return (
     <div className="flex gap-1 border-t border-hairline px-4 py-1.5">
       <IconButton label="Undo (⌘Z)" onClick={onUndo}>
-        <IconStop />
+        <IconUndo />
       </IconButton>
       <IconButton label="Redo (⇧⌘Z)" onClick={onRedo}>
-        <IconPlay />
+        <IconRedo />
       </IconButton>
     </div>
   );
 }
 
 // ---------------------------------------------------------------------------
-
-function ZoomPanel({
-  project,
-  cursorSamples,
-  cursorClicks,
-  commit,
-}: {
-  project: RecastProject;
-  cursorSamples: CursorSample[];
-  cursorClicks: Array<{ tUs: number; x: number; y: number }>;
-  commit: (p: RecastProject) => void;
-}): React.ReactElement {
-  const recalcAuto = (): void => {
-    if (cursorSamples.length < 20) return;
-    const kfs = computeAutoZoom(cursorSamples, cursorClicks, project.media.width || 1920, project.media.height || 1080, project.zoom.intensity);
-    commit({ ...project, zoom: { ...project.zoom, mode: 'auto', autoKeyframes: kfs } });
-  };
-
-  return (
-    <div className="space-y-4">
-      <Field label="Mode">
-        <Select
-          value={project.zoom.mode}
-          onValueChange={(v) => commit({ ...project, zoom: { ...project.zoom, mode: v as 'auto' | 'manual' | 'follow' } })}
-          options={[
-            { value: 'auto', label: 'Auto zoom (from cursor)' },
-            { value: 'manual', label: 'Manual keyframes' },
-            { value: 'follow', label: 'Follow cursor' },
-          ]}
-          ariaLabel="Zoom mode"
-        />
-      </Field>
-      <Field label="Intensity">
-        <Select
-          value={project.zoom.intensity}
-          onValueChange={(v) => commit({ ...project, zoom: { ...project.zoom, intensity: v as 'subtle' | 'balanced' | 'punchy' } })}
-          options={[
-            { value: 'subtle', label: 'Subtle — 1.25×' },
-            { value: 'balanced', label: 'Balanced — 1.6×' },
-            { value: 'punchy', label: 'Punchy — 2.0×' },
-          ]}
-          ariaLabel="Zoom intensity"
-        />
-      </Field>
-      <Field label="Enabled">
-        <Switch checked={project.zoom.enabled} onCheckedChange={(v) => commit({ ...project, zoom: { ...project.zoom, enabled: v } })} ariaLabel="Zoom enabled" />
-      </Field>
-      <Button onClick={recalcAuto} disabled={cursorSamples.length < 20}>
-        <span className="inline-flex items-center gap-2">
-          <IconSparkle size={14} /> Recompute auto zoom
-        </span>
-      </Button>
-      <Button
-        onClick={() =>
-          commit({
-            ...project,
-            zoom: {
-              ...project.zoom,
-              mode: 'manual',
-              manualKeyframes: [
-                ...project.zoom.manualKeyframes,
-                {
-                  id: `kf-${Date.now()}`,
-                  tUs: 0,
-                  zoom: 1.6,
-                  cx: (project.media.width || 1920) / 2,
-                  cy: (project.media.height || 1080) / 2,
-                  ease: 'out',
-                },
-              ],
-            },
-          })
-        }
-      >
-        <span className="inline-flex items-center gap-2">
-          <IconZoom size={14} /> Add manual keyframe
-        </span>
-      </Button>
-      {project.zoom.mode === 'manual'
-        ? project.zoom.manualKeyframes.map((kf) => (
-            <div key={kf.id} className="rounded-lg border border-hairline p-3 text-xs">
-              <div className="flex items-center justify-between">
-                <span className="tabular">{formatClock(kf.tUs)} · {kf.zoom.toFixed(2)}×</span>
-                <IconButton
-                  label="Remove keyframe"
-                  danger
-                  onClick={() =>
-                    commit({ ...project, zoom: { ...project.zoom, manualKeyframes: project.zoom.manualKeyframes.filter((k) => k.id !== kf.id) } })
-                  }
-                >
-                  <IconX size={12} />
-                </IconButton>
-              </div>
-              <div className="mt-2">
-                <span style={{ color: 'var(--text-muted)' }}>Zoom</span>
-                <Slider value={kf.zoom} min={1} max={4} step={0.05} ariaLabel="Keyframe zoom" onValueChange={(v) =>
-                  commit({
-                    ...project,
-                    zoom: {
-                      ...project.zoom,
-                      manualKeyframes: project.zoom.manualKeyframes.map((k) => (k.id === kf.id ? { ...k, zoom: v } : k)),
-                    },
-                  })
-                } />
-              </div>
-            </div>
-          ))
-        : null}
-    </div>
-  );
-}
 
 function StylePanel({ project, commit }: { project: RecastProject; commit: (p: RecastProject) => void }): React.ReactElement {
   const showToast = useApp((s) => s.showToast);
@@ -750,6 +582,12 @@ function StylePanel({ project, commit }: { project: RecastProject; commit: (p: R
           ]}
           ariaLabel="Cursor look"
         />
+      </Field>
+      <Field label="Cursor color">
+        <ColorPicker value={style.cursor.color} onChange={(hex) => commit({ ...project, style: { ...style, cursor: { ...style.cursor, color: hex } } })} ariaLabel="Cursor color" />
+      </Field>
+      <Field label="Click ripple color">
+        <ColorPicker value={style.cursor.rippleColor} onChange={(hex) => commit({ ...project, style: { ...style, cursor: { ...style.cursor, rippleColor: hex } } })} ariaLabel="Ripple color" />
       </Field>
       <Field label="Click ripple">
         <Switch checked={style.cursor.ripple} onCheckedChange={(v) => commit({ ...project, style: { ...style, cursor: { ...style.cursor, ripple: v } } })} ariaLabel="Click ripple" />

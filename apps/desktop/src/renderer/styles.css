@@ -1,3 +1,42 @@
 @import 'tailwindcss';
 @import '@recast/ui/tokens.css';
 @import '@recast/ui/global.css';
+
+/* Motion 2.0 — subtle UI motion (tokens-driven, reduced-motion aware). */
+
+@keyframes recast-panel-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.panel-in {
+  animation: recast-panel-in var(--dur-base, 180ms) var(--ease-out, cubic-bezier(0.2, 0, 0, 1));
+}
+
+@keyframes recast-toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.anim-pop {
+  animation: recast-toast-in var(--dur-slow, 240ms) var(--ease-out, cubic-bezier(0.2, 0, 0, 1));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .panel-in,
+  .anim-pop {
+    animation: none;
+  }
+}

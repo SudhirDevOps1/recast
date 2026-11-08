@@ -3,7 +3,7 @@ import { buildTimeMap, formatClock, rippleDeleteRange, splitClipsAt, timelineToS
 import type { Clip } from '@recast/shared';
 
 function clip(id: string, inUs: number, outUs: number, timelineIn = 0, speed = 1): Clip {
-  return { id, segmentId: 'seg', track: 'screen', sourceInUs: inUs, sourceOutUs: outUs, timelineInUs: timelineIn, speed };
+  return { id, segmentId: 'seg', track: 'screen', sourceInUs: inUs, sourceOutUs: outUs, timelineInUs: timelineIn, speed, transitionIn: 'none', transitionMs: 450 };
 }
 
 describe('formatClock', () => {

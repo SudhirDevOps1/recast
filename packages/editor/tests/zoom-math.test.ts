@@ -124,6 +124,73 @@ describe('zoom track', () => {
   });
 });
 
+describe('eased keyframes', () => {
+  const kfAt = (ease: 'in' | 'out' | 'hold' | 'linear' | 'inout' | 'pop') => [
+    { id: 'a', tUs: 1_000_000, zoom: 2, cx: 960, cy: 540, ease },
+  ];
+
+  it('linear approach lands exactly on the keyframe pose and stays', () => {
+    const track = buildZoomTrack(kfAt('linear'), 1920, 1080, 'balanced', 4_000_000);
+    // Before the transition window opens the pose is identity.
+    const early = poseAt(track, 100_000)!;
+    expect(early.scale).toBeCloseTo(1, 3);
+    // After pre-roll (300 ms) + post-roll (600 ms) window it is pinned at 2×.
+    const done = poseAt(track, 2_200_000)!;
+    expect(done.scale).toBeCloseTo(2, 3);
+    // Mid-window the scale is strictly between.
+    const mid = poseAt(track, 1_200_000)!;
+    expect(mid.scale).toBeGreaterThan(1.05);
+    expect(mid.scale).toBeLessThan(1.95);
+  });
+
+  it('hold keeps the previous pose until the window ends, then snaps', () => {
+    const track = buildZoomTrack(kfAt('hold'), 1920, 1080, 'balanced', 4_000_000);
+    const before = poseAt(track, 1_500_000)!;
+    expect(before.scale).toBeCloseTo(1, 5);
+    const after = poseAt(track, 2_200_000)!;
+    expect(after.scale).toBeCloseTo(2, 3);
+  });
+
+  it('every ease keeps consecutive samples continuous (except the single hold snap)', () => {
+    for (const ease of ['in', 'linear', 'inout', 'pop', 'out'] as const) {
+      const track = buildZoomTrack(kfAt(ease), 1920, 1080, 'balanced', 4_000_000);
+      for (let i = 1; i < track.length; i++) {
+        const a = track[i - 1]!.pose;
+        const b = track[i]!.pose;
+        expect(Math.abs(b.scale - a.scale)).toBeLessThan(0.15);
+        expect(Math.hypot(b.cx - a.cx, b.cy - a.cy)).toBeLessThan(400);
+      }
+    }
+  });
+
+  it('is deterministic for eased tracks', () => {
+    const run = () => JSON.stringify(buildZoomTrack(kfAt('inout'), 1920, 1080, 'balanced', 3_000_000));
+    expect(run()).toBe(run());
+  });
+
+  it('two eased keyframes chain continuously (second starts from first pose)', () => {
+    const track = buildZoomTrack(
+      [
+        { id: 'a', tUs: 1_000_000, zoom: 2, cx: 700, cy: 500, ease: 'inout' },
+        { id: 'b', tUs: 3_000_000, zoom: 1.4, cx: 1200, cy: 700, ease: 'linear' },
+      ],
+      1920,
+      1080,
+      'balanced',
+      5_000_000,
+    );
+    for (let i = 1; i < track.length; i++) {
+      const a = track[i - 1]!.pose;
+      const b = track[i]!.pose;
+      expect(Math.abs(b.scale - a.scale)).toBeLessThan(0.15);
+      expect(Math.hypot(b.cx - a.cx, b.cy - a.cy)).toBeLessThan(400);
+    }
+    // The second keyframe pulls the camera toward its anchor.
+    const end = poseAt(track, 4_400_000)!;
+    expect(end.cx).toBeGreaterThan(900);
+  });
+});
+
 describe('follow cursor', () => {
   it('holds still inside the dead zone and follows outside', () => {
     const samples: CursorSample[] = [];

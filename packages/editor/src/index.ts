@@ -1,4 +1,5 @@
 export * from './spring';
+export * from './easing';
 export * from './zoom-math';
 export * from './compositor';
 export * from './captions';

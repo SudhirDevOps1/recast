@@ -33,6 +33,50 @@ describe('project schema', () => {
     const bad = { ...p, schemaVersion: 99 };
     expect(RecastProjectSchema.safeParse(bad).success).toBe(false);
   });
+
+  it('fills motion defaults for pre-Motion-2.0 projects (backward compatible)', () => {
+    const p = makeEmptyProject('id-1', 'Demo', new Date().toISOString(), BUILTIN_PRESETS[0]!);
+    // Strip everything the Motion 2.0 update introduced — as an old .recast
+    // file on disk would look — and re-parse.
+    const legacy = JSON.parse(
+      JSON.stringify({
+        ...p,
+        timeline: { clips: [], durationUs: 0 },
+        style: { ...p.style, cursor: { look: 'pointer', sizePx: 24, color: '#FFFFFF', outlineColor: '#101418', outlineWidthPx: 1, shadow: true, ripple: false, pressScale: 0.85, idleFadeMs: 0 } },
+      }),
+    );
+    delete legacy.animation;
+    const parsed = RecastProjectSchema.parse(legacy);
+    expect(parsed.animation).toEqual({ fadeInMs: 0, fadeOutMs: 0 });
+    expect(parsed.style.cursor.clickBounce).toBe(false);
+    expect(parsed.style.cursor.cursorSmoothing).toBe(0);
+    expect(parsed.style.cursor.trail).toBe(false);
+    expect(parsed.style.cursor.rippleColor).toBe('#FFFFFF');
+  });
+
+  it('accepts clip transitions and eased keyframes', () => {
+    const p = makeEmptyProject('id-1', 'Demo', new Date().toISOString(), BUILTIN_PRESETS[0]!);
+    p.timeline = {
+      clips: [
+        {
+          id: 'c1',
+          segmentId: 's1',
+          track: 'screen',
+          sourceInUs: 0,
+          sourceOutUs: 2_000_000,
+          timelineInUs: 0,
+          speed: 1,
+          transitionIn: 'slide-left',
+          transitionMs: 600,
+        },
+      ],
+      durationUs: 2_000_000,
+    };
+    p.zoom.manualKeyframes = [{ id: 'kf1', tUs: 1_000_000, zoom: 2, cx: 960, cy: 540, ease: 'inout' }];
+    const parsed = RecastProjectSchema.parse(p);
+    expect(parsed.timeline.clips[0]!.transitionIn).toBe('slide-left');
+    expect(parsed.zoom.manualKeyframes[0]!.ease).toBe('inout');
+  });
 });
 
 describe('session manifest schema', () => {

@@ -98,6 +98,8 @@ export function buildProjectFromSession(input: BuildProjectInput): RecastProject
     sourceOutUs: seg.endUs,
     timelineInUs: t,
     speed: 1,
+    transitionIn: 'none' as const,
+    transitionMs: 450,
   }));
   t = manifest.screen.segments.reduce((acc, seg) => acc + (seg.endUs - seg.startUs), 0);
   project.timeline.durationUs = t;

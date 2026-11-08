@@ -38,6 +38,14 @@ export const CursorStyleSchema = z.object({
   pressScale: z.number().min(0.6).max(1.4),
   /** Fade the rendered cursor out after N ms without movement (0 = never). */
   idleFadeMs: z.number().min(0).max(5_000),
+  /** Overshoot bounce when the mouse button is released (Screen-Studio style). */
+  clickBounce: z.boolean().default(false),
+  /** Color of the click ripple/ring. */
+  rippleColor: z.string().default('#FFFFFF'),
+  /** 0 = raw captured motion, 1 = very smooth (exponential lag). */
+  cursorSmoothing: z.number().min(0).max(1).default(0),
+  /** Draw a fading motion trail behind the cursor. */
+  trail: z.boolean().default(false),
 });
 export type CursorStyle = z.infer<typeof CursorStyleSchema>;
 
@@ -100,6 +108,10 @@ function preset(
       ripple: false,
       pressScale: 0.85,
       idleFadeMs: 0,
+      clickBounce: false,
+      rippleColor: '#FFFFFF',
+      cursorSmoothing: 0,
+      trail: false,
       ...cursor,
     },
     captions: {
@@ -125,6 +137,8 @@ export const BUILTIN_PRESETS: StylePreset[] = [
     color: '#F5F7FA',
     outlineColor: '#0B0E12',
     outlineWidthPx: 1.5,
+    cursorSmoothing: 0.35,
+    clickBounce: true,
   }),
   preset('soft-studio', 'Soft Studio', 'source', {
     paddingPx: 24,
@@ -135,7 +149,10 @@ export const BUILTIN_PRESETS: StylePreset[] = [
     background: { type: 'gradient', gradient: { from: '#1B2030', to: '#0E1015', angleDeg: 160 } },
   }, {
     ripple: true,
+    rippleColor: '#9BA8FF',
     shadow: true,
+    cursorSmoothing: 0.4,
+    clickBounce: true,
   }),
   preset('bold-punch', 'Bold Punch', '16:9', {
     paddingPx: 40,
@@ -151,7 +168,11 @@ export const BUILTIN_PRESETS: StylePreset[] = [
     outlineColor: '#101418',
     outlineWidthPx: 2,
     ripple: true,
+    rippleColor: '#FFD666',
     pressScale: 0.8,
+    cursorSmoothing: 0.45,
+    clickBounce: true,
+    trail: true,
   }, {
     style: 'bold',
     sizePx: 44,
@@ -167,6 +188,9 @@ export const BUILTIN_PRESETS: StylePreset[] = [
     look: 'pointer',
     sizePx: 28,
     ripple: true,
+    rippleColor: '#FFFFFF',
+    cursorSmoothing: 0.4,
+    clickBounce: true,
   }, {
     style: 'boxed',
     sizePx: 40,

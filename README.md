@@ -79,8 +79,9 @@ Honest, tested-only claims live in [STATUS.md](STATUS.md). Highlights (Phase 1�
 
 - ✅ Screen / window / area capture, mic + system audio, countdown, pause/resume
 - ✅ Crash-safe segmented recording with recovery
-- ✅ Cursor track → auto-zoom (1.25× / 1.6× / 2.0× intensities), manual keyframes, follow-cursor mode
-- ✅ Editor: compositor-driven preview, trim/split/ripple delete, undo/redo, presets (`.recaststyle`), command palette
+- ✅ Cursor track → auto-zoom (1.25× / 1.6× / 2.0× intensities), manual keyframes with easing curves (silky spring / in-out / pop / hold), follow-cursor mode
+- ✅ Motion editing: per-clip intro transitions (fade / slide / rise / zoom-settle) with duration control, per-clip speed (0.25–4×), whole-video fades, cursor FX (release bounce, motion trail, smoothing)
+- ✅ Editor: compositor-driven preview, visual timeline (ruler, clip selection, drag-to-trim, draggable keyframes), trim/split/ripple delete, undo/redo, presets (`.recaststyle`), command palette
 - ✅ Export MP4/WebM/HEVC/ProRes/GIF with encoder fallback chain + verification
 - 🟡 Local Whisper captions (wired, needs a `whisper.cpp` binary on PATH)
 - 🟡 Live annotation, face-cam PiP (planned — see STATUS)

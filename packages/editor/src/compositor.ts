@@ -1,6 +1,7 @@
 import { clamp } from '@recast/shared';
-import type { Annotation, RecastProject, Redaction } from '@recast/shared';
+import type { Annotation, RecastProject, Redaction, TransitionKind } from '@recast/shared';
 import type { ZoomPose } from './zoom-math';
+import { evalEase } from './easing';
 
 /**
  * The compositor is a pure function of (project, time) → draw plan, shared by
@@ -30,6 +31,10 @@ export interface CursorDrawInfo {
   pressed: boolean;
   /** ms since last click, for the ripple animation; null when no recent click. */
   rippleMs: number | null;
+  /** 1 = neutral; press and release-bounce scale the cursor. */
+  scale: number;
+  /** Fading motion-trail points in output coords (oldest first, may be empty). */
+  trail: Array<{ x: number; y: number; alpha: number }>;
 }
 
 export interface RenderAnnotation {
@@ -52,6 +57,13 @@ export interface CaptionLine {
   endUs: number;
 }
 
+/** Intro motion of the active clip: eased layer alpha (+ screen-rect offset applied upstream). */
+export interface ClipIntro {
+  type: Exclude<TransitionKind, 'none'>;
+  /** Eased 0..1 opacity of the screen layer (0 at clip start, 1 when done). */
+  alpha: number;
+}
+
 export interface Composition {
   outW: number;
   outH: number;
@@ -70,6 +82,10 @@ export interface Composition {
   redactions: RenderRedaction[];
   captions: CaptionLine[];
   captionStyle: RecastProject['style']['captions'];
+  /** Active clip intro transition, null when none is playing. */
+  intro: ClipIntro | null;
+  /** Whole-video fade (in/out) — black overlay alpha 0..1, null when idle. */
+  fadeOverlay: { alpha: number } | null;
   /** 0..1 progress of the active clip for speed effects (unused visually). */
   showSafeGuides: boolean;
 }
@@ -88,6 +104,10 @@ export interface ComposeDeps {
   cursorEvents: CursorSampleLike[];
   getCaptionsAt: (tUs: number) => CaptionLine[];
   showSafeGuides?: boolean;
+  /** Intro transition of the clip active at tUs, with raw 0..1 progress. */
+  clipIn?: { type: TransitionKind; progress: number } | null;
+  /** Timeline duration — required for project fade in/out to evaluate. */
+  totalDurationUs?: number;
 }
 
 /** Output canvas size for a project at a given short-edge resolution. */
@@ -150,7 +170,7 @@ export function computeComposition(project: RecastProject, tUs: number, outW: nu
     sh = contentRect.h - 2 * pad;
     sw = sh * srcAr;
   }
-  const screenRect: Rect = {
+  let screenRect: Rect = {
     x: contentRect.x + (contentRect.w - sw) / 2,
     y: contentRect.y + (contentRect.h - sh) / 2,
     w: Math.max(1, sw),
@@ -170,9 +190,45 @@ export function computeComposition(project: RecastProject, tUs: number, outW: nu
   // Cursor mapping: source coords → output coords through the visible region.
   const cursor = mapCursor(project, tUs, deps.cursorEvents, screenRect, visibleSrc, style.cursor);
 
+  // Clip intro transition: offset/zoom the screen card before cursor and
+  // annotation mapping so overlays ride along with the motion.
+  let intro: ClipIntro | null = null;
+  if (deps.clipIn && deps.clipIn.type !== 'none') {
+    const p = clamp(deps.clipIn.progress, 0, 1);
+    const e = evalEase('out', p);
+    if (deps.clipIn.type === 'slide-left') {
+      screenRect = { ...screenRect, x: screenRect.x + (1 - e) * outW * 0.12 };
+    } else if (deps.clipIn.type === 'slide-up') {
+      screenRect = { ...screenRect, y: screenRect.y + (1 - e) * outH * 0.1 };
+    } else if (deps.clipIn.type === 'zoom') {
+      const grow = 1 + (1 - e) * 0.08;
+      const cxr = screenRect.x + screenRect.w / 2;
+      const cyr = screenRect.y + screenRect.h / 2;
+      screenRect = {
+        x: cxr - (screenRect.w * grow) / 2,
+        y: cyr - (screenRect.h * grow) / 2,
+        w: screenRect.w * grow,
+        h: screenRect.h * grow,
+      };
+    }
+    intro = { type: deps.clipIn.type, alpha: e };
+  }
+
   const radiusPx = (style.frame.radiusPx / 1000) * outH;
   const annotations = mapAnnotations(project, tUs, screenRect, visibleSrc, outH);
   const redactions = mapRedactions(project, tUs, screenRect, visibleSrc);
+
+  // Whole-video fade in/out over black.
+  let fadeOverlay: { alpha: number } | null = null;
+  const fadeInUs = (project.animation?.fadeInMs ?? 0) * 1_000;
+  const fadeOutUs = (project.animation?.fadeOutMs ?? 0) * 1_000;
+  const total = deps.totalDurationUs ?? 0;
+  if (total > 0 && (fadeInUs > 0 || fadeOutUs > 0)) {
+    let a = 0;
+    if (fadeInUs > 0) a = Math.max(a, 1 - clamp(tUs / fadeInUs, 0, 1));
+    if (fadeOutUs > 0) a = Math.max(a, 1 - clamp((total - tUs) / fadeOutUs, 0, 1));
+    if (a > 0.001) fadeOverlay = { alpha: a };
+  }
 
   return {
     outW,
@@ -191,6 +247,8 @@ export function computeComposition(project: RecastProject, tUs: number, outW: nu
     redactions,
     captions: deps.getCaptionsAt(tUs),
     captionStyle: style.captions,
+    intro,
+    fadeOverlay,
     showSafeGuides: deps.showSafeGuides ?? false,
   };
 }
@@ -206,25 +264,72 @@ function mapCursor(
   if (events.length === 0) return null;
   let lastMove: CursorSampleLike | null = null;
   let lastClick: CursorSampleLike | null = null;
+  let lastUp: CursorSampleLike | null = null;
   let down = false;
   let lastMoveTUs = -1;
+
+  // Exponential cursor smoothing (deterministic walk over the event list).
+  const smoothing = style.cursorSmoothing ?? 0;
+  const tau = 0.02 + smoothing * 0.18; // seconds of lag
+  let sx: number | null = null;
+  let sy: number | null = null;
+  let sT: number | null = null;
+  const trailRaw: Array<{ x: number; y: number; t: number }> = [];
+
   for (const e of events) {
     if (e.tUs > tUs) break;
     if (e.type === 'move' || e.type === 'up' || e.type === 'down') {
-      if (e.x != null && e.y != null) lastMove = e;
+      if (e.x != null && e.y != null) {
+        if (smoothing > 0) {
+          const tSec = e.tUs / 1e6;
+          if (sx == null || sy == null || sT == null) {
+            sx = e.x;
+            sy = e.y;
+          } else {
+            const dt = Math.max(0, tSec - sT);
+            const k = 1 - Math.exp(-dt / tau);
+            sx += (e.x - sx) * k;
+            sy += (e.y - sy) * k;
+          }
+          sT = tSec;
+          trailRaw.push({ x: sx, y: sy, t: e.tUs });
+          if (trailRaw.length > 24) trailRaw.shift();
+        }
+        lastMove = e;
+      }
     }
     if (e.type === 'down') {
       down = true;
       lastClick = e;
     }
-    if (e.type === 'up') down = false;
+    if (e.type === 'up') {
+      down = false;
+      lastUp = e;
+    }
     lastMoveTUs = e.tUs;
   }
   if (!lastMove) return null;
+
+  const px = smoothing > 0 && sx != null && sy != null ? sx : lastMove.x!;
+  const py = smoothing > 0 && sx != null && sy != null ? sy : lastMove.y!;
   const kx = screenRect.w / visibleSrc.w;
   const ky = screenRect.h / visibleSrc.h;
-  const x = screenRect.x + (lastMove.x! - visibleSrc.x) * kx;
-  const y = screenRect.y + (lastMove.y! - visibleSrc.y) * ky;
+  const x = screenRect.x + (px - visibleSrc.x) * kx;
+  const y = screenRect.y + (py - visibleSrc.y) * ky;
+
+  // Motion trail: recent smoothed positions with fading alpha.
+  const trail: Array<{ x: number; y: number; alpha: number }> = [];
+  if (style.trail) {
+    for (const p of trailRaw) {
+      const ageMs = (tUs - p.t) / 1_000;
+      if (ageMs > 180 || ageMs < 8) continue;
+      trail.push({
+        x: screenRect.x + (p.x - visibleSrc.x) * kx,
+        y: screenRect.y + (p.y - visibleSrc.y) * ky,
+        alpha: (1 - ageMs / 180) * 0.3,
+      });
+    }
+  }
 
   let alpha = 1;
   if (style.idleFadeMs > 0 && lastMoveTUs >= 0) {
@@ -232,7 +337,28 @@ function mapCursor(
     if (idleMs > style.idleFadeMs) alpha = clamp(1 - (idleMs - style.idleFadeMs) / 400, 0, 1);
   }
   const rippleMs = lastClick ? clamp((tUs - lastClick.tUs) / 1_000, 0, 500) : null;
-  return { x, y, visible: true, alpha, pressed: down, rippleMs: rippleMs != null && rippleMs < 450 ? rippleMs : null };
+
+  // Cursor scale: press shrinks; release bounces back with a slight overshoot.
+  let scale = 1;
+  if (down) {
+    scale = style.pressScale;
+  } else if (style.clickBounce && lastUp) {
+    const sinceUpMs = (tUs - lastUp.tUs) / 1_000;
+    if (sinceUpMs >= 0 && sinceUpMs < 260) {
+      scale = style.pressScale + (1 - style.pressScale) * evalEase('pop', sinceUpMs / 260);
+    }
+  }
+
+  return {
+    x,
+    y,
+    visible: true,
+    alpha,
+    pressed: down,
+    rippleMs: rippleMs != null && rippleMs < 450 ? rippleMs : null,
+    scale,
+    trail,
+  };
 }
 
 function mapAnnotations(
@@ -435,15 +561,26 @@ function drawCursor(ctx: CanvasRenderingContext2D, comp: Composition): void {
   const style = comp.cursorStyle;
   ctx.save();
   ctx.globalAlpha = c.alpha;
-  const press = c.pressed ? style.pressScale : 1;
-  const size = (style.sizePx / 1000) * comp.outH * press;
+  const size = (style.sizePx / 1000) * comp.outH * c.scale;
+
+  if (style.trail) {
+    for (const p of c.trail) {
+      ctx.save();
+      ctx.globalAlpha = c.alpha * p.alpha;
+      ctx.fillStyle = style.color;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, size * 0.22, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+  }
 
   if (c.rippleMs != null && style.ripple) {
     const f = c.rippleMs / 450;
     const rad = size * (0.5 + f * 1.6);
     ctx.beginPath();
     ctx.arc(c.x, c.y, rad, 0, Math.PI * 2);
-    ctx.strokeStyle = style.color;
+    ctx.strokeStyle = style.rippleColor;
     ctx.globalAlpha = c.alpha * (1 - f) * 0.7;
     ctx.lineWidth = Math.max(1, size * 0.06);
     ctx.stroke();
@@ -606,9 +743,14 @@ function drawCaptions(ctx: CanvasRenderingContext2D, comp: Composition): void {
 export function drawComposition(ctx: CanvasRenderingContext2D, comp: Composition, project: RecastProject, deps: DrawDeps): void {
   drawBackground(ctx, comp, deps);
 
+  // Clip intro transition: the whole screen card (shadow + video + border)
+  // fades/slides in with the eased layer alpha.
+  const layerAlpha = comp.intro ? comp.intro.alpha : 1;
+
   const sh = SHADOWS[comp.shadow];
   if (sh.blur > 0) {
     ctx.save();
+    ctx.globalAlpha = layerAlpha;
     ctx.shadowColor = `rgba(0,0,0,${sh.alpha})`;
     ctx.shadowBlur = sh.blur * comp.outH;
     ctx.shadowOffsetY = sh.y * comp.outH;
@@ -620,6 +762,7 @@ export function drawComposition(ctx: CanvasRenderingContext2D, comp: Composition
 
   // Screen video with zoom mapping.
   ctx.save();
+  ctx.globalAlpha = layerAlpha;
   roundRectPath(ctx, comp.screenRect, comp.radiusPx);
   ctx.clip();
   const frame = deps.getFrame('__active__', 0);
@@ -642,6 +785,7 @@ export function drawComposition(ctx: CanvasRenderingContext2D, comp: Composition
 
   if (comp.borderWidthPx > 0) {
     ctx.save();
+    ctx.globalAlpha = layerAlpha;
     ctx.lineWidth = comp.borderWidthPx;
     ctx.strokeStyle = comp.borderColor;
     roundRectPath(ctx, comp.screenRect, comp.radiusPx);
@@ -659,6 +803,15 @@ export function drawComposition(ctx: CanvasRenderingContext2D, comp: Composition
     ctx.setLineDash([6, 6]);
     ctx.lineWidth = 1;
     ctx.strokeRect(comp.outW * 0.05, comp.outH * 0.05, comp.outW * 0.9, comp.outH * 0.9);
+    ctx.restore();
+  }
+
+  // Whole-video fade in/out — always the topmost layer.
+  if (comp.fadeOverlay) {
+    ctx.save();
+    ctx.globalAlpha = comp.fadeOverlay.alpha;
+    ctx.fillStyle = '#000000';
+    ctx.fillRect(0, 0, comp.outW, comp.outH);
     ctx.restore();
   }
 }
