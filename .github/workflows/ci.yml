@@ -13,6 +13,14 @@ concurrency:
 permissions:
   contents: read
 
+# GitHub's release-asset CDN intermittently returns 502/503/504 (CI #63
+# smoke 504'd fetching the electron-v45.2.3 dist zip). npmmirror hosts the
+# exact same artifacts; @electron/get and electron-builder both honor
+# these env vars natively.
+env:
+  ELECTRON_MIRROR: https://npmmirror.com/mirrors/electron/
+  ELECTRON_BUILDER_BINARIES_MIRROR: https://npmmirror.com/mirrors/electron-builder-binaries/
+
 jobs:
   preflight:
     name: Preflight
