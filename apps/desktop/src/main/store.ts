@@ -14,7 +14,10 @@ export function loadSettings(): Settings {
   try {
     const raw = readFileSync(settingsFile(), 'utf8');
     const parsed = SettingsSchema.safeParse(JSON.parse(raw));
-    if (parsed.success) return parsed.data;
+    if (parsed.success) {
+      // The UI is English-only; coerce any locale saved by an older build.
+      return { ...parsed.data, language: 'en' };
+    }
   } catch {
     /* first run or corrupt file → defaults */
   }

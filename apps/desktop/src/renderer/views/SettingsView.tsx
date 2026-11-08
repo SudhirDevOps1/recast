@@ -49,11 +49,8 @@ export function SettingsView() {
           <Field label="Language">
             <Select
               value={settings.language}
-              onValueChange={(v) => void setSettings({ language: v as 'en' | 'hi' })}
-              options={[
-                { value: 'en', label: 'English' },
-                { value: 'hi', label: 'हिन्दी' },
-              ]}
+              onValueChange={(v) => void setSettings({ language: v as 'en' })}
+              options={[{ value: 'en', label: 'English' }]}
               ariaLabel="Language"
             />
           </Field>

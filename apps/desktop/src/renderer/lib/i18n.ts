@@ -1,11 +1,14 @@
 /**
- * i18n scaffolding (en + hi). The language setting exists and the dictionaries
- * are wired through `t()`; full externalization of every string is tracked in
- * STATUS.md as scaffolded — not every string is routed through it yet, and
- * this file says so plainly rather than pretending otherwise.
+ * i18n scaffolding — English only.
+ *
+ * Recast ships with an all-English UI by product decision: every label,
+ * heading, toast and dialog must read as clear English regardless of the
+ * host OS locale. The dictionary shape is kept (a single `en` map routed
+ * through `t()`) so future localization can re-enter without touching
+ * call sites, but there is deliberately no second locale today.
  */
 
-export type Locale = 'en' | 'hi';
+export type Locale = 'en';
 
 const en = {
   'library.title': 'Library',
@@ -19,24 +22,12 @@ const en = {
   'settings.title': 'Settings',
 };
 
-const hi: Partial<Record<keyof typeof en, string>> = {
-  'library.title': 'लाइब्रेरी',
-  'library.empty': 'अभी कोई रिकॉर्डिंग नहीं है',
-  'record.title': 'नई रिकॉर्डिंग',
-  'record.start': 'रिकॉर्डिंग शुरू करें',
-  'record.stop': 'रोकें और एडिटर खोलें',
-  'record.pause': 'रोकें',
-  'export.title': 'एक्सपोर्ट',
-  'editor.title': 'एडिटर',
-  'settings.title': 'सेटिंग्स',
-};
-
-const dicts: Record<Locale, Partial<Record<string, string>>> = { en, hi };
+const dicts: Record<Locale, Partial<Record<string, string>>> = { en };
 
 export function t(locale: Locale, key: keyof typeof en): string {
   return dicts[locale]?.[key] ?? en[key] ?? key;
 }
 
-export function localeFor(language: string): Locale {
-  return language === 'hi' ? 'hi' : 'en';
+export function localeFor(_language: string): Locale {
+  return 'en';
 }
