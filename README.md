@@ -1,18 +1,43 @@
+<div align="center">
+
+<img src="apps/website/assets/icon.png" width="96" alt="Recast logo" />
+
 # Recast
+
+**Free, open-source, local-first screen recorder and cinematic editor.**
+
+Record, auto-zoom, caption, export — no account, no cloud, no telemetry, no watermark, no feature gates.
+Everything runs 100% offline on your machine. macOS · Windows · Linux.
 
 [![CI](https://github.com/SudhirDevOps1/recast/actions/workflows/ci.yml/badge.svg)](https://github.com/SudhirDevOps1/recast/actions/workflows/ci.yml)
 [![Nightly installers](https://github.com/SudhirDevOps1/recast/actions/workflows/build.yml/badge.svg)](https://github.com/SudhirDevOps1/recast/actions/workflows/build.yml)
 [![CodeQL](https://github.com/SudhirDevOps1/recast/actions/workflows/codeql.yml/badge.svg)](https://github.com/SudhirDevOps1/recast/actions/workflows/codeql.yml)
 [![License: GPL-3.0-or-later](https://img.shields.io/badge/license-GPL--3.0--or--later-blue.svg)](LICENSE)
 [![Website](https://img.shields.io/badge/website-sudhirdevops1.github.io%2Frecast-7C5CFF)](https://sudhirdevops1.github.io/recast/)
+[![Release](https://img.shields.io/badge/download-latest_release-2EA043)](https://github.com/SudhirDevOps1/recast/releases/latest)
 
-**Free, open-source, local-first screen recorder and cinematic editor for macOS, Windows and Linux.**
+<img src="apps/website/assets/og.png" width="720" alt="Recast — record, auto-zoom, caption, export" />
 
-Record, auto-zoom, caption, export. No account, no cloud, no telemetry, no watermark, no feature gates. Everything runs 100% offline on your machine.
+**[Download](#install) · [Website](https://sudhirdevops1.github.io/recast/) · [Docs](#docs) · [Roadmap](docs/roadmap.md)**
+
+</div>
+
+---
+
+## Screenshots
+
+Real UI, captured from the running app (nothing mocked). Regenerate anytime with
+`xvfb-run -a node scripts/capture-screenshots.mjs`.
+
+| Editor — auto-zoom, styles, captions | Library |
+|---|---|
+| ![Editor](docs/screenshots/editor.png) | ![Library](docs/screenshots/library.png) |
+
+| New recording | Settings |
+|---|---|
+| ![Record](docs/screenshots/record.png) | ![Settings](docs/screenshots/settings.png) |
 
 *Screen Studio's polish, Cap's simplicity, Cursorful's shareability — zero subscription.*
-
-**Website & downloads:** [sudhirdevops1.github.io/recast](https://sudhirdevops1.github.io/recast/)
 
 ## How it works
 
