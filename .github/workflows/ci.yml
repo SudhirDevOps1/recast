@@ -118,7 +118,7 @@ jobs:
       - name: Install system dependencies for Electron + native build headers
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends libgtk-3-0 libnss3 libasound2 libgbm1 libxkbcommon0 xvfb libx11-dev libxtst-dev libxrandr-dev libxinerama-dev libxi-dev libxcursor-dev pkg-config
+          sudo apt-get install -y --no-install-recommends libgtk-3-0 libnss3 libasound2 libgbm1 libxkbcommon0 xvfb libx11-dev libxtst-dev libxrandr-dev libxinerama-dev libxi-dev libxcursor-dev pkg-config ffmpeg
 
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
