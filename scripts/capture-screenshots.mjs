@@ -1,3 +1,4 @@
+/* global window */
 /**
  * Capture REAL app screenshots for the README by driving the built Electron
  * app under xvfb with Playwright. Injects one schema-valid demo project
