@@ -27,17 +27,48 @@ interface FlowArgs {
   startEpochMs: number;
 }
 
+/** Maps raw getDisplayMedia rejections to messages a user can act on. */
+function friendlyDisplayMediaError(e: unknown): Error {
+  const name = (e as DOMException)?.name ?? '';
+  if (name === 'NotAllowedError') {
+    return new Error('Screen capture was denied — grant the screen-recording permission (see Settings → Permissions) and try again.');
+  }
+  if (name === 'NotFoundError') {
+    return new Error('No screen or window source is available to record.');
+  }
+  if (name === 'NotSupportedError' || name === 'InvalidStateError') {
+    return new Error('Screen capture is not available in this environment.');
+  }
+  return e instanceof Error ? e : new Error(String(e));
+}
+
+async function requestDisplayMedia(frameRate: number, withAudio: boolean): Promise<MediaStream> {
+  try {
+    return await navigator.mediaDevices.getDisplayMedia({
+      video: { frameRate },
+      audio: withAudio,
+    });
+  } catch (e) {
+    if (!withAudio) throw friendlyDisplayMediaError(e);
+    // Some platforms reject audio-constrained display requests outright —
+    // recording must still work, so retry video-only.
+    try {
+      return await navigator.mediaDevices.getDisplayMedia({ video: { frameRate } });
+    } catch {
+      throw friendlyDisplayMediaError(e);
+    }
+  }
+}
+
 export async function startRecordingFlow({ sessionId, startEpochMs }: FlowArgs): Promise<void> {
   const opts = (await import('../state/stores')).useRecorder.getState();
   const app = useApp.getState();
   const showToast = app.showToast;
 
-  // 1) Ask the main process for the display stream. The handler set in the
-  // main process supplies the source chosen via recoder:start request params.
-  const displayStream = await navigator.mediaDevices.getDisplayMedia({
-    video: { frameRate: opts.fps },
-    audio: opts.systemAudio && app.platform?.capabilities.systemAudio,
-  });
+  // 1) Ask the main process for the display stream. The display-media handler
+  // registered at bootstrap supplies the source chosen in the picker.
+  const wantSystemAudio = Boolean(opts.systemAudio && app.platform?.capabilities.systemAudio);
+  const displayStream = await requestDisplayMedia(opts.fps, wantSystemAudio);
   const videoTrack = displayStream.getVideoTracks()[0];
   void videoTrack;
   if (!videoTrack) throw new Error('No screen source was returned.');

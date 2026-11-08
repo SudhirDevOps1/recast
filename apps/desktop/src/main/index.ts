@@ -11,6 +11,7 @@ import { setupTray, renderRecordingMenu, renderStoppedMenu } from './tray';
 import { setupMenu } from './menu';
 import { registerProtocol, handleDeepLink } from './deep-link';
 import { registerMediaProtocol, handleMediaProtocol } from './protocol';
+import { registerDisplayMediaHandler } from './display-media';
 import { setupUpdater } from './updater';
 
 /**
@@ -35,6 +36,10 @@ async function bootstrap(): Promise<void> {
 
   await app.whenReady();
   handleMediaProtocol();
+
+  // Must exist before any renderer calls getDisplayMedia() — without it the
+  // request is denied and recording can never start.
+  registerDisplayMediaHandler();
 
   const library = new LibraryStore();
   const sessions = new SessionService();
