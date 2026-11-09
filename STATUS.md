@@ -1,6 +1,6 @@
 # STATUS — what is real, what is partial, what is not built
 
-Last updated: 2026-11-08 · Motion 2.0 (easing, transitions, fades, cursor FX, timeline 2.0) landed and gated; Phase 1–2 implemented and verified in this repo's gate; CI/CD live and iterating on the first real gate findings. Pages/branch-protection need a one-time admin grant (docs/repository-setup.md). Device-level QA pending CI hardware.
+Last updated: 2026-11-09 · P0 capture-hardening landed (Windows "Recording failed: Not supported" root-cause work): configure-probing encoder fallback, activation-safe countdown, compatibility mode, capture diagnostics. Phase 1–2 verified in this repo's gate; CI/CD live. Pages/branch-protection need a one-time admin grant (docs/repository-setup.md). Windows/macOS on-device QA pending real hardware.
 
 Legend: ✅ implemented & verified · 🟡 implemented but not yet verified on device/CI · 🟠 scaffolded, not complete · ❌ not built
 
@@ -15,8 +15,13 @@ Legend: ✅ implemented & verified · 🟡 implemented but not yet verified on d
 
 ## Recording
 
-- 🟡 Screen/window capture via `desktopCapturer` + `getDisplayMedia` with main-process `setDisplayMediaRequestHandler` — code complete, **not yet verified against real hardware** (sandbox has no display). First verification happens in the `smoke` CI job and on the three OS QA passes.
-- 🟡 Segmented crash-safe writing (2 s MP4 fragments, atomic `session.json` manifest, tmp+rename segment writes, `cursor.jsonl` batching) — logic unit-reviewed, no on-device crash test yet.
+- 🟡 Screen/window capture via `desktopCapturer` + `getDisplayMedia` with main-process `setDisplayMediaRequestHandler` — verified in the xvfb Playwright smoke (4/4, incl. full record→library and export e2e). **Windows on-device QA still pending** — the reported "Recording failed: Not supported" is root-caused and fixed in code (see below), but the 10× consecutive-run sign-off on real Windows 10/11 + mixed-DPI hardware remains open.
+- ✅ **Configure-probing encoder fallback chain** (`packages/capture/src/encoder-probe.ts`, 2026-11-09): `isConfigSupported()` is no longer trusted — every candidate (HW H.264 High → HW Baseline → SW H.264 → SW VP9) must actually `configure()` and drain a canary frame. This is the root-cause fix for the raw `NotSupportedError` DOMException toast on Windows (Chromium claims support, then configure() throws on half-broken GPU drivers). Unit-tested: the chain can never escape a raw DOMException (5 tests).
+- ✅ **MediaRecorder compatibility mode** (`packages/capture/src/compat.ts`, 2026-11-09): if every WebCodecs candidate fails, recording still produces a VP8/VP9 WebM (2 s appends, `compatibility: true` stamped in the manifest) instead of failing outright. Recording never dies to an encoder problem.
+- ✅ **Activation-safe start flow** (2026-11-09): the display stream is acquired synchronously inside the click handler BEFORE the countdown (the old countdown-first flow let transient activation expire → Chromium rejected getDisplayMedia on 5 s/10 s countdowns). Live preview under the countdown, Esc cancels and releases the streams.
+- ✅ **Structured capture diagnostics** (2026-11-09): every stage boundary (display-media, audio-init, encoder-probe, encoder-configure, segment-write, muxer, …) is logged by the renderer, batched over IPC and appended as NDJSON to `logs/capture.log` in the data dir (512 KB, one rotation slot). Settings → Diagnostics → **Copy diagnostics bundle** produces the app/OS/FFmpeg/display-deny summary + last 200 log lines. The display-media handler always answers (denies cleanly with a recorded reason — no more pending-forever requests).
+- ✅ **Real recorder stats** (2026-11-09): mic meter is the live AudioWorklet peak in dBFS (null = no mic) and disk-free is polled from the main process every 2 s — the hardcoded `null`/`-1` placeholders and the always-on "No signal" warning are gone. Mic device picker enumerates real devices with labels (persisted per profile), falls back to the default device on unplug.
+- 🟡 Segmented crash-safe writing (2 s MP4 fragments, atomic `session.json` manifest, tmp+rename segment writes, `cursor.jsonl` batching) — exercised by the smoke suite; forced-kill recovery test still pending.
 - ✅ Crash-recovery planning (`planRecovery`) — pure and unit-covered; the remux path uses `ffmpeg -c copy`.
 - ✅ 60 Hz cursor sampler + uiohook-napi click/scroll capture (main process), epoch-anchored clocks shared with the renderer — code complete, device verification pending.
 - ✅ AudioWorklet mixer (mic + system on separate tracks, 48 kHz, Opus encode) — code complete; system audio availability honestly reported per platform (WASAPI loopback on Windows, macOS 14.2+ loopback).
