@@ -27,7 +27,16 @@ export function registerDisplayMediaHandler(): void {
         sources.find((s) => s.id.startsWith('screen:')) ??
         sources[0];
 
-      if (!pick) return; // deny — the renderer surfaces a clear error toast
+      if (!pick) {
+        // Deny CLEANLY — an unanswered request leaves getDisplayMedia() pending
+        // forever and the recorder stuck on "Starting…". Record why so the
+        // renderer can show an accurate message instead of a bare denial.
+        const detail = `requested=${wanted ?? 'any'} · sources=${sources.length}`;
+        context().displayMediaDeny = { reason: 'no-source', detail, at: Date.now() };
+        console.error(`recast: display-media denied — no source available (${detail})`);
+        callback(null);
+        return;
+      }
 
       // Remember the granted source's display scale factor: cursor samples are
       // taken in Electron DIP coordinates while video frames are physical
@@ -46,9 +55,21 @@ export function registerDisplayMediaHandler(): void {
         response.audio = 'loopback';
       }
       callback(response);
-    })().catch(() => {
-      // Never throw inside the handler — a rejected bridge denies the request,
-      // which the renderer reports as a friendly toast.
+    })().catch((e: Error) => {
+      // Never throw inside the handler — and never leave the request hanging.
+      // A rejected bridge must deny the request so the renderer gets a fast,
+      // explainable error instead of waiting forever.
+      context().displayMediaDeny = {
+        reason: 'handler-error',
+        detail: `${e.name}: ${e.message}`,
+        at: Date.now(),
+      };
+      console.error(`recast: display-media handler failed — denying: ${e.name}: ${e.message}`);
+      try {
+        callback(null);
+      } catch {
+        /* callback already answered */
+      }
     });
   });
 }

@@ -4,7 +4,7 @@ export const APP_ID = 'app.recast.desktop';
 export const URL_SCHEME = 'recast';
 export const PROJECT_EXT = '.recast';
 export const STYLE_EXT = '.recaststyle';
-export const IPC_VERSION = 1;
+export const IPC_VERSION = 2;
 
 export const GITHUB_URL = 'https://github.com/SudhirDevOps1/recast';
 export const GITHUB_RELEASES_URL = `${GITHUB_URL}/releases/latest`;

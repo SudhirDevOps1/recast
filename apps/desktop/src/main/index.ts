@@ -63,6 +63,7 @@ async function bootstrap(): Promise<void> {
     sessionStartEpochMs: 0,
     recorderRequest: null,
     activeDisplayScaleFactor: null,
+    displayMediaDeny: null,
     lastMicMeterDb: null,
     lastDiskFreeMb: -1,
     activeExportIds: new Set(),

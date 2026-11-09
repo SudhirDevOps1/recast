@@ -18,6 +18,7 @@ import { InputSampler } from './input-sampler';
 import { ffmpegState, installFfmpeg, broadcastFfmpegProgress } from './ffmpeg-service';
 import { whisperStatus, downloadWhisperModel, transcribe } from './whisper';
 import { checkForUpdates, downloadUpdate, installUpdate } from './updater';
+import { appendCaptureLog, buildDiagnosticsBundle, copyDiagnosticsBundle } from './capture-log';
 import {
   beginChunkedExport,
   writeExportChunkAt,
@@ -574,6 +575,25 @@ export async function registerIpcHandlers(): Promise<void> {
   register('capture:diskFreeMb', async () => {
     const { checkDiskSpace } = await import('./disk');
     return checkDiskSpace();
+  });
+  register('capture:appendSegmentFile', (payload) => {
+    const { sessionId, file, data } = payload as { sessionId: string; file: string; data: ArrayBuffer };
+    c.sessions.appendSegmentFile(sessionId, file, new Uint8Array(data));
+  });
+  register('capture:appendLog', async (payload) => {
+    const { entries } = payload as { entries: import('@recast/shared').CaptureLogEntry[] };
+    await appendCaptureLog(entries);
+  });
+  register('capture:lastDisplayDeny', () => {
+    const deny = c.displayMediaDeny;
+    if (!deny) return null;
+    // Stale denials (older than 30 s) are irrelevant to the current attempt.
+    if (Date.now() - deny.at > 30_000) return null;
+    return deny;
+  });
+  register('diagnostics:bundle', () => buildDiagnosticsBundle());
+  register('diagnostics:copy', async () => {
+    await copyDiagnosticsBundle();
   });
   register('capture:attachAudio', (payload) => {
     const { sessionId, file, data } = payload as { sessionId: string; file: string; data: ArrayBuffer };

@@ -189,6 +189,10 @@ export const SessionManifestSchema = z.object({
    *  stored in DIP; multiplying by this converts them to video pixel space.
    *  Optional: stamped by main at session creation; older manifests omit it. */
   displayScaleFactor: z.number().optional(),
+  /** True when the session was captured in MediaRecorder compatibility mode
+   *  (single growing WebM) because every WebCodecs encoder failed to
+   *  configure. The library surfaces this so the codec story stays honest. */
+  compatibility: z.boolean().optional(),
 });
 export type SessionManifest = z.infer<typeof SessionManifestSchema>;
 

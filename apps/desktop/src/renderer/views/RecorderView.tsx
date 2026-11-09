@@ -2,8 +2,9 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useApp, useRecorder } from '../state/stores';
 import { bridge } from '../lib/bridge';
 import { Button, Field, Select, Switch, Slider, Badge, IconRecord, IconStop, IconPause, IconPlay, IconMonitor, IconMic, IconSpeaker, IconCamera, IconRefresh } from '@recast/ui';
-import type { ListSourcesResponse } from '@recast/shared';
-import { startRecordingFlow, stopRecordingFlow, rendererRecorderHandle, RecordingError } from '../lib/record-flow';
+import type { DeviceInfo, ListSourcesResponse } from '@recast/shared';
+import { startRecordingFlow, stopRecordingFlow, rendererRecorderHandle, acquireCaptureSources, releaseAcquiredSources, RecordingError, type AcquiredSources } from '../lib/record-flow';
+import { logCapture } from '../lib/capture-log';
 
 /**
  * Recorder: source picker with live thumbnails, mic + system audio with
@@ -22,6 +23,10 @@ export function RecorderView() {
   const [micMeter, setMicMeter] = useState<number | null>(null);
   const [countingDown, setCountingDown] = useState<number | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const [mics, setMics] = useState<DeviceInfo[]>([]);
+  const previewRef = useRef<HTMLVideoElement | null>(null);
+  const acquiredRef = useRef<AcquiredSources | null>(null);
+  const cancelledRef = useRef(false);
 
   const refreshSources = useCallback(async (): Promise<void> => {
     setRefreshingSources(true);
@@ -37,6 +42,40 @@ export function RecorderView() {
   useEffect(() => {
     void refreshSources();
   }, [refreshSources]);
+
+  // Real device enumeration (renderer-side — labels only become visible after
+  // a getUserMedia grant). Re-enumerate on devicechange so a vanished
+  // selection cannot silently break a take.
+  const refreshDevices = useCallback(async (): Promise<void> => {
+    try {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const micList: DeviceInfo[] = [];
+      devices.forEach((d, i) => {
+        if (d.kind !== 'audioinput') return;
+        micList.push({
+          id: d.deviceId,
+          label: d.label || (d.deviceId ? `Microphone ${i + 1}` : 'System default'),
+          default: d.deviceId === 'default' || d.deviceId === '',
+        });
+      });
+      if (micList.length === 0) {
+        micList.push({ id: 'default', label: 'System default', default: true });
+      }
+      setMics(micList);
+    } catch (e) {
+      logCapture('devices', 'warn', 'device enumeration failed', (e as Error).message);
+    }
+  }, []);
+
+  useEffect(() => {
+    void refreshDevices();
+    const handler = (): void => {
+      void refreshDevices();
+      void refreshSources();
+    };
+    navigator.mediaDevices?.addEventListener?.('devicechange', handler);
+    return () => navigator.mediaDevices?.removeEventListener?.('devicechange', handler);
+  }, [refreshDevices, refreshSources]);
 
   const recorderStateRef = useRef(recorderState);
   recorderStateRef.current = recorderState;
@@ -69,6 +108,9 @@ export function RecorderView() {
           return;
         }
         streamRef.current = stream;
+        // Mic permission just got granted — labels in enumerateDevices() are
+        // now real; refresh the device list once.
+        void refreshDevices();
         const ctx = new AudioContext();
         const src = ctx.createMediaStreamSource(stream);
         const analyser = ctx.createAnalyser();
@@ -94,7 +136,7 @@ export function RecorderView() {
     return () => {
       cancelled = true;
     };
-  }, [opts.micEnabled]);
+  }, [opts.micEnabled, refreshDevices]);
 
   const recording = recorderState?.phase === 'recording' || recorderState?.phase === 'paused';
   const paused = recorderState?.phase === 'paused';
@@ -271,6 +313,14 @@ export function RecorderView() {
             <IconCamera />
           </div>
         </Field>
+        <Field label="Microphone device" hint="Used for the recording when the microphone is on.">
+          <Select
+            value={opts.micDeviceId ?? 'default'}
+            onValueChange={(v) => opts.set({ micDeviceId: v === 'default' ? null : v })}
+            options={mics.map((m) => ({ value: m.id || 'default', label: m.default ? `${m.label} (default)` : m.label }))}
+            ariaLabel="Microphone device"
+          />
+        </Field>
         <Field label="Frame rate">
           <Select
             value={String(opts.fps)}
@@ -323,41 +373,105 @@ export function RecorderView() {
       </div>
 
       {countingDown != null ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(6,8,12,0.85)' }}>
-          <div className="tabular text-7xl font-bold" style={{ color: 'var(--accent)' }}>
-            {countingDown}
+        <div className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-6" style={{ background: 'rgba(6,8,12,0.92)' }}>
+          <div
+            className="flex items-center justify-center rounded-full"
+            style={{
+              width: 132,
+              height: 132,
+              border: '6px solid var(--accent)',
+              boxShadow: '0 0 0 1px var(--hairline), 0 8px 40px rgba(0,0,0,0.5)',
+            }}
+          >
+            <div className="tabular text-6xl font-bold" style={{ color: 'var(--accent)' }} aria-live="polite">
+              {countingDown}
+            </div>
           </div>
+          <div className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+            Recording starts in {countingDown}s — press <kbd>Esc</kbd> to cancel
+          </div>
+          {/* Live preview underneath the ring: proof of what is being captured. */}
+          <video
+            ref={(el) => {
+              previewRef.current = el;
+              if (el && acquiredRef.current && el.srcObject !== acquiredRef.current.displayStream) {
+                el.srcObject = acquiredRef.current.displayStream;
+                void el.play().catch(() => undefined);
+              }
+            }}
+            autoPlay
+            muted
+            playsInline
+            className="max-h-[52vh] rounded-lg border border-hairline object-contain"
+            style={{ background: '#000' }}
+            aria-label="Live capture preview during countdown"
+          />
         </div>
       ) : null}
     </div>
   );
 
   async function start(): Promise<void> {
+    // 1) Acquire the streams SYNCHRONOUSLY inside the click's transient
+    //    activation. The old flow ran the countdown first, so with a 5 s or
+    //    10 s countdown Chromium rejected getDisplayMedia (activation expired)
+    //    and recording simply never started.
     try {
       const { sessionId, startEpochMs } = await bridge().invoke('recorder:start', {
         screenId: opts.selectedScreenId ?? undefined,
         windowId: opts.selectedWindowId ?? undefined,
-        micDeviceId: opts.micEnabled ? 'default' : null,
+        micDeviceId: opts.micEnabled ? (opts.micDeviceId ?? 'default') : null,
         systemAudio: opts.systemAudio,
         cameraDeviceId: opts.cameraEnabled ? 'default' : null,
         countdownSec: opts.countdownSec,
         fps: opts.fps,
         quality: opts.quality,
       });
-      if (opts.countdownSec > 0) {
-        for (let i = opts.countdownSec; i > 0; i--) {
-          setCountingDown(i);
-          await new Promise((r) => setTimeout(r, 1_000));
+
+      cancelledRef.current = false;
+      acquiredRef.current = await acquireCaptureSources(showToast);
+      logCapture('display-media', 'info', 'streams acquired before countdown');
+
+      // 2) Countdown with a live preview; Esc cancels cleanly.
+      const escHandler = (ev: KeyboardEvent): void => {
+        if (ev.key === 'Escape') cancelledRef.current = true;
+      };
+      window.addEventListener('keydown', escHandler);
+      try {
+        if (opts.countdownSec > 0 && !cancelledRef.current) {
+          for (let i = opts.countdownSec; i > 0; i--) {
+            if (cancelledRef.current) break;
+            setCountingDown(i);
+            await new Promise((r) => setTimeout(r, 1_000));
+          }
         }
+      } finally {
+        window.removeEventListener('keydown', escHandler);
         setCountingDown(null);
       }
-      await startRecordingFlow({ sessionId, startEpochMs });
+
+      if (cancelledRef.current) {
+        releaseAcquiredSources(acquiredRef.current);
+        acquiredRef.current = null;
+        logCapture('display-media', 'info', 'countdown cancelled — streams released');
+        showToast('Recording cancelled.', 'info');
+        return;
+      }
+
+      // 3) Hand the already-open streams to the pipeline.
+      const acquired = acquiredRef.current;
+      acquiredRef.current = null;
+      await startRecordingFlow({ sessionId, startEpochMs, acquired: acquired! });
     } catch (e) {
       setCountingDown(null);
+      releaseAcquiredSources(acquiredRef.current);
+      acquiredRef.current = null;
+      logCapture('pipeline', 'error', 'start failed', (e as Error).message);
       if (e instanceof RecordingError && e.action) {
         showToast(e.message, 'error', e.action);
       } else {
-        showToast(`Recording failed: ${(e as Error).message}`, 'error');
+        const msg = e instanceof Error ? `${e.name === 'Error' ? '' : `${e.name}: `}${e.message}` : String(e);
+        showToast(`Recording failed — ${msg}`, 'error');
       }
     }
   }

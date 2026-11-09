@@ -180,6 +180,16 @@ export const PermissionStatusSchema = z.object({
 });
 export type PermissionStatus = z.infer<typeof PermissionStatusSchema>;
 
+/** One structured capture-diagnostic entry (NDJSON in capture.log). */
+export const CaptureLogEntrySchema = z.object({
+  ts: z.number(),
+  stage: z.string().min(1).max(64),
+  level: z.enum(['debug', 'info', 'warn', 'error']),
+  message: z.string().max(500),
+  detail: z.string().max(800).optional(),
+});
+export type CaptureLogEntry = z.infer<typeof CaptureLogEntrySchema>;
+
 // ---------------------------------------------------------------------------
 // Request/response contracts. Both ends validate with these schemas.
 // ---------------------------------------------------------------------------
@@ -228,6 +238,12 @@ export const IPC = {
   'capture:writeManifest': def(z.object({ sessionId: z.string(), manifest: z.unknown() }), z.void()),
   'capture:attachAudio': def(z.object({ sessionId: z.string(), label: z.string(), file: z.string(), data: z.unknown() }), z.void()),
   'capture:diskFreeMb': def(z.void(), z.number()),
+  'capture:appendSegmentFile': def(z.object({ sessionId: z.string(), file: z.string(), data: z.unknown() }), z.void()),
+  'capture:appendLog': def(z.object({ entries: z.array(CaptureLogEntrySchema).max(200) }), z.void()),
+  'capture:lastDisplayDeny': def(
+    z.void(),
+    z.object({ reason: z.string(), detail: z.string(), at: z.number() }).nullable(),
+  ),
   'capture:readCursor': def(
     z.object({ sessionId: z.string() }),
     z.object({ samples: z.array(z.unknown()), clicks: z.array(z.unknown()) }),
@@ -296,6 +312,9 @@ export const IPC = {
 
   'ffmpeg:status': def(z.void(), FfmpegStatusSchema),
   'ffmpeg:install': def(z.void(), z.object({ started: z.boolean() })),
+
+  'diagnostics:bundle': def(z.void(), z.string()),
+  'diagnostics:copy': def(z.void(), z.void()),
 
   'updater:check': def(z.void(), z.object({ available: z.boolean(), version: z.string().nullable() })),
   'updater:download': def(z.void(), z.void()),

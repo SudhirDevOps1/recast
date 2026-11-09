@@ -51,6 +51,17 @@ export class SessionService {
     void statSync(finalPath).size;
   }
 
+  /** Append to one growing media file (compatibility-mode WebM, 2 s chunks). */
+  appendSegmentFile(sessionId: string, file: string, data: Uint8Array): void {
+    const s = this.open;
+    if (!s || s.id !== sessionId) throw new Error(`No open session ${sessionId}`);
+    // Renderer-supplied name: refuse anything path-shaped before it touches disk.
+    if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(file) || file.includes('..')) {
+      throw new Error(`Invalid media file name: ${file}`);
+    }
+    appendFileSync(join(s.dir, file), data);
+  }
+
   appendInput(sessionId: string, events: InputEvent[]): void {
     const s = this.open;
     if (!s || s.id !== sessionId) return;

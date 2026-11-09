@@ -170,6 +170,8 @@ export interface RecorderStore {
   micEnabled: boolean;
   systemAudio: boolean;
   cameraEnabled: boolean;
+  /** Selected microphone device id (null = system default). */
+  micDeviceId: string | null;
   countdownSec: 0 | 3 | 5 | 10;
   fps: 24 | 30 | 60;
   quality: 'source' | '1080p' | '1440p' | '2160p';
@@ -183,6 +185,7 @@ export const useRecorder = create<RecorderStore>((set) => ({
   micEnabled: false,
   systemAudio: false,
   cameraEnabled: false,
+  micDeviceId: null,
   countdownSec: 3,
   fps: 30,
   quality: 'source',

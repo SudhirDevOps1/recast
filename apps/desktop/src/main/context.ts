@@ -24,6 +24,10 @@ export interface AppContext {
    *  Stamped into the session manifest so cursor coords can be converted to
    *  video pixel space. Null until a display-media grant happens this run. */
   activeDisplayScaleFactor: number | null;
+  /** Why the display-media handler last denied a request (null when none or
+   *  stale). Lets the renderer turn a bare NotAllowedError into an accurate
+   *  message — "no source available" is not a permission problem. */
+  displayMediaDeny: { reason: 'no-source' | 'handler-error'; detail: string; at: number } | null;
   lastMicMeterDb: number | null;
   lastDiskFreeMb: number;
   activeExportIds: Set<string>;

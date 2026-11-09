@@ -34,7 +34,10 @@ export function createMainWindow(): BrowserWindow {
 
   win.once('ready-to-show', () => win.show());
 
-  const devUrl = process.env.RECAST_DEV_URL;
+  // electron-vite exposes ELECTRON_RENDERER_URL in dev; RECAST_DEV_URL is our
+  // manual override. Without the fallback `pnpm dev` silently loaded a stale
+  // out/renderer/index.html and HMR appeared dead.
+  const devUrl = process.env.RECAST_DEV_URL ?? process.env.ELECTRON_RENDERER_URL;
   if (devUrl) {
     void win.loadURL(devUrl);
   } else {
@@ -91,7 +94,7 @@ export function createToolbarWindow(): BrowserWindow {
     },
   });
   win.setAlwaysOnTop(true, 'floating');
-  const devUrl = process.env.RECAST_DEV_URL;
+  const devUrl = process.env.RECAST_DEV_URL ?? process.env.ELECTRON_RENDERER_URL;
   if (devUrl) void win.loadURL(`${devUrl.replace(/\/$/, '')}/toolbar.html`);
   else void win.loadFile(join(__dirname, '../renderer/toolbar.html'));
   win.on('closed', () => {
@@ -122,7 +125,7 @@ export function createAreaWindow(display: { id: number; bounds: { x: number; y: 
       nodeIntegration: false,
     },
   });
-  const devUrl = process.env.RECAST_DEV_URL;
+  const devUrl = process.env.RECAST_DEV_URL ?? process.env.ELECTRON_RENDERER_URL;
   if (devUrl) void win.loadURL(`${devUrl.replace(/\/$/, '')}/area.html`);
   else void win.loadFile(join(__dirname, '../renderer/area.html'));
   c.areaWindow = win;

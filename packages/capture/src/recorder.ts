@@ -2,7 +2,9 @@ import { RECORDING } from '@recast/shared';
 import type { SessionManifest } from '@recast/shared';
 import type { CaptureHost, RecorderCallbacks, RecorderStats, StartOptions } from './host';
 import { AudioCapture, type AudioSource } from './audio-mixer';
-import { resolveVideoEncoder, SegmentWriter } from './segment-writer';
+import { SegmentWriter } from './segment-writer';
+import { probeEncoderChain, EncoderUnsupportedError } from './encoder-probe';
+import { startCompatRecording } from './compat';
 
 /**
  * Screen recorder orchestration (renderer side).
@@ -28,6 +30,10 @@ export interface RecorderHandle {
   resume(): void;
   stop(): Promise<{ manifest: SessionManifest; audioFiles: Array<{ label: string; file: string; bytes: ArrayBuffer }> }>;
   stats(): RecorderStats;
+  /** Human-readable encoder path actually in use ("Hardware H.264 · High", …). */
+  readonly encoderPath: string;
+  /** True when recording runs in MediaRecorder compatibility mode. */
+  readonly compatibilityMode: boolean;
 }
 
 function bitrateForQuality(width: number, height: number, fps: number): number {
@@ -44,9 +50,15 @@ export async function startRecording(
   host: CaptureHost,
   callbacks: RecorderCallbacks,
 ): Promise<RecorderHandle> {
+  const log = (stage: string, message: string, detail?: string): void => {
+    console.debug(`recast:${stage}`, message, detail ?? '');
+    callbacks.onLog?.(stage, message, detail);
+  };
+
   const settings = videoTrack.getSettings();
   const srcW = settings.width ?? 1920;
   const srcH = settings.height ?? 1080;
+  log('display-media', `video track granted`, `${srcW}x${srcH} @${settings.frameRate ?? '?'}fps · ${videoTrack.label || 'unnamed source'}`);
 
   // Quality cap: downscale at ingest when the source exceeds the target.
   let outW = srcW;
@@ -65,14 +77,34 @@ export async function startRecording(
   const crop = opts.cropRect;
   const encW = crop ? crop.w - (crop.w % 2) : outW;
   const encH = crop ? crop.h - (crop.h % 2) : outH;
+  const bitrate = bitrateForQuality(encW, encH, opts.fps);
 
-  const { config } = await resolveVideoEncoder(
-    encW,
-    encH,
-    opts.fps,
-    bitrateForQuality(encW, encH, opts.fps),
-    true,
-  );
+  // Stage encoder-probe/encoder-configure: configure-probe the whole fallback
+  // chain BEFORE anything else. isConfigSupported() alone has been observed
+  // to claim support and still throw NotSupportedError at configure() —
+  // that raw DOMException was the "Recording failed: Not supported" toast.
+  let probed;
+  try {
+    probed = await probeEncoderChain(encW, encH, opts.fps, bitrate, (m, d) => log('encoder-probe', m, d));
+  } catch (e) {
+    if (e instanceof EncoderUnsupportedError) {
+      // Recording must never fail outright: MediaRecorder compatibility mode.
+      log('encoder-probe', 'all WebCodecs candidates failed — entering compatibility mode', e.message);
+      return startCompatRecording(
+        videoTrack,
+        audioSources,
+        { fps: opts.fps, sessionId: opts.sessionId, startEpochMs: opts.startEpochMs },
+        host,
+        { onStats: callbacks.onStats, onError: callbacks.onError },
+        (m, d) => log('compat', m, d),
+      );
+    }
+    const err = e as Error;
+    log('encoder-probe', 'unexpected probe failure', `${err.name}: ${err.message}`);
+    throw new Error(`Recording failed at encoder-probe: ${err.name} — ${err.message}`);
+  }
+  const { config } = probed;
+
   // The muxer and the manifest must tell the truth about the codec: the
   // fallback chain can land on VP9 when the machine has no H.264 encoder,
   // and mislabeled segments decode as garbage (black preview, dead export).
@@ -102,14 +134,18 @@ export async function startRecording(
   if (audioSources.length > 0) {
     try {
       await audio.start(audioSources);
+      log('audio-init', `audio sources started`, audioSources.map((s) => s.label).join(' + '));
     } catch (e) {
-      callbacks.onError(`Audio capture failed: ${(e as Error).message}`);
+      const err = e as Error;
+      log('audio-init', 'audio capture failed — continuing video-only', `${err.name}: ${err.message}`);
+      callbacks.onError(`Audio capture failed: ${err.message}`);
     }
   }
 
   let encoder: VideoEncoder | null = null;
   let reader: ReadableStreamDefaultReader<VideoFrame> | null = null;
   let pumpActive = false;
+  let latestMicPeak: number | null = null;
 
   let paused = false;
   let pausedStartedAtUs = 0;
@@ -152,7 +188,7 @@ export async function startRecording(
             writer.updateLastSegmentEnd(tUs + (chunk.duration ?? 0));
           })
           .catch((e: Error) => {
-            console.error('recast: segment write failed', e);
+            log('segment-write', 'segment write failed', e.message);
             callbacks.onError(`Segment write failed: ${e.message}`);
             void encoder?.flush().catch(() => undefined);
             stopping = true;
@@ -160,9 +196,29 @@ export async function startRecording(
         bytes = writer.totalBytes;
       }
     },
-    error: (e) => callbacks.onError(`Encoder error: ${e.message}`),
+    error: (e) => {
+      log('encoder', 'asynchronous encoder error', `${e.name}: ${e.message}`);
+      callbacks.onError(`Encoder error: ${e.message}`);
+    },
   });
-  encoder.configure(config);
+  // The probe proved this exact config configures and drains a canary frame;
+  // a failure here is a race and gets a stage-named structured error.
+  try {
+    encoder.configure(config);
+    log('encoder-configure', `configured ${probed.path}`, `${config.codec} ${encW}x${encH}@${opts.fps} · ${(bitrate / 1_000_000).toFixed(1)} Mbps`);
+  } catch (e) {
+    const err = e as Error;
+    log('encoder-configure', `configure threw after a successful probe`, `${err.name}: ${err.message}`);
+    try {
+      encoder.close();
+    } catch {
+      /* nothing to close */
+    }
+    throw new Error(
+      `Recording failed at encoder-configure (${probed.path}): ${err.name} — ${err.message}. ` +
+        'Send Settings → Diagnostics → Copy diagnostics bundle.',
+    );
+  }
 
   const processFrame = async (frame: VideoFrame): Promise<void> => {
     total += 1;
@@ -235,6 +291,9 @@ export async function startRecording(
   void pump();
 
   const statsTimer = setInterval(() => {
+    void audio.meter('mic').then((peak) => {
+      latestMicPeak = peak;
+    });
     callbacks.onStats({
       phase,
       elapsedUs: Math.max(0, captureTimeUs()),
@@ -242,8 +301,13 @@ export async function startRecording(
       droppedFrames: dropped,
       totalFrames: total,
       segmentCount: writer.writtenSegments.length,
+      micPeak: latestMicPeak,
+      compatibilityMode: false,
     });
   }, 250);
+
+  const encoderPath = probed.path;
+  const compatibilityMode = false;
 
   return {
     pause() {
@@ -279,6 +343,7 @@ export async function startRecording(
         const audioFiles = await audio.stop();
         videoTrack.stop();
         clearInterval(statsTimer);
+        log('muxer', 'recording finalized', `${writer.writtenSegments.length} segment(s) · ${((writer.totalBytes || 0) / 1_000_000).toFixed(1)} MB · ${encoderPath}`);
 
         const segments = writer.writtenSegments;
         const finalManifest: SessionManifest = {
@@ -291,7 +356,9 @@ export async function startRecording(
         return { manifest: finalManifest, audioFiles };
       } catch (e) {
         clearInterval(statsTimer);
-        callbacks.onError(`Stop failed: ${(e as Error).message}`);
+        const err = e as Error;
+        log('muxer', 'stop flow failed', `${err.name}: ${err.message}`);
+        callbacks.onError(`Stop failed: ${err.message}`);
         throw e;
       }
     },
@@ -303,7 +370,15 @@ export async function startRecording(
         droppedFrames: dropped,
         totalFrames: total,
         segmentCount: writer.writtenSegments.length,
+        micPeak: latestMicPeak,
+        compatibilityMode: false,
       };
+    },
+    get encoderPath(): string {
+      return encoderPath;
+    },
+    get compatibilityMode(): boolean {
+      return compatibilityMode;
     },
   };
 }
