@@ -158,6 +158,50 @@ export function SettingsView() {
 
       <section className="space-y-4">
         <h2 className="text-sm font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>
+          Diagnostics
+        </h2>
+        <div className="space-y-3 rounded-lg border border-hairline p-4 text-sm">
+          <div className="text-xs" style={{ color: 'var(--text-muted)' }}>
+            Recording problems? Copy the diagnostics bundle and attach it to the bug report — it contains the
+            per-stage capture log, app/OS versions and settings (no personal data, no secrets).
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              onClick={() => {
+                void bridge()
+                  .invoke('diagnostics:copy', undefined)
+                  .then(() => showToast('Diagnostics bundle copied to the clipboard.', 'success'))
+                  .catch((e) => showToast(`Copy failed: ${(e as Error).message}`, 'error'));
+              }}
+            >
+              Copy diagnostics bundle
+            </Button>
+            <Button
+              size="sm"
+              onClick={() => {
+                void bridge()
+                  .invoke('diagnostics:bundle', undefined)
+                  .then((text) => {
+                    void navigator.clipboard?.writeText?.(text).catch(() => undefined);
+                    showToast('Bundle generated (clipboard copy attempted).', 'info');
+                  })
+                  .catch((e) => showToast(`Bundle failed: ${(e as Error).message}`, 'error'));
+              }}
+            >
+              Copy (fallback)
+            </Button>
+          </div>
+          <div className="text-xs" style={{ color: 'var(--text-muted)' }}>
+            The capture log lives in the <code>logs/</code> folder of the data directory below and rotates at 512 KB.
+          </div>
+        </div>
+      </section>
+
+      <Divider />
+
+      <section className="space-y-4">
+        <h2 className="text-sm font-semibold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>
           General
         </h2>
         <div className="space-y-3 text-sm">
