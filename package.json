@@ -30,6 +30,7 @@
     "check:docs": "node scripts/check-docs.mjs",
     "dist:win": "pnpm --filter @recast/desktop dist:win",
     "dist:nsis": "node -e \"process.env.ARCH_SUFFIX = process.env.ARCH_SUFFIX || ''; const cp = require('child_process'); cp.spawnSync('npx', ['electron-builder', '--win', 'nsis', '--x64', '--publish', 'never'], { stdio: 'inherit', shell: true, cwd: 'apps/desktop' });\"",
+    "dist:msi": "node -e \"process.env.ARCH_SUFFIX = process.env.ARCH_SUFFIX || ''; const cp = require('child_process'); cp.spawnSync('npx', ['electron-builder', '--win', 'msi', '--x64', '--publish', 'never'], { stdio: 'inherit', shell: true, cwd: 'apps/desktop' });\"",
     "dist:win:arm64": "pnpm --filter @recast/desktop dist:win:arm64",
     "dist:mac": "pnpm --filter @recast/desktop dist:mac",
     "dist:mac:arm64": "pnpm --filter @recast/desktop dist:mac:arm64",
