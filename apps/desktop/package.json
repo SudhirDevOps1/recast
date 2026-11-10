@@ -15,7 +15,7 @@
     "build": "electron-vite build",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "smoke": "playwright test",
-    "dist:win": "electron-vite build && electron-builder --win --x64 --publish never",
+    "dist:win": "electron-vite build && node -e \"process.env.ARCH_SUFFIX = process.env.ARCH_SUFFIX || ''; const cp = require('child_process'); cp.spawnSync('npx', ['electron-builder', '--win', 'nsis', '--x64', '--publish', 'never'], { stdio: 'inherit', shell: true });\"",
     "dist:win:arm64": "electron-vite build && electron-builder --win nsis portable --arm64 --publish never",
     "dist:mac": "electron-vite build && electron-builder --mac --universal --publish never",
     "dist:mac:arm64": "electron-vite build && electron-builder --mac --arm64 --publish never",
