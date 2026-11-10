@@ -123,5 +123,4 @@ export function handleMediaProtocol(): void {
       },
     });
   });
-  void net;
 }
