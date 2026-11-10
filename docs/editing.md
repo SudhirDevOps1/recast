@@ -65,3 +65,10 @@ Unit tests: `tests/easing.test.ts`, `tests/compositor.test.ts` (intro alpha/offs
 ## Captions
 
 Imported/generated captions are stored as `.srt` next to the session media; the compositor renders them through the style (clean/bold/boxed/pill/karaoke) with auto line-breaking at 42 chars, two lines max.
+
+## Related
+
+- [export.md](export.md) - how the edit becomes a file
+- [recording.md](recording.md) - where the footage comes from
+- [architecture.md](architecture.md) - the shared compositor
+- [keyboard-shortcuts.md](keyboard-shortcuts.md) - full shortcut map

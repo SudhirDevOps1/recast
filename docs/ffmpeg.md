@@ -41,3 +41,9 @@ Explains why it's needed → shows size and license → downloads with resume �
 The pinned builds (ffmpeg-static b6.0) are GPL builds including libx264/libx265. Shipping them alongside Recast makes **Recast GPL-3.0-or-later** (`LICENSE` at the repo root; notice also shipped as `resources/ffmpeg/LICENSE.txt` next to the binaries).
 
 If you redistribute Recast **without** the GPL FFmpeg binaries (WebCodecs-only paths, hardware encoders, OpenH264), your build can carry a different license per your own GPL-compliance analysis — FFmpeg's LGPL build options are documented upstream. What you may not do is ship the bundled GPL binaries under a different license.
+
+## Related
+
+- [export.md](export.md) - which features need it
+- [build.md](build.md) - fetching and pinning it
+- [../SECURITY.md](../SECURITY.md) - binary verification rules

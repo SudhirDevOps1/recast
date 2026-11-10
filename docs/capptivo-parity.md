@@ -65,3 +65,9 @@ open-source Screen Studio alternative — while keeping Recast's stack
 ### Explicitly out of scope
 - Rewriting capture/render in Rust — Recast's WebCodecs + ffmpeg pipeline is
   cross-platform and shippable; we fix and harden it instead.
+
+## Related
+
+- [../STATUS.md](../STATUS.md) - what is real today
+- [roadmap.md](roadmap.md) - phases and acceptance criteria
+- [editing.md](editing.md) - the editor feature set

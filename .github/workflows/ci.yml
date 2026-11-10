@@ -53,7 +53,8 @@ jobs:
           required="README.md LICENSE AGENTS.md CONTRIBUTING.md SECURITY.md STATUS.md PERFORMANCE.md SPIKE-RESULTS.md CHANGELOG.md \
             docs/README.md docs/architecture.md docs/recording.md docs/editing.md docs/export.md docs/ffmpeg.md \
             docs/platform-support.md docs/build.md docs/packaging.md docs/code-signing.md docs/keyboard-shortcuts.md \
-            docs/troubleshooting.md docs/roadmap.md prompts/build-prompt.md apps/website/index.html"
+            docs/troubleshooting.md docs/roadmap.md docs/deployment.md docs/security.md docs/support.md \
+            prompts/build-prompt.md apps/website/index.html"
           missing=0
           for f in $required; do
             if [ ! -f "$f" ]; then
@@ -70,6 +71,9 @@ jobs:
             exit 1
           fi
           echo "branding ok"
+
+      - name: Documentation links and anchors
+        run: node scripts/check-docs.mjs
 
   verify:
     name: Lint, types, tests

@@ -50,3 +50,10 @@ packages/ui             design tokens + primitives
 ```
 
 Internal packages ship TypeScript source directly (bundler resolution); there is no separate build step for them.
+
+## Related
+
+- [architecture.md](architecture.md) - workspace layout in detail
+- [packaging.md](packaging.md) - installer targets
+- [repository-setup.md](repository-setup.md) - one-time admin settings
+- [../CONTRIBUTING.md](../CONTRIBUTING.md) - commit and review rules

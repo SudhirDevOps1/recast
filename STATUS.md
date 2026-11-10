@@ -12,6 +12,7 @@ Legend: ✅ implemented & verified · 🟡 implemented but not yet verified on d
 - ✅ `pnpm build` — electron-vite produces main (61.8 kB), preload and renderer bundles (3 entry points)
 - ✅ `scripts/fetch-ffmpeg.mjs` — downloads, verifies (registry integrity + SHA-256), pins hashes, stages into `resources/ffmpeg/<platform>-<arch>/`; linux-x64 fetched with real pinned hashes (ffmpeg 6.0-static 78.7 MB, ffprobe 4.0.2-static 64.5 MB); both binaries execute
 - ✅ Icons generated (icon.png 1024, icon.ico multi-size, tray templates)
+- ✅ Documentation set organised for enterprise use (2026-11-10): README rewritten as an enterprise landing page (value props, capability table with state markers, mermaid architecture map, install matrix, audience-based doc map); new operational guides `docs/deployment.md` (silent MSI/GPO/MDM rollout, offline checksum verification, version pinning, data locations), `docs/security.md` (network behaviour, permission table, trust boundaries, at-rest state) and `docs/support.md` (diagnostics bundle, bug-report template, response expectations); every doc carries a "Related" footer. `scripts/check-docs.mjs` validates relative links, in-page anchors and code fences and runs in the CI docs job; the new documents are part of its required-files list.
 
 ## Recording
 
