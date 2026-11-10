@@ -154,6 +154,8 @@ export const RecastProjectSchema = z.object({
   /** Whole-video motion (fades). Defaults keep old projects rendering as before. */
   animation: AnimationSchema.default({ fadeInMs: 0, fadeOutMs: 0 }),
   captions: CaptionsSchema.nullable().default(null),
+  /** Optional frame crop in video source coordinates. Null = entire capture. */
+  crop: z.object({ x: z.number(), y: z.number(), w: z.number(), h: z.number() }).nullable().default(null),
 });
 export type RecastProject = z.infer<typeof RecastProjectSchema>;
 
@@ -229,5 +231,6 @@ export function makeEmptyProject(
     audioEdits: { gainDb: 0, fadeInMs: 0, fadeOutMs: 0, normalizeLufs: false, duckMusic: false },
     animation: { fadeInMs: 0, fadeOutMs: 0 },
     captions: null,
+    crop: null,
   };
 }

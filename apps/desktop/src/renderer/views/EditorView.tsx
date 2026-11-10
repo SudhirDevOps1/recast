@@ -23,6 +23,7 @@ import { segmentLocalTimeUs, type RecastProject } from '@recast/shared';
 import { TimelineStrip, relayoutProject } from './TimelineStrip';
 import { MotionPanel } from './MotionPanel';
 import { AudioPanel } from './AudioPanel';
+import { CropPanel } from './CropPanel';
 import { StylePanel } from './StylePanel';
 
 /**
@@ -46,7 +47,7 @@ export function EditorView() {
   const [cursorClicks, setCursorClicks] = useState<Array<{ tUs: number; x: number; y: number }>>([]);
   const [keystrokes, setKeystrokes] = useState<Array<{ tUs: number; key: string }>>([]);
   const [captions, setCaptions] = useState<CaptionLine[]>([]);
-  const [panel, setPanel] = useState<'motion' | 'style' | 'facecam' | 'audio' | 'captions'>('motion');
+  const [panel, setPanel] = useState<'motion' | 'style' | 'facecam' | 'crop' | 'audio' | 'captions'>('motion');
 
   const timeMap = useMemo(() => (project ? buildTimeMap(project.timeline.clips) : { clips: [], durationUs: 0 }), [project]);
 
@@ -221,6 +222,7 @@ export function EditorView() {
           <PanelTab label="Motion" active={panel === 'motion'} onClick={() => setPanel('motion')} />
           <PanelTab label="Style" active={panel === 'style'} onClick={() => setPanel('style')} />
           <PanelTab label="Cam" active={panel === 'facecam'} onClick={() => setPanel('facecam')} />
+          <PanelTab label="Crop" active={panel === 'crop'} onClick={() => setPanel('crop')} />
           <PanelTab label="Audio" active={panel === 'audio'} onClick={() => setPanel('audio')} />
           <PanelTab label="CC" active={panel === 'captions'} onClick={() => setPanel('captions')} />
         </div>
@@ -238,6 +240,7 @@ export function EditorView() {
           )}
           {panel === 'style' && <StylePanel project={project} commit={commit} />}
           {panel === 'facecam' && <FacecamPanel project={project} commit={commit} />}
+          {panel === 'crop' && <CropPanel project={project} commit={commit} />}
           {panel === 'audio' && <AudioPanel project={project} commit={commit} />}
           {panel === 'captions' && <CaptionsPanel project={project} captions={captions} commit={commit} onLoaded={setCaptions} />}
         </div>

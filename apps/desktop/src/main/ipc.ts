@@ -461,8 +461,8 @@ export async function registerIpcHandlers(): Promise<void> {
     await cleanupFrameDir(dir);
   });
   register('export:ffmpegGif', async (payload) => {
-    const { frameDir, fps, width, outFile } = payload as { frameDir: string; fps: number; width: number; outFile: string };
-    return runFfmpegGif(frameDir, fps, width, outFile);
+    const { frameDir, fps, width, outFile, loop } = payload as { frameDir: string; fps: number; width: number; outFile: string; loop?: number };
+    return runFfmpegGif(frameDir, fps, width, outFile, loop ?? 0);
   });
   register('export:ffmpegProres', async (payload) => {
     const { frameDir, fps, outFile } = payload as { frameDir: string; fps: number; outFile: string };

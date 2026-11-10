@@ -27,7 +27,8 @@ export function ExportView() {
   const ffmpeg = useApp((s) => s.ffmpeg);
   const [format, setFormat] = useState<'mp4' | 'webm' | 'hevc' | 'prores' | 'gif'>('mp4');
   const [resolution, setResolution] = useState<'720p' | '1080p' | '1440p' | '2160p' | 'source'>('1080p');
-  const [fps, setFps] = useState<24 | 30 | 60>(30);
+  const [fps, setFps] = useState<number>(30);
+  const [gifLoop, setGifLoop] = useState<0 | -1>(0);
   const [estimate, setEstimate] = useState<{ sizeMb: number; seconds: number; durationUs: number } | null>(null);
   const [progress, setProgress] = useState<ExportProgress | null>(null);
   const [destination, setDestination] = useState<string | null>(null);
@@ -165,6 +166,7 @@ export function ExportView() {
           format,
           fps,
           shortEdge: resolution === 'source' ? Math.min(proj.media.height || 1080, 2160) : Number.parseInt(resolution, 10),
+          gifLoop,
           cancelCheck: () => cancelRef.current,
         },
         {
@@ -265,8 +267,9 @@ export function ExportView() {
         <Field label="Frame rate">
           <Select
             value={String(fps)}
-            onValueChange={(v) => setFps(Number(v) as 24 | 30 | 60)}
+            onValueChange={(v) => setFps(Number(v))}
             options={[
+              { value: '15', label: '15 fps (compact)' },
               { value: '24', label: '24 fps' },
               { value: '30', label: '30 fps' },
               { value: '60', label: '60 fps' },
@@ -274,6 +277,19 @@ export function ExportView() {
             ariaLabel="Frame rate"
           />
         </Field>
+        {format === 'gif' ? (
+          <Field label="GIF Loop">
+            <Select
+              value={String(gifLoop)}
+              onValueChange={(v) => setGifLoop(Number(v) as 0 | -1)}
+              options={[
+                { value: '0', label: 'Infinite loop' },
+                { value: '-1', label: 'Play once' },
+              ]}
+              ariaLabel="GIF Loop"
+            />
+          </Field>
+        ) : null}
         <Field label="Destination">
           <Button onClick={() => void pickDestination()}>{destination ? 'Change…' : 'Choose file…'}</Button>
         </Field>

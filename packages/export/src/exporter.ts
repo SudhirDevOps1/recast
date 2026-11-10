@@ -29,7 +29,7 @@ export interface ExportHost {
   discardPartial(destination: string): Promise<void>;
   readFile(path: string): Promise<ArrayBuffer>;
   writeFrameImage(dir: string, index: number, png: ArrayBuffer): Promise<void>;
-  ffmpegGif(frameDir: string, fps: number, width: number, outFile: string): Promise<boolean>;
+  ffmpegGif(frameDir: string, fps: number, width: number, outFile: string, loop?: number): Promise<boolean>;
   ffmpegProres(frameDir: string, fps: number, outFile: string): Promise<boolean>;
   ffmpegLoudnorm(file: string, targetLufs: number): Promise<boolean>;
   ffprobeDurationUs(file: string): Promise<number | null>;
@@ -40,8 +40,9 @@ export interface ExportHost {
 export interface ExportRequest {
   destination: string;
   format: 'mp4' | 'webm' | 'hevc' | 'prores' | 'gif';
-  fps: 24 | 30 | 60;
+  fps: number;
   shortEdge: number;
+  gifLoop?: number;
   cancelCheck: () => boolean;
 }
 
@@ -402,7 +403,7 @@ export async function runExport(
       onProgress({ frame: totalFrames, totalFrames, encodeFps: 0, stage: 'muxing', usedPath: choice.path });
       const ok =
         req.format === 'gif'
-          ? await host.ffmpegGif(frameDir!, fps, Math.min(outW, 1280), req.destination)
+          ? await host.ffmpegGif(frameDir!, fps, Math.min(outW, 1280), req.destination, req.gifLoop ?? 0)
           : await host.ffmpegProres(frameDir!, fps, req.destination);
       await host.cleanupDir(frameDir!);
       if (!ok) throw new Error('FFmpeg encode failed — see Settings → Media engine for diagnostics.');

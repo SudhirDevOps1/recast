@@ -19,8 +19,8 @@ export const captureMediaHost: ExportHost = {
   writeFrameImage: async (dir, index, png) => {
     await bridge().invoke('export:writeFrameImage', { dir, index, png } as never);
   },
-  ffmpegGif: async (frameDir, fps, width, outFile) =>
-    bridge().invoke('export:ffmpegGif', { frameDir, fps, width, outFile }),
+  ffmpegGif: async (frameDir, fps, width, outFile, loop) =>
+    bridge().invoke('export:ffmpegGif', { frameDir, fps, width, outFile, loop } as never),
   ffmpegProres: async (frameDir, fps, outFile) => bridge().invoke('export:ffmpegProres', { frameDir, fps, outFile }),
   ffmpegLoudnorm: async (file, targetLufs) => bridge().invoke('export:ffmpegLoudnorm', { file, targetLufs }),
   ffprobeDurationUs: async (file) => bridge().invoke('export:probeDuration', { file }),

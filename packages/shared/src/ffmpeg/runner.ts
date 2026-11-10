@@ -251,8 +251,8 @@ export class FfmpegRunner {
     if (res.code !== 0) throw new FfmpegError(`Loudnorm failed: ${res.stderr.slice(-400)}`, res.stderr);
   }
 
-  /** GIF: two-pass palette generation for clean colors. */
-  async gifFromFrames(frameDir: string, fps: number, width: number, outFile: string): Promise<void> {
+  /** GIF: two-pass palette generation for clean colors. loop = 0 (infinite), loop = -1 (once). */
+  async gifFromFrames(frameDir: string, fps: number, width: number, outFile: string, loop = 0): Promise<void> {
     const palette = `${outFile}.palette.png`;
     const inPattern = `${frameDir}/f-%06d.png`;
     const p1 = await this.run(
@@ -268,6 +268,7 @@ export class FfmpegRunner {
       [
         '-y', '-framerate', String(fps), '-i', inPattern, '-i', palette,
         '-lavfi', `fps=${fps},scale=${width}:-2:flags=lanczos [x]; [x][1:v] paletteuse=dither=bayer:bayer_scale=3`,
+        '-loop', String(loop),
         outFile,
       ],
       { timeoutMs: 20 * 60_000 },

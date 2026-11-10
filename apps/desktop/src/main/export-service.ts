@@ -66,11 +66,11 @@ export async function cleanupFrameDir(dir: string): Promise<void> {
   await fs.rm(dir, { recursive: true, force: true }).catch(() => undefined);
 }
 
-export async function runFfmpegGif(frameDir: string, fps: number, width: number, outFile: string): Promise<boolean> {
+export async function runFfmpegGif(frameDir: string, fps: number, width: number, outFile: string, loop = 0): Promise<boolean> {
   const { runner } = await ffmpegState();
   if (!runner) return false;
   try {
-    await runner.gifFromFrames(frameDir, fps, width, outFile);
+    await runner.gifFromFrames(frameDir, fps, width, outFile, loop);
     return true;
   } catch {
     return false;

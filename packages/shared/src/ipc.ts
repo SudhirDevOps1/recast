@@ -266,7 +266,7 @@ export const IPC = {
   'export:tempFrameDir': def(z.void(), z.string()),
   'export:writeFrameImage': def(z.object({ dir: z.string(), index: z.number(), png: z.unknown() }), z.void()),
   'export:cleanupDir': def(z.object({ dir: z.string() }), z.void()),
-  'export:ffmpegGif': def(z.object({ frameDir: z.string(), fps: z.number(), width: z.number(), outFile: z.string() }), z.boolean()),
+  'export:ffmpegGif': def(z.object({ frameDir: z.string(), fps: z.number(), width: z.number(), outFile: z.string(), loop: z.number().optional() }), z.boolean()),
   'export:ffmpegProres': def(z.object({ frameDir: z.string(), fps: z.number(), outFile: z.string() }), z.boolean()),
   'export:ffmpegLoudnorm': def(z.object({ file: z.string(), targetLufs: z.number() }), z.boolean()),
   'export:probeDuration': def(z.object({ file: z.string() }), z.number().nullable()),

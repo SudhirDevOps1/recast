@@ -187,9 +187,11 @@ export function computeComposition(project: RecastProject, tUs: number, outW: nu
   }
   const contentRect: Rect = { x: (outW - cw) / 2, y: (outH - ch) / 2, w: cw, h: ch };
 
-  // Screen rect: fit the source video into the content rect with padding.
+  // Screen rect: fit the source video (or cropped region) into content rect with padding.
   const pad = (style.frame.paddingPx / 1000) * outH; // style padding is per-mille of output height
-  const srcAr = project.media.width && project.media.height ? project.media.width / project.media.height : 16 / 9;
+  const effectiveW = project.crop && project.crop.w > 0 ? project.crop.w : (project.media.width || 1920);
+  const effectiveH = project.crop && project.crop.h > 0 ? project.crop.h : (project.media.height || 1080);
+  const srcAr = effectiveW / effectiveH;
   let sw = contentRect.w - 2 * pad;
   let sh = sw / srcAr;
   if (sh > contentRect.h - 2 * pad) {
@@ -204,16 +206,20 @@ export function computeComposition(project: RecastProject, tUs: number, outW: nu
   };
 
   const pose = deps.pose;
-  const maxW = Math.max(1, project.media.width || screenRect.w);
-  const maxH = Math.max(1, project.media.height || screenRect.h);
+  const maxW = Math.max(1, effectiveW);
+  const maxH = Math.max(1, effectiveH);
   const visW = Math.min(maxW, maxW / pose.scale);
   const visH = Math.min(maxH, maxH / pose.scale);
+  const cropOffsetX = project.crop ? project.crop.x : 0;
+  const cropOffsetY = project.crop ? project.crop.y : 0;
+  const localCx = pose.cx - cropOffsetX;
+  const localCy = pose.cy - cropOffsetY;
   const minX = 0;
   const maxX = Math.max(0, maxW - visW);
   const minY = 0;
   const maxY = Math.max(0, maxH - visH);
-  const vx = clamp(pose.cx - visW / 2, minX, maxX);
-  const vy = clamp(pose.cy - visH / 2, minY, maxY);
+  const vx = clamp(localCx - visW / 2, minX, maxX) + cropOffsetX;
+  const vy = clamp(localCy - visH / 2, minY, maxY) + cropOffsetY;
   const visibleSrc: Rect = {
     x: vx,
     y: vy,
