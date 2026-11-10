@@ -147,8 +147,7 @@
     os: platform.mobile ? 'windows' : (platform.os || 'windows'),
     arch: platform.arch === 'x64' ? 'x64' : 'arm64',
     release: null,
-    assets: [],
-    failed: false
+    assets: []
   };
 
   /* ------------------------------------------------------------ rendering */
@@ -359,8 +358,6 @@
   }
 
   function showFallback() {
-    state.failed = true;
-
     ['windows', 'macos', 'linux'].forEach(function (os) {
       var ul = $('[data-list="' + os + '"]');
       if (!ul) return;
