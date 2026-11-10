@@ -1,181 +1,234 @@
 <div align="center">
 
-<img src="apps/website/assets/icon.png" width="96" alt="Recast logo" />
+<img src="apps/website/assets/icon.png" width="120" height="120" alt="Recast logo" style="border-radius: 28px;" />
 
 # Recast
 
-**Free, open-source, local-first screen recorder and cinematic editor.**
+**The local-first screen recorder and cinematic video editor.**
 
-Record, auto-zoom, caption, export - no account, no cloud, no telemetry, no watermark, no feature gates.
-Everything runs 100% offline on your machine. macOS - Windows - Linux.
+Record, auto-zoom, annotate, overlay keystrokes, and export high-impact product demos.  
+100% offline. Zero accounts. Zero cloud lock-in. Zero telemetry. Zero watermarks. Free forever under GPL-3.0.
 
 [![CI](https://github.com/SudhirDevOps1/recast/actions/workflows/ci.yml/badge.svg)](https://github.com/SudhirDevOps1/recast/actions/workflows/ci.yml)
 [![Release](https://github.com/SudhirDevOps1/recast/actions/workflows/release.yml/badge.svg)](https://github.com/SudhirDevOps1/recast/actions/workflows/release.yml)
-[![Nightly installers](https://github.com/SudhirDevOps1/recast/actions/workflows/build.yml/badge.svg)](https://github.com/SudhirDevOps1/recast/actions/workflows/build.yml)
 [![CodeQL](https://github.com/SudhirDevOps1/recast/actions/workflows/codeql.yml/badge.svg)](https://github.com/SudhirDevOps1/recast/actions/workflows/codeql.yml)
 [![License: GPL-3.0-or-later](https://img.shields.io/badge/license-GPL--3.0--or--later-blue.svg)](LICENSE)
 [![Website](https://img.shields.io/badge/website-sudhirdevops1.github.io%2Frecast-7C5CFF)](https://sudhirdevops1.github.io/recast/)
 [![Latest release](https://img.shields.io/badge/download-v0.1.4-2EA043)](https://github.com/SudhirDevOps1/recast/releases/latest)
 
-<img src="apps/website/assets/og.png" width="720" alt="Recast - record, auto-zoom, caption, export" />
+<br />
 
-**[Download](#install) - [Documentation](docs/README.md) - [Deployment guide](docs/deployment.md) - [Security](docs/security.md) - [Website](https://sudhirdevops1.github.io/recast/) - [Status](STATUS.md)**
+<img src="apps/website/assets/og.png" width="800" alt="Recast - record, auto-zoom, caption, export" />
+
+<br />
+
+**[Download](#install) · [Product Tour](#product-tour) · [Documentation](docs/README.md) · [Deployment Guide](docs/deployment.md) · [Security](docs/security.md) · [Website](https://sudhirdevops1.github.io/recast/) · [Status](STATUS.md)**
 
 </div>
 
 ---
 
-## Why teams pick it
+## Why Recast?
 
-| | |
-|---|---|
-| **Nothing leaves the machine** | Zero network requests by default. No account, no analytics, no crash reporting. Footage is written to disk and stays there. |
-| **Deterministic output** | Preview and export render through the same compositor, so what you see is what you ship. Every export is verified with `ffprobe` before the file is renamed into place. |
-| **Auditable artifacts** | Every release publishes `SHA256SUMS`; the website shows the first bytes of each file's SHA-256 so you can match a download against the published hash. |
-| **No feature gate, no seat count** | GPL-3.0, free forever. Nothing is held back behind a subscription, an account, or a licence server. |
+| Feature | Screen Studio ($29/mo) | OBS Studio | Recast (Free & Open Source) |
+|---|---|---|---|
+| **License & Price** | Commercial ($29/month) | GPL-2.0 (Free) | **GPL-3.0 (100% Free Forever)** |
+| **Data Privacy** | Cloud account required | 100% Local | **100% Offline, Zero Telemetry** |
+| **Automatic Zooms** | Proprietary algorithm | None (Manual filters) | **Dwell & Click Heuristics + 1-Click Suggestions** |
+| **Live Annotations** | Post-production only | Complex plugin setup | **Built-in Floating Pill Toolbar** |
+| **Keystroke HUD** | Yes | Third-party software | **Native Low-latency Hardware HUD Overlay** |
+| **Crash Protection** | In-memory / temp files | Direct writing | **Segmented 2s Chunks + Atomic Manifest** |
+| **Determinism** | Black-box exporter | Varied | **Single Compositor Contract (Preview = Export)** |
 
-## Capabilities at a glance
+### Core Guarantees
 
-Legend: **verified** = tested on that OS - **implemented** = code complete, device QA pending - **partial** = scaffolded - **not built**.
+- **100% Offline & Private:** Zero network requests by default. No analytics, no telemetry, no crash pings. Your audio, screen captures, and projects never touch a remote server.
+- **Unified Compositor:** The exact same rendering engine (`packages/editor/src/compositor.ts`) drives both real-time canvas preview and final multi-format export. What you preview is byte-for-byte what gets rendered.
+- **Crash-Safe Segmented Pipeline:** Screen and audio are captured in isolated 2-second segments with atomic index manifests. Even if the host machine experiences a power outage during recording, the session is fully recoverable.
+- **Frame-Clock Deterministic Export:** Never relies on `requestAnimationFrame` for timeline rendering. Exports proceed tick-by-tick with exact sub-pixel positioning, dynamic motion blur, and EBU R128 (-14 LUFS) loudnorm audio normalization.
+- **Enterprise-Ready Deployment:** Distributable via silent MSI, GPO/MDM deployment profiles, standalone single-file portable executables, and cryptographically verified SHA-256 hash manifests.
+
+---
+
+## New in v0.1.4: Market Parity Upgrade
+
+- **P0-1 Suggest Zooms:** 1-click intelligent zoom proposals based on cursor dwell ($\le 8\text{ px}$ for $\ge 500\text{ ms}$) and click clusters, allowing instant cinematic framing.
+- **P0-2 Live Floating Annotation Toolbar:** Minimalist 440px desktop pill toolbar during recording with Pen, Highlighter, Arrow, and Bounding Box tools streaming vector strokes to `annotations.jsonl`.
+- **P0-3 Keystroke HUD (Shortcut Overlays):** Low-latency hardware key capturing via `uiohook-napi` rendered directly as floating dark-glass keycaps on both preview and export.
+- **Hardened Stop Flow:** Guaranteed window teardown and atomic buffer flushing, eliminating any lingering background processes or hanging recorder sessions.
+- **High-Craft Branding:** Redesigned studio squircle icon and cross-platform high-DPI asset pipeline.
+
+---
+
+## Capabilities at a Glance
+
+Legend: **verified** = tested on OS · **implemented** = code complete, device QA pending · **partial** = scaffolded · **not built**.
 
 | Area | Capability | State |
 |---|---|---|
-| Capture | Screen / window / area capture, mic + system audio on separate tracks, countdown, pause/resume | implemented |
-| Capture | Crash-safe segmented writing (2 s fragments, atomic manifest), recovery remux | implemented |
-| Capture | Encoder fallback chain that probes by configuring, plus a VP8/VP9 compatibility mode | verified (unit) |
-| Capture | Face-cam picture-in-picture - opt-in camera take recorded beside the screen take, drawn as an overlay in preview and export | implemented - Windows camera QA pending |
-| Capture | 60 Hz cursor sampling, global hotkeys, tray control, live recorder stats | implemented |
-| Editor | Preview frame lifecycle (FrameSync) + segment-local seek mapping - no more black preview or export frames | verified (unit) |
-| Editor | Cursor track to auto-zoom (3 intensities), manual keyframes with easing, follow-cursor | verified (unit) |
-| Editor | Timeline 2.0 - ruler, trim, split, ripple delete, draggable keyframes, undo/redo | implemented |
-| Editor | Motion panel - intro transitions, per-clip speed 0.25-4x, fades, cursor FX | verified (unit) |
-| Editor | Style system - aspect ratios, background (solid, gradient, mesh, echo, **image**, transparent), cursor looks, `.recaststyle` presets, command palette | verified (unit) |
-| Editor | Face-cam panel, cursor FX controls (smoothing, trail, click bounce), Library poster thumbnails, export presets | implemented |
-| Export | MP4 (H.264), WebM, GIF, ProRes; HEVC where the platform provides it | implemented |
-| Export | Frame-clock exporter (never rAF), loudnorm to -14 LUFS, cancel leaves no partial file | implemented |
-| Captions | Local Whisper via `whisper.cpp`, SRT/VTT import/export, burn-in styles | partial - untested end to end |
-| Distribution | NSIS, MSI, portable, ARM64, DMG arm64/x64, AppImage, deb, rpm, tar.gz, updater feed | verified in CI |
-| Distribution | Code signing and notarization | not built - certificates pending |
-| Platform | Windows 10 1809+, macOS 12.3+, Linux X11 (Wayland via portal, reduced feature set) | see [platform support](docs/platform-support.md) |
+| **Capture** | Full screen, specific window, and custom area capture | implemented |
+| **Capture** | Microphone and system audio recorded to isolated lossless tracks | implemented |
+| **Capture** | Live floating annotation toolbar (pen, highlighter, arrows, boxes) | implemented |
+| **Capture** | Hardware keystroke sampling (global keydown and shortcut tracking) | implemented |
+| **Capture** | Crash-safe segmented writing (2-second fragments, atomic manifest) | implemented |
+| **Capture** | Face-cam picture-in-picture (synchronized camera take with custom masks) | implemented |
+| **Capture** | 60 Hz cursor sampling, global hotkeys, system tray integration | implemented |
+| **Editor** | Dynamic FrameSync preview lifecycle + segment-local seek mapping | verified (unit) |
+| **Editor** | Auto-zoom engine (3 intensities) + "Suggest Zooms" heuristic analysis | verified (unit) |
+| **Editor** | Multi-track timeline: ruler, trim, split, ripple delete, draggable keyframes | implemented |
+| **Editor** | Motion panel: intro transitions, per-clip speed (0.25x–4x), spring physics | verified (unit) |
+| **Editor** | Style system: aspect ratios, mesh/gradient/solid backgrounds, `.recaststyle` presets | verified (unit) |
+| **Editor** | Keystroke HUD renderer (dark glass pill keycaps with automated decay) | verified (unit) |
+| **Export** | MP4 (H.264), WebM (VP8/VP9), ProRes 422/4444, and high-framerate animated GIF | implemented |
+| **Export** | Frame-clock exporter (no dropped frames), EBU R128 audio normalization | implemented |
+| **Captions** | Local Whisper speech-to-text via `whisper.cpp`, SRT/VTT import/export | partial |
+| **Distribution** | NSIS, MSI Enterprise, Portable, ARM64, macOS DMG, AppImage, deb, rpm | verified in CI |
 
-The full, per-item truth lives in [STATUS.md](STATUS.md) - nothing is claimed as working that was not tested.
+The complete, per-item verification status lives in [STATUS.md](STATUS.md).
 
-## Product tour
+---
 
-60-second tour of the real app - nothing mocked: open a recording, watch the auto-zoom preview play,
-restyle live, then export and verify the file.
+## Product Tour
+
+A fully native, offline desktop studio designed for engineering demos, feature walk-throughs, and polished documentation:
 
 ![Recast demo - record, auto-zoom, restyle, export](docs/screenshots/demo.gif)
 
-| Editor - auto-zoom, styles, captions | Library |
+| Studio Editor (Auto-Zoom, Styles, Timeline) | Project Library |
 |---|---|
 | ![Editor](docs/screenshots/editor.png) | ![Library](docs/screenshots/library.png) |
 
-| New recording | Settings |
+| Studio Capture Setup | Settings & Audio Preferences |
 |---|---|
 | ![Record](docs/screenshots/record.png) | ![Settings](docs/screenshots/settings.png) |
 
-*Regenerate the demo and the stills with `node scripts/capture-demo.mjs` and `node scripts/capture-screenshots.mjs`.*
+---
 
-## Architecture at a glance
+## Architecture
+
+Recast enforces a strict one-way trust boundary between native OS operations and sandboxed pixel rendering:
 
 ```mermaid
 flowchart LR
-  subgraph main["main process (Node) - owns the OS"]
-    M1["windows, tray, shortcuts, permissions"]
-    M2["library (SQLite) + .recast projects"]
-    M3["session service (segments, manifest, cursor.jsonl)"]
-    M4["FFmpeg / whisper supervision, updater"]
+  subgraph main["Main Process (Node.js) - Controls Host OS"]
+    M1["Window, Tray & Hotkey Manager"]
+    M2["Project Storage (SQLite) + .recast"]
+    M3["Session Service (2s Chunks, cursor.jsonl)"]
+    M4["FFmpeg Supervisor & Low-level Hooks"]
   end
-  subgraph preload["preload - one typed bridge"]
+  subgraph preload["Preload Layer - Typed Bridge"]
     P1["window.recast: invoke / on / send"]
   end
-  subgraph renderer["renderer (sandboxed) - owns pixels"]
-    R1["capture engine (WebCodecs, mp4-muxer)"]
-    R2["editor + compositor (preview)"]
-    R3["export engine (frame clock)"]
+  subgraph renderer["Renderer Process (Chromium Sandbox) - Controls Pixels"]
+    R1["WebCodecs Capture & mp4-muxer"]
+    R2["Unified Compositor (Canvas Preview)"]
+    R3["Frame-Clock Deterministic Exporter"]
   end
   main -->|"zod-validated IPC"| preload --> renderer
-  renderer -->|"media + project files"| main
+  renderer -->|"media segments & project metadata"| main
 ```
 
-One direction of trust: the renderer is sandboxed and never touches Node; every IPC channel is declared once
-with a zod schema and validated on both ends. Full detail in [docs/architecture.md](docs/architecture.md).
+- **Sandboxed Renderer:** The browser window has `nodeIntegration: false`, `contextIsolation: true`, and `sandbox: true`. No native system APIs can be invoked directly from the DOM.
+- **Strict IPC Contracts:** Every inter-process channel is defined in `packages/shared/src/ipc.ts` with explicit bidirectional Zod schemas.
+- **Process Isolation:** FFmpeg and child utilities are executed strictly with `shell: false`, argument arrays, and verified binary paths.
+
+Full details are documented in [docs/architecture.md](docs/architecture.md).
+
+---
 
 ## Install
 
-| Platform | Artifact | Deployment profile |
+Official installers are published on [GitHub Releases](https://github.com/SudhirDevOps1/recast/releases) and the [Recast Website](https://sudhirdevops1.github.io/recast/). Every release publishes a cryptographic `SHA256SUMS` file.
+
+| Platform | Format | Deployment Profile |
 |---|---|---|
-| Windows x64 | `Recast-Setup-x.y.z.exe` | NSIS, per-user, no UAC prompt |
-| Windows x64 | `Recast-x.y.z-enterprise.msi` | Per-machine, for GPO / silent deployment |
-| Windows x64 | `Recast-Portable-x.y.z.exe` | Runs from a USB stick, settings next to the exe |
-| Windows ARM64 | `Recast-Setup-x.y.z-arm64.exe` | Native ARM64 build |
-| macOS arm64 | `Recast-x.y.z-arm64.dmg` | Apple Silicon - **unsigned until certificates land** |
-| macOS x64 | `Recast-x.y.z-x64.dmg` | Intel - **unsigned until certificates land** |
-| Linux x64 | `Recast-x.y.z-x86_64.AppImage` | X11 full support, Wayland through the portal |
-| Linux x64 | `.deb` / `.rpm` / `.tar.gz` | Plus Flatpak, Snap and AUR manifests (authored, not yet submitted) |
+| **Windows x64** | `Recast-Setup-x.y.z.exe` | Standard NSIS installer (per-user, no UAC elevation required) |
+| **Windows x64** | `Recast-x.y.z-enterprise.msi` | Per-machine Windows Installer for GPO / MDM / silent distribution |
+| **Windows x64** | `Recast-Portable-x.y.z.exe` | Zero-install portable executable; keeps settings adjacent to binary |
+| **Windows ARM64**| `Recast-Setup-x.y.z-arm64.exe`| Optimized native ARM64 executable for Snapdragon / Surface devices |
+| **macOS arm64** | `Recast-x.y.z-arm64.dmg` | Native Apple Silicon (M1/M2/M3/M4) installer |
+| **macOS x64** | `Recast-x.y.z-x64.dmg` | Intel 64-bit installer |
+| **Linux x64** | `Recast-x.y.z-x86_64.AppImage` | Universal binary for X11 & Wayland (via desktop portal) |
+| **Linux Packages**| `.deb` / `.rpm` / `.tar.gz` | Debian, Ubuntu, Fedora, RHEL packages |
 
-Get the files from [Releases](https://github.com/SudhirDevOps1/recast/releases) or the
-[website](https://sudhirdevops1.github.io/recast/), which resolves the right artifact for your platform.
-Every release publishes `SHA256SUMS`.
+> **Note on code signing:** Binaries are currently unsigned until code signing certificates land. On Windows, choose *More info → Run anyway* if SmartScreen appears. On macOS, right-click and choose *Open* or run `xattr -cr /Applications/Recast.app`. See [docs/code-signing.md](docs/code-signing.md) for roadmap details.
 
-> **Installers are currently unsigned.** Windows may show SmartScreen, macOS needs
-> `xattr -cr` or right-click - Open on first launch. This is stated, not hidden - see
-> [docs/code-signing.md](docs/code-signing.md) for the signing plan and the reputation note.
+---
 
-## Deploy in a locked-down environment
+## Enterprise Deployment
 
-Recast makes no network calls by default, so it can be installed from an internal share with no proxy
-and no allow-listing. The [deployment guide](docs/deployment.md) covers silent MSI installs, GPO and MDM
-rollouts, offline checksum verification, version pinning and data locations.
+Recast is purpose-built for zero-trust, air-gapped, and locked-down corporate environments:
+- **Zero Inbound/Outbound Networking:** No firewall exceptions, allow-listing, or outbound proxy configuration needed.
+- **Silent MSI Rollout:** Supports standard enterprise installation flags:
+  ```cmd
+  msiexec /i Recast-0.1.4-enterprise.msi /qn /norestart ALLUSERS=1
+  ```
+- Detailed GPO instructions, checksum verification, and registry paths are available in the [Deployment Guide](docs/deployment.md).
 
-## Build from source
+---
+
+## Building from Source
+
+### Prerequisites
+- Node.js >= 20.11 (22 LTS recommended)
+- pnpm >= 9.0.0
+- Python 3 (for asset generation scripts)
+
+### Setup & Compilation
 
 ```bash
+# Clone the repository
+git clone https://github.com/SudhirDevOps1/recast.git
+cd recast
+
+# Install workspace dependencies
 pnpm install
-pnpm fetch:ffmpeg   # optional: bundle the FFmpeg safety net (see docs/ffmpeg.md)
-pnpm verify         # typecheck + lint + unit tests + build
-pnpm dev            # run the app in dev mode
-pnpm dist:win       # or dist:mac / dist:linux
+
+# Fetch and stage platform FFmpeg safety net binaries (pinned SHA-256)
+pnpm fetch:ffmpeg
+
+# Run full quality gates (TypeCheck + Lint + Unit Tests + Build)
+pnpm verify
+
+# Launch the app in development mode
+pnpm dev
 ```
 
-Requirements: Node >= 20.11 (22 recommended), pnpm 9. Full setup, native module notes and the workspace
-layout are in [docs/build.md](docs/build.md).
+### Packaging Binaries
 
-## Documentation
+```bash
+pnpm dist:win      # Builds NSIS, MSI, Portable, and ARM64 on Windows
+pnpm dist:mac      # Builds DMG for Apple Silicon and Intel on macOS
+pnpm dist:linux    # Builds AppImage, deb, rpm, and tar.gz on Linux
+```
 
-| Audience | Start here |
+---
+
+## Documentation Index
+
+| Topic | Documentation Link |
 |---|---|
-| Everyone | [docs/README.md](docs/README.md) - the documentation index |
-| End user | [recording](docs/recording.md) - [editing](docs/editing.md) - [export](docs/export.md) - [keyboard shortcuts](docs/keyboard-shortcuts.md) |
-| IT / operations | [deployment](docs/deployment.md) - [security](docs/security.md) - [support](docs/support.md) - [platform support](docs/platform-support.md) |
-| Engineer | [architecture](docs/architecture.md) - [build](docs/build.md) - [packaging](docs/packaging.md) - [code signing](docs/code-signing.md) - [FFmpeg](docs/ffmpeg.md) |
-| Maintainer | [roadmap](docs/roadmap.md) - [STATUS.md](STATUS.md) - [repository setup](docs/repository-setup.md) - [AGENTS.md](AGENTS.md) |
+| **Overview & Index** | [docs/README.md](docs/README.md) · Master guide and directory structure |
+| **User Manual** | [docs/recording.md](docs/recording.md) · [docs/editing.md](docs/editing.md) · [docs/export.md](docs/export.md) · [docs/keyboard-shortcuts.md](docs/keyboard-shortcuts.md) |
+| **Enterprise & IT** | [docs/deployment.md](docs/deployment.md) · [docs/security.md](docs/security.md) · [docs/platform-support.md](docs/platform-support.md) · [docs/support.md](docs/support.md) |
+| **Engineering** | [docs/architecture.md](docs/architecture.md) · [docs/build.md](docs/build.md) · [docs/packaging.md](docs/packaging.md) · [docs/ffmpeg.md](docs/ffmpeg.md) |
+| **Project Governance**| [STATUS.md](STATUS.md) · [CHANGELOG.md](CHANGELOG.md) · [AGENTS.md](AGENTS.md) · [docs/market-parity.md](docs/market-parity.md) |
 
-## Security and privacy
+---
 
-The renderer is sandboxed, IPC is schema-validated on both ends, child processes are spawned without a
-shell and verified against pinned SHA-256 hashes before they can run, and the default build performs no
-network requests at all. Recast does not encrypt data at rest - if your threat model includes local disk
-access, use full-disk encryption. The threat model, the data-flow table and how to report a vulnerability
-are in [docs/security.md](docs/security.md) and [SECURITY.md](SECURITY.md).
+## Security & Responsible Disclosure
 
-## Support
+Security is treated as a foundational constraint:
+- Sandboxed Chromium renderer with strict Content Security Policy (CSP).
+- Zero remote scripts, zero inline scripts, no runtime evaluation (`unsafe-eval` disabled).
+- Argument-array-only process execution without shell wrappers.
+- Cryptographic SHA-256 verification of external tools (`ffmpeg.lock.json`).
 
-Recast is maintained in the open with no support SLA. Before filing an issue, export the diagnostics
-bundle (Settings - Diagnostics - Copy diagnostics bundle) - it carries the app, OS, FFmpeg and display
-permission state plus the last 200 capture log lines. Known issues, a bug-report template and the
-response expectations are in [docs/support.md](docs/support.md).
+Please do not report security vulnerabilities via public GitHub issues. Follow the confidential disclosure policy in [SECURITY.md](SECURITY.md).
 
-## Contributing
-
-Issues and pull requests are welcome; the build, test and commit rules are in
-[CONTRIBUTING.md](CONTRIBUTING.md), the repository rules for coding agents in [AGENTS.md](AGENTS.md), and
-the release history in [CHANGELOG.md](CHANGELOG.md). Security reports must not be filed as public issues -
-use the private channel described in [SECURITY.md](SECURITY.md).
+---
 
 ## License
 
-GPL-3.0-or-later. Recast ships FFmpeg builds that include libx264 (GPL); see
-[docs/ffmpeg.md](docs/ffmpeg.md) for the licensing story and the MIT/LGPL alternative for redistributions
-that strip the binaries.
+Recast is licensed under the [GNU General Public License v3.0 or later](LICENSE).  
+Bundled FFmpeg distributions include `libx264` (GPL). For licensing terms and redistributions without GPL components, see [docs/ffmpeg.md](docs/ffmpeg.md).

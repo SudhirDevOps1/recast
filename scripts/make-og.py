@@ -14,8 +14,41 @@ ACCENT_HI = (146, 125, 255)
 TEXT = (232, 235, 242)
 MUTED = (152, 160, 179)
 
-BOLD = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
-REG = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
+import sys
+import os
+
+def get_font(size: int, bold: bool = False):
+    candidates = []
+    if sys.platform == 'win32':
+        windir = os.environ.get('WINDIR', 'C:\\Windows')
+        if bold:
+            candidates.extend([
+                os.path.join(windir, 'Fonts', 'segoeuib.ttf'),
+                os.path.join(windir, 'Fonts', 'arialbd.ttf'),
+            ])
+        else:
+            candidates.extend([
+                os.path.join(windir, 'Fonts', 'segoeui.ttf'),
+                os.path.join(windir, 'Fonts', 'arial.ttf'),
+            ])
+    elif sys.platform == 'darwin':
+        candidates.extend([
+            '/System/Library/Fonts/SFNS.ttf',
+            '/Library/Fonts/Arial.ttf',
+        ])
+    else:
+        if bold:
+            candidates.append('/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf')
+        else:
+            candidates.append('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf')
+
+    for c in candidates:
+        if os.path.exists(c):
+            try:
+                return ImageFont.truetype(c, size)
+            except Exception:
+                pass
+    return ImageFont.load_default()
 
 
 def main() -> None:
@@ -41,15 +74,15 @@ def main() -> None:
     td.rounded_rectangle(
         [1, 1, 166, 166], radius=39, outline=(255, 255, 255, 28), width=2
     )
-    fr = ImageFont.truetype(BOLD, 96)
+    fr = get_font(96, bold=True)
     td.text((84, 76), "R", font=fr, fill=ACCENT_HI + (255,), anchor="mm")
     td.rounded_rectangle([52, 138, 116, 147], radius=4, fill=ACCENT + (140,))
     im.paste(tile, (84, 128), tile)
 
     # Headline + copy.
-    f_head = ImageFont.truetype(BOLD, 62)
-    f_sub = ImageFont.truetype(REG, 30)
-    f_tag = ImageFont.truetype(BOLD, 24)
+    f_head = get_font(62, bold=True)
+    f_sub = get_font(30, bold=False)
+    f_tag = get_font(24, bold=True)
     d.text((84, 356), "Recast", font=f_head, fill=TEXT)
     d.text(
         (84, 444),
