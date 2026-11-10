@@ -676,11 +676,14 @@ export async function registerIpcHandlers(): Promise<void> {
 
   register('capture:readCursor', (payload) => {
     const { sessionId } = payload as { sessionId: string };
-    // Project ids are `prj-<sessionId>`; media.dir is the authoritative path.
-    const project = loadProject(`prj-${sessionId}`);
-    if (!project) return { samples: [], clicks: [], keys: [] };
-    const factor = c.sessions.manifestFor(sessionId)?.displayScaleFactor ?? 1;
-    return readCursorJsonl(project.media.dir, project.media.cursor?.file ?? 'cursor.jsonl', factor);
+    if (!sessionId) return { samples: [], clicks: [], keys: [] };
+    const rawSessionId = sessionId.replace(/^prj-/, '');
+    const projectId = sessionId.startsWith('prj-') ? sessionId : `prj-${sessionId}`;
+    const project = loadProject(projectId);
+    const mediaDir = project?.media?.dir ?? join(recordingsDir(), rawSessionId);
+    const factor = c.sessions.manifestFor(rawSessionId)?.displayScaleFactor ?? 1;
+    const cursorFile = project?.media?.cursor?.file ?? 'cursor.jsonl';
+    return readCursorJsonl(mediaDir, cursorFile, factor);
   });
   register('capture:readCaptions', async (payload) => {
     const { path } = payload as { path: string };

@@ -69,7 +69,7 @@ export function EditorView() {
     if (!project) return;
     let cancelled = false;
     void (async () => {
-      if (project.media.cursor?.available) {
+      if (project.media.cursor?.available || project.id) {
         // Cursor data comes through the main process with the project; the
         // editor re-reads it from the session dir via a lightweight IPC.
         try {
@@ -80,9 +80,15 @@ export function EditorView() {
               clicks: typeof cursorClicks;
               keys?: Array<{ tUs: number; key: string }>;
             };
-            setCursorSamples(d.samples);
-            setCursorClicks(d.clicks);
-            if (d.keys) setKeystrokes(d.keys);
+            if (d.samples && d.samples.length > 0) {
+              setCursorSamples(d.samples);
+            }
+            if (d.clicks && d.clicks.length > 0) {
+              setCursorClicks(d.clicks);
+            }
+            if (d.keys && d.keys.length > 0) {
+              setKeystrokes(d.keys);
+            }
           }
         } catch {
           setCursorSamples([]);

@@ -31,8 +31,8 @@ export interface FrameSyncOptions {
   createSnapshotCanvas?: (w: number, h: number) => HTMLCanvasElement | null;
 }
 
-/** Snapshot canvas height cap — snapshots only back the UI, not exports. */
-const SNAPSHOT_MAX_H = 540;
+/** Snapshot canvas height cap — preserve full 4K/1080p preview fidelity. */
+const SNAPSHOT_MAX_H = 2160;
 
 type VideoLike = HTMLVideoElement;
 

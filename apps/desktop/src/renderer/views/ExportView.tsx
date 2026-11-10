@@ -14,6 +14,7 @@ const EXPORT_PRESETS: Array<{ label: string; format: 'mp4' | 'webm' | 'hevc' | '
   { label: 'Smooth 60 fps', format: 'mp4', resolution: '1080p', fps: 60 },
   { label: '4K master', format: 'mp4', resolution: '2160p', fps: 30 },
   { label: 'Light 720p', format: 'mp4', resolution: '720p', fps: 24 },
+  { label: 'Animated GIF', format: 'gif', resolution: '720p', fps: 24 },
   { label: 'WebM lossless-ish', format: 'webm', resolution: 'source', fps: 30 },
 ];
 

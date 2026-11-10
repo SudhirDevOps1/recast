@@ -156,6 +156,22 @@ export function MotionPanel({
                 ariaLabel="Clip speed"
                 onValueChange={(v) => updateClip({ speed: v })}
               />
+              <div className="flex items-center gap-1.5 mt-2">
+                {[0.5, 0.75, 1, 1.25, 1.5, 2, 4].map((spd) => (
+                  <button
+                    key={spd}
+                    type="button"
+                    onClick={() => updateClip({ speed: spd })}
+                    className={`px-2 py-0.5 text-[11px] font-medium rounded transition-all cursor-pointer ${
+                      Math.abs(sel.speed - spd) < 0.04
+                        ? 'bg-accent text-white font-bold'
+                        : 'bg-white/5 hover:bg-white/10 text-muted'
+                    }`}
+                  >
+                    {spd}×
+                  </button>
+                ))}
+              </div>
             </Field>
             <div className="flex justify-end">
               <Button

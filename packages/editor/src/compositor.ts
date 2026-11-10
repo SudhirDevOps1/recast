@@ -204,11 +204,19 @@ export function computeComposition(project: RecastProject, tUs: number, outW: nu
   };
 
   const pose = deps.pose;
-  const visW = (project.media.width || screenRect.w) / pose.scale;
-  const visH = (project.media.height || screenRect.h) / pose.scale;
+  const maxW = Math.max(1, project.media.width || screenRect.w);
+  const maxH = Math.max(1, project.media.height || screenRect.h);
+  const visW = Math.min(maxW, maxW / pose.scale);
+  const visH = Math.min(maxH, maxH / pose.scale);
+  const minX = 0;
+  const maxX = Math.max(0, maxW - visW);
+  const minY = 0;
+  const maxY = Math.max(0, maxH - visH);
+  const vx = clamp(pose.cx - visW / 2, minX, maxX);
+  const vy = clamp(pose.cy - visH / 2, minY, maxY);
   const visibleSrc: Rect = {
-    x: pose.cx - visW / 2,
-    y: pose.cy - visH / 2,
+    x: vx,
+    y: vy,
     w: visW,
     h: visH,
   };
@@ -952,10 +960,14 @@ export function drawComposition(ctx: CanvasRenderingContext2D, comp: Composition
   if (frame) {
     const vs = comp.visibleSrc;
     const media = project.media;
-    const sx = clamp(vs.x, 0, Math.max(0, media.width - 1));
-    const sy = clamp(vs.y, 0, Math.max(0, media.height - 1));
-    const sw = clamp(vs.w, 1, media.width - sx);
-    const shh = clamp(vs.h, 1, media.height - sy);
+    const fw = (frame as { videoWidth?: number; width?: number }).videoWidth || (frame as { width?: number }).width || media.width || 1;
+    const fh = (frame as { videoHeight?: number; height?: number }).videoHeight || (frame as { height?: number }).height || media.height || 1;
+    const scaleX = fw / (media.width || fw);
+    const scaleY = fh / (media.height || fh);
+    const sx = clamp(vs.x * scaleX, 0, Math.max(0, fw - 1));
+    const sy = clamp(vs.y * scaleY, 0, Math.max(0, fh - 1));
+    const sw = clamp(vs.w * scaleX, 1, fw - sx);
+    const shh = clamp(vs.h * scaleY, 1, fh - sy);
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = 'high';
     ctx.drawImage(frame as CanvasImageSource, sx, sy, sw, shh, comp.screenRect.x, comp.screenRect.y, comp.screenRect.w, comp.screenRect.h);
