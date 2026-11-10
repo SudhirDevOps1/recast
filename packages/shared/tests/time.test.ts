@@ -63,3 +63,17 @@ describe('rippleDeleteRange', () => {
     expect(out[1].sourceInUs).toBe(1 * US_PER_S);
   });
 });
+
+import { segmentLocalTimeUs } from '../src/time';
+
+describe('segmentLocalTimeUs (capture clock → segment-local file time)', () => {
+  it('maps capture-clock times into the offset-written segment file', () => {
+    // Segment 3 starts at 10 s on the capture clock; its FILE starts at 0.
+    expect(segmentLocalTimeUs(10_500_000, 10_000_000)).toBe(500_000);
+  });
+
+  it('clamps pre-roll requests to 0 (never seeks before a segment)', () => {
+    expect(segmentLocalTimeUs(9_000_000, 10_000_000)).toBe(0);
+    expect(segmentLocalTimeUs(0, 0)).toBe(0);
+  });
+});

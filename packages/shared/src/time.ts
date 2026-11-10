@@ -114,6 +114,21 @@ export function rippleDeleteRange(clips: Clip[], tIn: number, tOut: number): Cli
   return out;
 }
 
+/**
+ * Capture-clock time → per-segment FILE time.
+ *
+ * Segment MP4s are written with `firstTimestampBehavior: 'offset'`, so every
+ * file's internal timeline starts at 0 even though `seg.startUs` is a
+ * monotonic capture-clock value. Seeking a segment `<video>` with the raw
+ * capture-clock time therefore lands PAST the end of every segment after the
+ * first (~2 s each) — the "intermittent black preview / frozen export"
+ * reports. Every consumer that drives a segment video element (FrameSync
+ * preview, exporter seeks) MUST pass through this mapping.
+ */
+export function segmentLocalTimeUs(sourceUs: number, segStartUs: number): number {
+  return Math.max(0, sourceUs - segStartUs);
+}
+
 export function clamp(v: number, lo: number, hi: number): number {
   return Math.min(hi, Math.max(lo, v));
 }

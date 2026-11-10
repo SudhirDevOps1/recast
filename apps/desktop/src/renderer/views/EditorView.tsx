@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useApp, useEditor } from '../state/stores';
 import { bridge } from '../lib/bridge';
-import { Button, IconButton, Field, Select, Badge, IconPlay, IconPause, IconScissors, IconTrash, IconDownload, IconUndo, IconRedo } from '@recast/ui';
+import { Button, IconButton, Field, Select, Badge, Switch, ColorPicker, Slider, IconPlay, IconPause, IconScissors, IconTrash, IconDownload, IconUndo, IconRedo } from '@recast/ui';
 import {
   buildTimeMap,
   timelineToSource,
@@ -14,11 +14,12 @@ import {
   buildProjectZoomTrack,
   cuesAt,
   parseSrt,
+  FrameSync,
   type CursorSample,
   type CaptionLine,
   type FollowStep,
 } from '@recast/editor';
-import type { RecastProject } from '@recast/shared';
+import { segmentLocalTimeUs, type RecastProject } from '@recast/shared';
 import { TimelineStrip, relayoutProject } from './TimelineStrip';
 import { MotionPanel } from './MotionPanel';
 import { AudioPanel } from './AudioPanel';
@@ -44,7 +45,7 @@ export function EditorView() {
   const [cursorSamples, setCursorSamples] = useState<CursorSample[]>([]);
   const [cursorClicks, setCursorClicks] = useState<Array<{ tUs: number; x: number; y: number }>>([]);
   const [captions, setCaptions] = useState<CaptionLine[]>([]);
-  const [panel, setPanel] = useState<'motion' | 'style' | 'audio' | 'captions'>('motion');
+  const [panel, setPanel] = useState<'motion' | 'style' | 'facecam' | 'audio' | 'captions'>('motion');
 
   const timeMap = useMemo(() => (project ? buildTimeMap(project.timeline.clips) : { clips: [], durationUs: 0 }), [project]);
 
@@ -95,13 +96,18 @@ export function EditorView() {
     };
   }, [project?.id, project?.captions?.file]);
 
-  // Media element URLs via the recast-media protocol.
+  // Media element URLs via the recast-media protocol. The face-cam segment
+  // (when the take recorded one) joins the map under a reserved id.
   const mediaUrls = useMemo(() => {
     if (!project) return new Map<string, string>();
     const m = new Map<string, string>();
     for (const seg of project.media.segments) {
       const p = `${project.media.dir}/${seg.file}`;
       m.set(seg.id, `recast-media://local/${encodePath(p)}`);
+    }
+    if (project.media.camera) {
+      const camPath = `${project.media.dir}/${project.media.camera.file}`;
+      m.set(CAMERA_ELEMENT_ID, `recast-media://local/${encodePath(camPath)}`);
     }
     return m;
   }, [project?.media]);
@@ -156,6 +162,7 @@ export function EditorView() {
         <PreviewCanvas
           project={project}
           currentTimeUs={currentTimeUs}
+          playing={playing}
           zoomTrack={zoomTrack}
           captions={captions}
           cursorSamples={cursorSamples}
@@ -199,6 +206,7 @@ export function EditorView() {
         <div className="mb-3 flex gap-1">
           <PanelTab label="Motion" active={panel === 'motion'} onClick={() => setPanel('motion')} />
           <PanelTab label="Style" active={panel === 'style'} onClick={() => setPanel('style')} />
+          <PanelTab label="Cam" active={panel === 'facecam'} onClick={() => setPanel('facecam')} />
           <PanelTab label="Audio" active={panel === 'audio'} onClick={() => setPanel('audio')} />
           <PanelTab label="CC" active={panel === 'captions'} onClick={() => setPanel('captions')} />
         </div>
@@ -215,6 +223,7 @@ export function EditorView() {
             />
           )}
           {panel === 'style' && <StylePanel project={project} commit={commit} />}
+          {panel === 'facecam' && <FacecamPanel project={project} commit={commit} />}
           {panel === 'audio' && <AudioPanel project={project} commit={commit} />}
           {panel === 'captions' && <CaptionsPanel project={project} captions={captions} commit={commit} onLoaded={setCaptions} />}
         </div>
@@ -234,6 +243,9 @@ export function EditorView() {
 function encodePath(p: string): string {
   return p.split(/[\\/]/).map(encodeURIComponent).join('/');
 }
+
+/** Reserved element id for the face-cam decode video. */
+export const CAMERA_ELEMENT_ID = '__camera__';
 
 // ---------------------------------------------------------------------------
 
@@ -255,6 +267,7 @@ function PanelTab({ label, active, onClick }: { label: string; active: boolean; 
 function PreviewCanvas({
   project,
   currentTimeUs,
+  playing,
   zoomTrack,
   captions,
   cursorSamples,
@@ -264,6 +277,7 @@ function PreviewCanvas({
 }: {
   project: RecastProject;
   currentTimeUs: number;
+  playing: boolean;
   zoomTrack: FollowStep[];
   captions: CaptionLine[];
   cursorSamples: Array<{ tUs: number; x: number; y: number; type?: string }>;
@@ -273,6 +287,19 @@ function PreviewCanvas({
 }): React.ReactElement {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const [, setFrameTick] = useState(0);
+  const [bgImage, setBgImage] = useState<HTMLImageElement | null>(null);
+  // FrameSync owns the hidden videos: it seeks them when scrubbing, plays
+  // them at clip speed when playing, and serves a last-good-frame snapshot
+  // while a seek/decode is in flight — the fix for the intermittent black
+  // preview (compositor used to black-fill whenever no frame was paintable).
+  const frameSyncRef = useRef<FrameSync | null>(null);
+  if (!frameSyncRef.current) {
+    frameSyncRef.current = new FrameSync({
+      onFrame: () => setFrameTick((v) => v + 1),
+    });
+  }
+  useEffect(() => () => frameSyncRef.current?.destroy(), []);
 
   // Create hidden video elements once per segment set.
   useEffect(() => {
@@ -283,15 +310,43 @@ function PreviewCanvas({
       v.src = url;
       v.muted = true;
       v.preload = 'auto';
+      v.playbackRate = 1;
       videoRefs.current.set(segId, v);
     }
+    frameSyncRef.current?.setVideos(videoRefs.current);
+    setFrameTick((v) => v + 1); // videos may already be buffered — redraw once bound
   }, [mediaUrls, videoRefs, mediaVersion]);
+
+  // Background image (style.frame.background.type === 'image') — loaded once
+  // through recast-media and served to the compositor on every draw pass.
+  const bg = project.style.frame.background;
+  useEffect(() => {
+    if (bg.type !== 'image' || !bg.imageFile) {
+      setBgImage(null);
+      return;
+    }
+    let cancelled = false;
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      if (!cancelled) setBgImage(img);
+    };
+    img.onerror = () => {
+      if (!cancelled) setBgImage(null);
+    };
+    img.src = `recast-media://local/${encodePath(bg.imageFile)}`;
+    return () => {
+      cancelled = true;
+    };
+  }, [bg.type, bg.imageFile]);
 
   // Render on every time/style change through the shared compositor.
   useEffect(() => {
     const canvas = canvasRef.current;
     const ctx = canvas?.getContext('2d');
     if (!canvas || !ctx) return;
+    const frameSync = frameSyncRef.current;
+    if (!frameSync) return;
     const map = buildTimeMap(project.timeline.clips);
     const hit = timelineToSource(map, currentTimeUs);
     const pose =
@@ -311,12 +366,58 @@ function PreviewCanvas({
       clipIn,
       totalDurationUs: map.durationUs,
     });
-    const activeVideo = hit ? videoRefs.current.get(hit.clip.segmentId) ?? null : null;
+
+    // Drive the decode videos to the exact frame the playhead wants. Screen
+    // segment files are written with `firstTimestampBehavior: 'offset'`, so
+    // element time is SEGMENT-LOCAL — capture-clock times must map through
+    // segmentLocalTimeUs() or every segment after the first seeks past its
+    // end (the "black every ~2 s" report).
+    let screenLocalUs = 0;
+    if (hit) {
+      const seg = project.media.segments.find((s) => s.id === hit.clip.segmentId);
+      screenLocalUs = segmentLocalTimeUs(hit.sourceUs, seg?.startUs ?? 0);
+      if (playing) {
+        frameSync.play(hit.clip.segmentId, screenLocalUs, hit.clip.speed);
+      } else {
+        frameSync.pauseAll();
+        frameSync.seekTo(hit.clip.segmentId, screenLocalUs);
+      }
+    } else {
+      frameSync.pauseAll();
+    }
+
+    // Face-cam decode runs alongside the screen video (same capture clock;
+    // the single cam file starts at 0, so this mapping is identity-safe).
+    const camSeg = project.media.camera;
+    if (hit && camSeg) {
+      const camDur = Math.max(0, camSeg.endUs - camSeg.startUs);
+      const camUs = Math.min(segmentLocalTimeUs(hit.sourceUs, camSeg.startUs), camDur);
+      if (playing) {
+        frameSync.play(CAMERA_ELEMENT_ID, camUs, 1, 'keep');
+      } else {
+        frameSync.seekTo(CAMERA_ELEMENT_ID, camUs);
+      }
+    }
+
     drawComposition(ctx, comp, project, {
-      getFrame: () => activeVideo,
+      // The compositor passes ('__active__' | '__echo__', 0) — resolve both
+      // to the active clip's segment at its real (segment-local) time.
+      getFrame: (segmentId) => {
+        if (!hit) return null;
+        const segId = segmentId === '__echo__' || segmentId === '__active__' ? hit.clip.segmentId : segmentId;
+        return frameSync.getFrame(segId, screenLocalUs);
+      },
       scratch: document.createElement('canvas'),
+      getBackgroundImage: () => bgImage,
+      getCameraFrame: () => {
+        if (!hit || !project.media.camera) return null;
+        const camSeg = project.media.camera;
+        const camDur = Math.max(0, camSeg.endUs - camSeg.startUs);
+        const camUs = Math.min(segmentLocalTimeUs(hit.sourceUs, camSeg.startUs), camDur);
+        return frameSync.getFrame(CAMERA_ELEMENT_ID, camUs);
+      },
     });
-  }, [project, currentTimeUs, zoomTrack, captions, cursorSamples, videoRefs, mediaVersion]);
+  }, [project, currentTimeUs, playing, zoomTrack, captions, cursorSamples, videoRefs, mediaVersion, bgImage]);
 
   // Keep the canvas sized to its container (device pixel ratio aware).
   useEffect(() => {
@@ -335,6 +436,14 @@ function PreviewCanvas({
   return (
     <div ref={containerRef} className="relative min-h-0 flex-1" style={{ background: 'var(--bg-sunken)' }}>
       <canvas ref={canvasRef} className="absolute inset-0 h-full w-full" aria-label="Preview" />
+      {/* Loading shimmer: only while no frame has ever decoded — real content
+          replaces it the moment the first frame presents. */}
+      {!frameSyncRef.current?.hasAnyFrame ? (
+        <div className="preview-loading" aria-hidden="true">
+          <div className="preview-loading-dot" />
+          <span>Rendering preview…</span>
+        </div>
+      ) : null}
       {project.zoom.enabled && zoomTrack.length > 0 ? (
         <div className="absolute right-3 top-3">
           <Badge tone="accent">zoom {interpZoom(zoomTrack, currentTimeUs).scale.toFixed(2)}×</Badge>
@@ -478,6 +587,138 @@ function ShortcutBar({ onUndo, onRedo }: { onUndo: () => void; onRedo: () => voi
       <IconButton label="Redo (⇧⌘Z)" onClick={onRedo}>
         <IconRedo />
       </IconButton>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+
+function FacecamPanel({
+  project,
+  commit,
+}: {
+  project: RecastProject;
+  commit: (p: RecastProject) => void;
+}): React.ReactElement {
+  const cam = project.media.camera;
+  const fc = project.style.facecam;
+  const setFacecam = (patch: Partial<RecastProject['style']['facecam']>): void =>
+    commit({ ...project, style: { ...project.style, facecam: { ...fc, ...patch } } });
+
+  if (!cam) {
+    return (
+      <div className="space-y-3">
+        <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+          Picture-in-picture face cam.
+        </p>
+        <div className="rounded-lg border border-hairline p-3 text-xs" style={{ color: 'var(--text-muted)' }}>
+          This recording was captured without a camera. Enable <strong>Face camera</strong> in the recorder and the
+          take will include a camera track you can place and style here — the screen recording itself is never blocked
+          by a camera problem.
+        </div>
+      </div>
+    );
+  }
+
+  const positions: Array<{ id: 'tl' | 'tr' | 'bl' | 'br'; label: string }> = [
+    { id: 'tl', label: 'Top left' },
+    { id: 'tr', label: 'Top right' },
+    { id: 'bl', label: 'Bottom left' },
+    { id: 'br', label: 'Bottom right' },
+  ];
+
+  return (
+    <div className="space-y-4">
+      <Field label="Face cam">
+        <Switch checked={fc.enabled} onCheckedChange={(v) => setFacecam({ enabled: v })} ariaLabel="Enable face cam" />
+      </Field>
+      {!fc.enabled ? (
+        <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+          Camera track available ({cam.width}×{cam.height}). Turn it on to place it on the canvas.
+        </p>
+      ) : null}
+      {fc.enabled ? (
+        <>
+          <Field label="Position">
+            <div className="grid grid-cols-2 gap-2">
+              {positions.map((p) => (
+                <button
+                  key={p.id}
+                  type="button"
+                  aria-label={p.label}
+                  aria-pressed={fc.position === p.id}
+                  onClick={() => setFacecam({ position: p.id })}
+                  className="rounded-lg border px-3 py-2 text-xs font-semibold transition-colors"
+                  style={{
+                    borderColor: fc.position === p.id ? 'var(--accent)' : 'var(--hairline-strong)',
+                    background: fc.position === p.id ? 'var(--accent-subtle)' : 'transparent',
+                    color: fc.position === p.id ? 'var(--accent)' : 'var(--text-secondary)',
+                  }}
+                >
+                  {p.label}
+                </button>
+              ))}
+            </div>
+          </Field>
+          <Field label={`Size — ${Math.round(fc.widthFraction * 100)}%`}>
+            <Slider
+              value={fc.widthFraction}
+              min={0.08}
+              max={0.45}
+              step={0.01}
+              ariaLabel="Face cam width"
+              onValueChange={(v) => setFacecam({ widthFraction: v })}
+            />
+          </Field>
+          <Field label="Round face cam">
+            <Switch checked={fc.round} onCheckedChange={(v) => setFacecam({ round: v })} ariaLabel="Round face cam" />
+          </Field>
+          <Field label="Mirror">
+            <Switch checked={fc.mirror} onCheckedChange={(v) => setFacecam({ mirror: v })} ariaLabel="Mirror webcam" />
+          </Field>
+          <Field label="Drop shadow">
+            <Switch checked={fc.shadow} onCheckedChange={(v) => setFacecam({ shadow: v })} ariaLabel="Face cam shadow" />
+          </Field>
+          <Field label={`Margin — ${Math.round(fc.marginFraction * 100)}%`}>
+            <Slider
+              value={fc.marginFraction}
+              min={0.01}
+              max={0.2}
+              step={0.01}
+              ariaLabel="Face cam margin"
+              onValueChange={(v) => setFacecam({ marginFraction: v })}
+            />
+          </Field>
+          <Field label={`Border — ${fc.borderWidthPx} px`}>
+            <div className="flex items-center gap-3">
+              <div className="flex-1">
+                <Slider
+                  value={fc.borderWidthPx}
+                  min={0}
+                  max={12}
+                  step={1}
+                  ariaLabel="Face cam border width"
+                  onValueChange={(v) => setFacecam({ borderWidthPx: v })}
+                />
+              </div>
+              <ColorPicker value={fc.borderColor} onChange={(borderColor) => setFacecam({ borderColor })} ariaLabel="Face cam border color" />
+            </div>
+          </Field>
+          <Field label={`Opacity — ${Math.round(fc.opacity * 100)}%`}>
+            <Slider
+              value={fc.opacity}
+              min={0.3}
+              max={1}
+              step={0.05}
+              ariaLabel="Face cam opacity"
+              onValueChange={(v) => setFacecam({ opacity: v })}
+            />
+          </Field>
+          <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
+            Cam timing follows the capture clock. Takes that use pause may drift slightly in the cam overlay.
+          </p>
+        </>
+      ) : null}
     </div>
   );
 }

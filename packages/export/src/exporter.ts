@@ -1,6 +1,6 @@
 import { ArrayBufferTarget as WebMTarget, Muxer as WebMMuxer } from 'webm-muxer';
 import { Muxer as Mp4Muxer, StreamTarget } from 'mp4-muxer';
-import { buildTimeMap, timelineToSource, US_PER_S } from '@recast/shared';
+import { buildTimeMap, timelineToSource, segmentLocalTimeUs, US_PER_S } from '@recast/shared';
 import type { RecastProject } from '@recast/shared';
 import {
   computeComposition,
@@ -53,6 +53,8 @@ export interface ExportDeps {
   /** Hidden, muted video element per segment, ready for seeks. */
   getVideoElement: (segmentId: string) => HTMLVideoElement | null;
   getBackgroundImage: (() => CanvasImageSourceLike | null) | null;
+  /** Face-cam decode element (null when the take has no camera track). */
+  getCameraElement?: (() => HTMLVideoElement | null) | null;
   preferHardware: boolean;
   /** ffmpeg-backed features; when false the exporter degrades to core formats. */
   hasFfmpeg: boolean;
@@ -284,6 +286,7 @@ export async function runExport(
   }
 
   const scratch = document.createElement('canvas');
+  const cameraSeg = project.media.camera;
   const drawDeps = {
     getFrame: (): CanvasImageSourceLike | null => {
       const hit = timelineToSource(map, currentTUs);
@@ -292,6 +295,7 @@ export async function runExport(
     },
     scratch,
     getBackgroundImage: deps.getBackgroundImage ?? undefined,
+    getCameraFrame: deps.getCameraElement ?? undefined,
   };
 
   let currentTUs = 0;
@@ -313,7 +317,22 @@ export async function runExport(
       if (hit) {
         const video = deps.getVideoElement(hit.clip.segmentId);
         if (video) {
-          await seekTo(video, hit.sourceUs / US_PER_S);
+          // Segment files carry a segment-local timeline (mp4-muxer writes
+          // `firstTimestampBehavior: 'offset'`) — capture-clock times must
+          // map through segmentLocalTimeUs() or every segment after the
+          // first seeks past its end (black export after ~2 s clips).
+          const seg = project.media.segments.find((s) => s.id === hit.clip.segmentId);
+          await seekTo(video, segmentLocalTimeUs(hit.sourceUs, seg?.startUs ?? 0) / US_PER_S);
+        }
+        // Face-cam element rides the same capture clock (single cam file
+        // starting at 0, so its mapping is identity-safe).
+        if (cameraSeg && deps.getCameraElement) {
+          const camVideo = deps.getCameraElement();
+          if (camVideo) {
+            const camDur = Math.max(0, cameraSeg.endUs - cameraSeg.startUs);
+            const camUs = Math.min(segmentLocalTimeUs(hit.sourceUs, cameraSeg.startUs), camDur);
+            await seekTo(camVideo, camUs / US_PER_S).catch(() => undefined);
+          }
         }
       }
       const pose = deps.zoomTrack.length > 0 ? interpPose(deps.zoomTrack, currentTUs) : { scale: 1, cx: project.media.width / 2, cy: project.media.height / 2 };

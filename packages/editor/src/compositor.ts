@@ -64,6 +64,20 @@ export interface ClipIntro {
   alpha: number;
 }
 
+/** Face-cam picture-in-picture placement, resolved in output coords. */
+export interface FacecamRect {
+  rect: Rect;
+  /** w/2 for circular cams; radiusPx otherwise. */
+  radiusPx: number;
+  /** Circular mode crops the source to a centered square. */
+  round: boolean;
+  mirror: boolean;
+  shadow: boolean;
+  borderWidthPx: number;
+  borderColor: string;
+  opacity: number;
+}
+
 export interface Composition {
   outW: number;
   outH: number;
@@ -88,6 +102,8 @@ export interface Composition {
   fadeOverlay: { alpha: number } | null;
   /** 0..1 progress of the active clip for speed effects (unused visually). */
   showSafeGuides: boolean;
+  /** Face-cam PiP — null unless style.facecam.enabled and a camera segment exists. */
+  facecam: FacecamRect | null;
 }
 
 export interface CursorSampleLike {
@@ -218,6 +234,31 @@ export function computeComposition(project: RecastProject, tUs: number, outW: nu
   const annotations = mapAnnotations(project, tUs, screenRect, visibleSrc, outH);
   const redactions = mapRedactions(project, tUs, screenRect, visibleSrc);
 
+  // Face-cam PiP: only when enabled AND the session actually has a camera
+  // segment (the schema toggle is honest about availability).
+  const fcStyle = style.facecam;
+  const cam = project.media.camera;
+  let facecam: FacecamRect | null = null;
+  if (fcStyle.enabled && cam && cam.width > 0 && cam.height > 0) {
+    const w = clamp(fcStyle.widthFraction * outW, 16, outW);
+    const camAspect = cam.width / cam.height;
+    // Round cams crop the source to a centered square first.
+    const h = fcStyle.round ? w : w / camAspect;
+    const margin = fcStyle.marginFraction * outH;
+    const x = fcStyle.position === 'tl' || fcStyle.position === 'bl' ? margin : outW - w - margin;
+    const y = fcStyle.position === 'tl' || fcStyle.position === 'tr' ? margin : outH - h - margin;
+    facecam = {
+      rect: { x, y, w, h },
+      radiusPx: fcStyle.round ? w / 2 : Math.min(14, w / 8),
+      round: fcStyle.round,
+      mirror: fcStyle.mirror,
+      shadow: fcStyle.shadow,
+      borderWidthPx: (fcStyle.borderWidthPx / 1000) * outH,
+      borderColor: fcStyle.borderColor,
+      opacity: fcStyle.opacity,
+    };
+  }
+
   // Whole-video fade in/out over black.
   let fadeOverlay: { alpha: number } | null = null;
   const fadeInUs = (project.animation?.fadeInMs ?? 0) * 1_000;
@@ -250,6 +291,7 @@ export function computeComposition(project: RecastProject, tUs: number, outW: nu
     intro,
     fadeOverlay,
     showSafeGuides: deps.showSafeGuides ?? false,
+    facecam,
   };
 }
 
@@ -424,6 +466,8 @@ export interface DrawDeps {
   /** Scratch canvas reused across frames for pixelate (avoids per-frame allocs). */
   scratch?: HTMLCanvasElement | OffscreenCanvas | null;
   getBackgroundImage?: () => CanvasImageSourceLike | null;
+  /** Camera frame for the face-cam PiP (video element already seeked by the caller). */
+  getCameraFrame?: () => CanvasImageSourceLike | null;
 }
 
 const SHADOWS: Record<Composition['shadow'], { blur: number; y: number; alpha: number }> = {
@@ -522,6 +566,70 @@ function drawBackground(ctx: CanvasRenderingContext2D, comp: Composition, deps: 
       return;
     }
   }
+}
+
+/** Face-cam PiP: rounded/circular clip, optional mirror, border, shadow.
+ *  Drawn over the background + screen card, under annotations and cursor. */
+function drawFacecam(ctx: CanvasRenderingContext2D, comp: Composition, deps: DrawDeps): void {
+  const fc = comp.facecam;
+  if (!fc) return;
+  const frame = deps.getCameraFrame?.();
+  if (!frame) return;
+  const { rect } = fc;
+  ctx.save();
+  ctx.globalAlpha = fc.opacity * (comp.intro ? comp.intro.alpha : 1);
+
+  if (fc.shadow) {
+    ctx.save();
+    ctx.shadowColor = 'rgba(0,0,0,0.45)';
+    ctx.shadowBlur = rect.h * 0.12;
+    ctx.shadowOffsetY = rect.h * 0.04;
+    ctx.fillStyle = '#000000';
+    roundRectPath(ctx, rect, fc.radiusPx);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  ctx.save();
+  roundRectPath(ctx, rect, fc.radiusPx);
+  ctx.clip();
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+  if (fc.round) {
+    // Centered square crop of the camera source, drawn into the square rect.
+    const vw = (frame as { videoWidth?: number; width?: number }).videoWidth ?? (frame as { width?: number }).width ?? rect.w;
+    const vh = (frame as { videoHeight?: number; height?: number }).videoHeight ?? (frame as { height?: number }).height ?? rect.w;
+    const side = Math.min(vw, vh);
+    const sx = (vw - side) / 2;
+    const sy = (vh - side) / 2;
+    if (fc.mirror) {
+      ctx.translate(rect.x + rect.w, rect.y);
+      ctx.scale(-1, 1);
+      ctx.drawImage(frame as CanvasImageSource, sx, sy, side, side, 0, 0, rect.w, rect.w);
+    } else {
+      ctx.drawImage(frame as CanvasImageSource, sx, sy, side, side, rect.x, rect.y, rect.w, rect.w);
+    }
+  } else {
+    // Full frame fit (aspect handled by the caller's rect sizing).
+    if (fc.mirror) {
+      ctx.translate(rect.x + rect.w, rect.y);
+      ctx.scale(-1, 1);
+      ctx.drawImage(frame as CanvasImageSource, 0, 0, rect.w, rect.h);
+    } else {
+      ctx.drawImage(frame as CanvasImageSource, rect.x, rect.y, rect.w, rect.h);
+    }
+  }
+  ctx.restore();
+
+  if (fc.borderWidthPx > 0) {
+    ctx.save();
+    ctx.lineWidth = fc.borderWidthPx;
+    ctx.strokeStyle = fc.borderColor;
+    roundRectPath(ctx, rect, fc.radiusPx);
+    ctx.stroke();
+    ctx.restore();
+  }
+  ctx.restore();
 }
 
 function drawRedactions(ctx: CanvasRenderingContext2D, comp: Composition, deps: DrawDeps): void {
@@ -792,6 +900,8 @@ export function drawComposition(ctx: CanvasRenderingContext2D, comp: Composition
     ctx.stroke();
     ctx.restore();
   }
+
+  drawFacecam(ctx, comp, deps);
 
   drawAnnotations(ctx, comp);
   drawCursor(ctx, comp);
