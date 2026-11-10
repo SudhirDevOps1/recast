@@ -167,15 +167,50 @@
 
   var triggers = $$('.acc-trigger');
 
+  function panelOf(btn) {
+    return document.getElementById(btn.getAttribute('aria-controls'));
+  }
+
+  /* The panel animates on max-height, so it needs an exact pixel target —
+     measured from the content itself, with a generous fallback in CSS. */
+  function openPanel(btn) {
+    var panel = panelOf(btn);
+    if (!panel) return;
+
+    panel.style.removeProperty('max-height');
+    panel.style.setProperty('--acc-max', panel.scrollHeight + 'px');
+    panel.classList.add('is-open');
+
+    /* Safety net: a height transition that never runs (background tab,
+       throttled compositor, reduced-motion engine) must not be able to hide
+       the answer. If the panel is still collapsed after the transition
+       window, drop the cap and let it take its natural height. */
+    window.setTimeout(function () {
+      if (!panel.classList.contains('is-open')) return;
+      if (panel.getBoundingClientRect().height < 4) panel.style.maxHeight = 'none';
+    }, 700);
+  }
+
+  function closePanel(btn) {
+    var panel = panelOf(btn);
+    if (!panel) return;
+    panel.classList.remove('is-open');
+    panel.style.removeProperty('max-height');
+  }
+
   triggers.forEach(function (btn) {
     btn.addEventListener('click', function () {
       var isOpen = btn.getAttribute('aria-expanded') === 'true';
 
       triggers.forEach(function (other) {
-        if (other !== btn) other.setAttribute('aria-expanded', 'false');
+        if (other === btn) return;
+        other.setAttribute('aria-expanded', 'false');
+        closePanel(other);
       });
 
       btn.setAttribute('aria-expanded', isOpen ? 'false' : 'true');
+      if (isOpen) closePanel(btn);
+      else openPanel(btn);
     });
   });
 

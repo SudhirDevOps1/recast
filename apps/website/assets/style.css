@@ -1917,9 +1917,10 @@ kbd {
 .acc-trigger[aria-expanded='true'] i::after { opacity: 0; }
 
 .acc-panel {
-  display: grid;
-  grid-template-rows: 0fr;
-  transition: grid-template-rows 460ms var(--ease);
+  display: block;
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 420ms var(--ease);
 }
 .acc-panel > div { overflow: hidden; }
 .acc-panel p {
@@ -1929,7 +1930,23 @@ kbd {
   line-height: 1.7;
   color: var(--muted);
 }
-.acc-trigger[aria-expanded='true'] + .acc-panel { grid-template-rows: 1fr; }
+/* The panel is a sibling of the <h3>, not of the button inside it, so the
+   adjacent-sibling selector alone never matched and the answer stayed at
+   height 0. JS marks the open panel with .is-open; the :has() rule is a
+   no-JS-friendly fallback for browsers that support it. */
+.acc-panel.is-open { max-height: var(--acc-max, 600px); }
+h3:has(.acc-trigger[aria-expanded='true']) + .acc-panel { max-height: var(--acc-max, 600px); }
+
+/* The reveal animates the CONTENT, not the panel's height: a height
+   transition that never runs (background tab, throttled compositor) must
+   never be able to hide the answer. No fill-mode, so if the animation does
+   not start the text simply sits in its normal state - visible. */
+.acc-panel.is-open > div { animation: acc-reveal 300ms var(--ease); }
+h3:has(.acc-trigger[aria-expanded='true']) + .acc-panel > div { animation: acc-reveal 300ms var(--ease); }
+@keyframes acc-reveal {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: none; }
+}
 
 /* ----------------------------------------------------------------- cta */
 
