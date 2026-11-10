@@ -54,6 +54,40 @@ flowchart TB
 - A malformed payload fails loudly with the channel name - no silent `undefined` propagation.
 - Errors cross as `{ __error: string }` and throw on the caller side.
 
+## Preview frame lifecycle
+
+The canvas preview draws frames, but the pixels come from a hidden `<video>` element **per segment**.
+Before v0.1.3 those elements were never seeked or played: the preview sat frozen on frame 0 and the
+compositor filled the screen rect solid black whenever no frame was paintable - the "random black screen"
+reports.
+
+`packages/editor/src/frame-sync.ts` (FrameSync) now owns them:
+
+| State | Behaviour |
+|---|---|
+| Paused / scrubbing | Issue a precise seek when drift exceeds the **40 ms** tolerance; redraw on `seeked` or on the next presented frame |
+| Playing | `play()` the active segment at the clip's speed, pause the others, hard-resync when drift exceeds **120 ms** |
+| Frame not paintable yet | `getFrame()` serves the **last successfully presented frame** from an offscreen snapshot (max height 540 px - snapshots back the UI only, never exports) |
+
+`requestVideoFrameCallback` is used when available, so "a frame is presented" is a real decode signal
+rather than a timer.
+
+### Segment-local seek mapping
+
+Segment MP4s are written with `firstTimestampBehavior: 'offset'` - each file's internal timeline starts at
+0, while `seg.startUs` is a monotonic capture-clock value. Seeking a segment element with the raw
+capture-clock time therefore lands **past the end of every segment after the first** (~2 s each) - the
+"black every few seconds" symptom.
+
+Every consumer that drives a segment video element (FrameSync preview, exporter seeks) must map the time
+first:
+
+```ts
+segmentLocalTimeUs(sourceUs, segStartUs) => max(0, sourceUs - segStartUs)
+```
+
+It is the identity for compatibility-mode sessions (a single WebM covering the whole capture).
+
 ## Storage
 
 | Data | Location | Format |
@@ -61,7 +95,10 @@ flowchart TB
 | Settings | `<data>/settings.json` | JSON, atomic writes |
 | Library index | `<data>/library.db` | better-sqlite3, WAL |
 | Projects | `<data>/projects/<id>.recast` | JSON (schemaVersion 1), atomic, autosaved every 5 s |
+| Face-cam placement | inside the project style (`style.facecam`) | optional with defaults - older `.recast` files and `.recaststyle` presets still parse |
 | Recording sessions | `<data>/recordings/<sessionId>/` | `session.json` manifest + `seg-NNNN.mp4` fragments + `cursor.jsonl` |
+| Face-cam take (optional) | `<data>/recordings/<sessionId>/cam-0.webm` | one WebM over the capture clock (VP8/VP9, MediaRecorder timeslice) |
+| Poster thumbnail | `<data>/recordings/<sessionId>/thumbnail.png` | ffmpeg poster frame, generated once and reused by the Library |
 | FFmpeg (in-app install) | `<data>/bin/ffmpeg/` | binaries + manifest.json |
 | Whisper models | `<data>/models/` | ggml files |
 | Capture diagnostics | `<data>/logs/capture.log` | NDJSON, 512 KB, one rotation slot |

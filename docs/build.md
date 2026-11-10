@@ -29,6 +29,10 @@ pnpm dev                     # electron-vite dev (hot reload main/preload/render
 | `pnpm fetch:ffmpeg` | stage FFmpeg per `ffmpeg.lock.json` (`--pin`, `--force`, `--skip`, target names) |
 | `pnpm icons` | regenerate app icons (Python + Pillow) |
 | `pnpm dist:win` / `dist:mac` / `dist:linux` | electron-builder for the current platform |
+| `pnpm dist:win:arm64` | NSIS + portable for Windows ARM64 (MSI stays x64-only) |
+| `pnpm dist:mac:arm64` / `dist:mac:x64` | DMG + zip for Apple Silicon / Intel |
+| `pnpm check:website` | website audit: ids, anchors, local assets, third-party scripts, asset-version drift |
+| `pnpm check:docs` | documentation audit: relative links, in-page anchors, code fences |
 
 ## Native modules
 

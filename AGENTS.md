@@ -29,6 +29,8 @@ pnpm dev               # dev run
 pnpm fetch:ffmpeg      # stage FFmpeg binaries per ffmpeg.lock.json (--pin to record hashes)
 pnpm smoke             # Playwright Electron smoke (RECAST_SMOKE=1, built app)
 pnpm dist:linux|mac|win
+pnpm check:website    # website markup + asset audit (runs in website.yml before every deploy)
+pnpm check:docs       # docs links, anchors and code fences (runs in the CI docs job)
 ```
 
 ## Code conventions

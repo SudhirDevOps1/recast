@@ -45,9 +45,9 @@ Configs live in `apps/desktop/electron-builder.yml` (artifacts land in the repo-
 ```bash
 pnpm dist:win        # NSIS + MSI + portable (x64)
 pnpm dist:win:arm64  # arm64 NSIS + portable (MSI is x64-only)
-pnpm dist:mac:arm64  # macos-14 runner
-pnpm dist:mac:x64    # macos-13 runner
-pnpm dist:mac        # universal build
+pnpm dist:mac:arm64  # macos-15 runner (Apple Silicon)
+pnpm dist:mac:x64    # macos-15 runner, cross-compiled for Intel
+pnpm dist:mac        # current host - use the two scripts above for a matrix
 pnpm dist:linux      # AppImage + deb + rpm + tar.gz
 pnpm dist:linux:extras # Flatpak + Snap (best-effort; also on nightly manual dispatch)
 ```

@@ -62,6 +62,48 @@ Unit tests: `tests/easing.test.ts`, `tests/compositor.test.ts` (intro alpha/offs
 - `.recaststyle` files are JSON with `format: "recaststyle"` and `version: 1`; import parses + validates and applies as **one undo step**.
 - Style covers: aspect ratio (incl. custom width/height), padding, radius, border width + color, shadow level, background (solid / gradient with color pickers, angle and presets / mesh / blurred echo with blur-dim-scale sliders / transparent), cursor style (look, size, colors, outline, ripple color, press scale, idle fade), caption style.
 
+## Face cam panel (v0.1.3)
+
+The Cam panel writes `style.facecam`; it only renders when the take actually has a camera track, so the
+toggle never promises footage that does not exist.
+
+| Control | Range / values | Notes |
+|---|---|---|
+| Enable | on / off | Defaults to off |
+| Position | top-left, top-right, bottom-left, bottom-right | Corner placement in the final composition |
+| Size | 8 % - 45 % of output width | Default 22 % |
+| Round crop | on / off | Circular cams crop the source to a centred square first |
+| Mirror | on / off | Self-view convention, default on |
+| Margin | 1 % - 20 % of output height | Distance from the composition edge |
+| Shadow | on / off | Default on |
+| Border | 0 - 12 px + colour | Default 2 px, translucent white |
+| Opacity | 30 % - 100 % | Default 100 % |
+
+The overlay is drawn over the background and the screen card, under annotations and the cursor.
+
+## Background image (v0.1.3)
+
+The style system accepts an **image** background next to solid / gradient / mesh / blurred echo / transparent.
+The picked file is copied into the session directory (so the project stays self-contained) and rendered by
+the preview **and** the export through the same compositor path.
+
+## Cursor FX controls (v0.1.3)
+
+Smoothing, motion trail and click bounce already existed in the engine; the Motion panel now exposes them:
+exponential smoothing (0-1, tau = 20 ms + 180 ms x strength), a fading trail over the last 180 ms, and a
+release overshoot through the `pop` curve over 260 ms.
+
+## Library poster thumbnails (v0.1.3)
+
+The Library persists one ffmpeg poster frame per session as `thumbnail.png` instead of re-spawning ffmpeg
+on every visit. Without FFmpeg it falls back to streaming the first segment through `recast-media://`.
+Cards show the duration chip and a hover play affordance.
+
+## Export presets (v0.1.3)
+
+The export view ships presets for format, resolution and frame rate, so the common cases (1080p30 MP4,
+1080p60 WebM, 720p GIF) are one click away from the estimate.
+
 ## Captions
 
 Imported/generated captions are stored as `.srt` next to the session media; the compositor renders them through the style (clean/bold/boxed/pill/karaoke) with auto line-breaking at 42 chars, two lines max.

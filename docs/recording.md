@@ -25,6 +25,23 @@
 - Events are batched every 100 ms and appended to `cursor.jsonl` (one JSON object per line, epoch-anchored `tUs`).
 - Global hotkeys: `CmdOrCtrl+Alt+R` (start/stop) and `CmdOrCtrl+Alt+P` (pause/resume) by default; configurable in Settings.
 
+## Face cam (optional, opt-in)
+
+Face cam became a full slice in v0.1.3. It is **off by default** and strictly additive:
+
+1. **Enable + pick a device** in the recorder. The exact device is tried first; if it is unavailable the
+   recorder falls back to the default camera, and if no camera answers at all the take continues **without**
+   a face cam (a toast says so). A camera problem can never block or corrupt the screen recording.
+2. **Capture** runs on a separate renderer-side `MediaRecorder` track (`cam-0.webm`, VP8/VP9 with timeslice),
+   independent of the WebCodecs screen pipeline. Pause and resume are forwarded to it.
+3. **Manifest** - the segment list is stored under `camera.segments` in `session.json`, and the project keeps
+   it as `project.media.camera`. Sessions without a camera keep `null`.
+4. **Draw** - the compositor places it as a picture-in-picture overlay (see [editing.md](editing.md)), and the
+   exporter seeks and draws the same overlay, so preview and export match.
+
+Honest caveat: the camera track follows the capture clock, so a take that uses pause can drift slightly in
+the overlay. Windows camera QA on real hardware is still pending.
+
 ## Crash recovery
 
 1. Every ~2 s a closed segment MP4 is on disk (tmp + rename) and `session.json` (atomic write) lists it.

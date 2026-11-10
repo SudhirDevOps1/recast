@@ -27,19 +27,19 @@ Packaging details per target: [packaging.md](packaging.md).
 MSI (per-machine, GPO-friendly):
 
 ```powershell
-msiexec /i "Recast-0.1.2-enterprise.msi" /qn /norestart
+msiexec /i "Recast-0.1.3-enterprise.msi" /qn /norestart
 ```
 
 Uninstall silently:
 
 ```powershell
-msiexec /x "Recast-0.1.2-enterprise.msi" /qn /norestart
+msiexec /x "Recast-0.1.3-enterprise.msi" /qn /norestart
 ```
 
 NSIS (per-user, no elevation):
 
 ```powershell
-Start-Process "Recast-Setup-0.1.2.exe" -ArgumentList "/S" -Wait
+Start-Process "Recast-Setup-0.1.3.exe" -ArgumentList "/S" -Wait
 ```
 
 Deployment notes:
@@ -65,12 +65,12 @@ are TCC prompts. A managed deployment must therefore also ship a profile or a fi
 
 ```bash
 # Debian / Ubuntu
-sudo dpkg -i Recast-0.1.2-amd64.deb
+sudo dpkg -i Recast-0.1.3-amd64.deb
 # or
-sudo apt install ./Recast-0.1.2-amd64.deb
+sudo apt install ./Recast-0.1.3-amd64.deb
 
 # Fedora / RHEL
-sudo rpm -i Recast-0.1.2-x86_64.rpm
+sudo rpm -i Recast-0.1.3-x86_64.rpm
 ```
 
 AppImage needs `libfuse2` on distros that no longer ship it (Ubuntu 22.04+):
@@ -105,7 +105,7 @@ shasum -a 256 -c SHA256SUMS          # macOS
 
 ```powershell
 # Windows
-Get-FileHash -Algorithm SHA256 .\Recast-Setup-0.1.2.exe
+Get-FileHash -Algorithm SHA256 .\Recast-Setup-0.1.3.exe
 ```
 
 The website shows the first bytes of each file's SHA-256 next to the file name, so a download can be
@@ -115,7 +115,7 @@ matched against the published hash without opening the archive.
 
 | Need | How |
 |---|---|
-| Freeze a version | Deploy the artifact of a specific tag (`v0.1.2`) - old releases stay downloadable. |
+| Freeze a version | Deploy the artifact of a specific tag (`v0.1.3`) - old releases stay downloadable. |
 | Track the newest stable | Use the `latest` release assets. |
 | Test before rollout | Use the `nightly` prerelease; it carries the same artifact matrix and the same checksums. |
 | Roll back | Install the previous version over the new one. No telemetry-driven "latest" call is made unless you enable update checks. |

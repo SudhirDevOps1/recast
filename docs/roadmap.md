@@ -13,7 +13,7 @@ Prove before building UI:
 - [x] FFmpeg fetch + TOFU pinning + registry-integrity-verified tarballs — **measured**: linux-x64 ffmpeg 6.0-static 78.7 MB (sha256 pinned), ffprobe 4.0.2-static 64.5 MB; both execute
 - [x] Better-sqlite3 + electron-builder `asarUnpack` configuration
 - [ ] 1080p60 capture + hardware encode on real Windows/macOS hardware — **pending device QA**
-- [x] Zoom engine math (detect → cluster → keyframes → spring) — 41 unit tests green
+- [x] Zoom engine math (detect → cluster → keyframes → spring) — 92 unit tests green
 
 ## Phase 1 — record → trim → export ✅ implemented / 🟡 device QA pending
 

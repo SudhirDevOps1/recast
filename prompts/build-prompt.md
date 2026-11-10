@@ -270,7 +270,7 @@ Signing: Azure Trusted Signing or EV cert on Windows (timestamp every file); Dev
 
 Auto-update: stable and beta channels, delta where supported, never restart mid-recording, documented rollback.
 
-CI: `windows-latest` (x64), `windows-11-arm`, `macos-14`, `macos-13`, `ubuntu-22.04`. Build, sign, notarize, smoke-test the artifact, upload, auto-generate release notes. Nightly on `main`, releases on `v*`.
+CI: `windows-latest` (x64), `windows-11-arm`, `macos-15`, `ubuntu-22.04`. (The brief originally read `macos-14`/`macos-13`; those images are withdrawn for new use on this repo, so every macOS job runs on `macos-15` and the Intel target is cross-compiled on arm64 hardware.) Build, sign, notarize, smoke-test the artifact, upload, auto-generate release notes. Nightly on `main`, releases on `v*`.
 
 ---
 

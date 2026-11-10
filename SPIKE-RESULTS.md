@@ -5,7 +5,7 @@ them, with measured numbers. This file records what was actually validated,
 where, and what remains unmeasured. Nothing here claims a device number that
 was not measured on a device.
 
-Last updated: 2026-11-07.
+Last updated: 2026-11-10.
 
 ## Validated in this repository's build environment (Linux sandbox, 2026-11-07)
 
@@ -13,7 +13,7 @@ Last updated: 2026-11-07.
 |---|---|---|
 | Type-safe core across 6 workspace projects | `pnpm typecheck` (tsc strict, `--noEmit`) | ✅ green |
 | Lint rules (flat ESLint, react-hooks) | `pnpm lint` | ✅ 0 errors |
-| Zoom / spring / timeline / schema / filename math | `pnpm test` (Vitest) | ✅ 41/41 pass — clustering windows, spring settle without overshoot, fit clamping, follow dead-zone 18 %, pan clamp, time mapping with speed, `.recaststyle` round-trip, IPC schemas, `recast-{project}-{ts}` naming |
+| Zoom / spring / timeline / schema / filename math | `pnpm test` (Vitest) | ✅ 92/92 pass — clustering windows, spring settle without overshoot, fit clamping, follow dead-zone 18 %, pan clamp, time mapping with speed, `.recaststyle` round-trip, IPC schemas, `recast-{project}-{ts}` naming |
 | Bundling (main + preload + renderer) | `pnpm build` (electron-vite) | ✅ 3 entry points, renderer bundle ≈ 613 kB CSS-included / 427 kB index |
 | FFmpeg acquisition + integrity | `pnpm ffmpeg:fetch` (TOFU pinning per `ffmpeg.lock.json`) | ✅ linux-x64 fetched: ffmpeg (ffmpeg-static b6.0, 78.7 MB) + ffprobe (ffprobe-static 3.1.0), SHA-256 pinned and verified before use; both binaries execute (`-version`) |
 | Icons and packaging metadata | `pnpm icons` + electron-builder config load | ✅ icon.png 1024, multi-size .ico, tray templates |

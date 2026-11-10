@@ -11,7 +11,8 @@ Status first: **no release is signed today** — certificates are not yet in pla
 ## macOS
 
 - **Plan**: Developer ID Application certificate → `electron-builder` signs with hardened runtime + entitlements (`build/entitlements.mac.plist`: JIT, audio-input, camera, apple-events) → `notarytool` (App Store Connect API key via `APPLE_ID`/`APPLE_APP_SPECIFIC_PASSWORD`/`APPLE_TEAM_ID` env) → `stapler` staples the DMG.
-- CI (`macos-14`, `macos-13`) imports the certificate from secrets (`MAC_CERTIFICATE`, base64 P12).
+- CI (`macos-15`) imports the certificate from secrets (`MAC_CERTIFICATE`, base64 P12). The `macos-14` and
+  `macos-13` images are withdrawn for new use on this repo, so no job targets them.
 - Until signing exists, Gatekeeper requires `xattr -cr Recast.app` — the release notes will say exactly that instead of pretending it's signed.
 
 ## Linux

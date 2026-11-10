@@ -15,7 +15,7 @@ Everything runs 100% offline on your machine. macOS - Windows - Linux.
 [![CodeQL](https://github.com/SudhirDevOps1/recast/actions/workflows/codeql.yml/badge.svg)](https://github.com/SudhirDevOps1/recast/actions/workflows/codeql.yml)
 [![License: GPL-3.0-or-later](https://img.shields.io/badge/license-GPL--3.0--or--later-blue.svg)](LICENSE)
 [![Website](https://img.shields.io/badge/website-sudhirdevops1.github.io%2Frecast-7C5CFF)](https://sudhirdevops1.github.io/recast/)
-[![Latest release](https://img.shields.io/badge/download-v0.1.2-2EA043)](https://github.com/SudhirDevOps1/recast/releases/latest)
+[![Latest release](https://img.shields.io/badge/download-v0.1.3-2EA043)](https://github.com/SudhirDevOps1/recast/releases/latest)
 
 <img src="apps/website/assets/og.png" width="720" alt="Recast - record, auto-zoom, caption, export" />
 
@@ -43,11 +43,14 @@ Legend: **verified** = tested on that OS - **implemented** = code complete, devi
 | Capture | Screen / window / area capture, mic + system audio on separate tracks, countdown, pause/resume | implemented |
 | Capture | Crash-safe segmented writing (2 s fragments, atomic manifest), recovery remux | implemented |
 | Capture | Encoder fallback chain that probes by configuring, plus a VP8/VP9 compatibility mode | verified (unit) |
+| Capture | Face-cam picture-in-picture - opt-in camera take recorded beside the screen take, drawn as an overlay in preview and export | implemented - Windows camera QA pending |
 | Capture | 60 Hz cursor sampling, global hotkeys, tray control, live recorder stats | implemented |
+| Editor | Preview frame lifecycle (FrameSync) + segment-local seek mapping - no more black preview or export frames | verified (unit) |
 | Editor | Cursor track to auto-zoom (3 intensities), manual keyframes with easing, follow-cursor | verified (unit) |
 | Editor | Timeline 2.0 - ruler, trim, split, ripple delete, draggable keyframes, undo/redo | implemented |
 | Editor | Motion panel - intro transitions, per-clip speed 0.25-4x, fades, cursor FX | verified (unit) |
-| Editor | Style system - aspect ratios, background, cursor looks, `.recaststyle` presets, command palette | verified (unit) |
+| Editor | Style system - aspect ratios, background (solid, gradient, mesh, echo, **image**, transparent), cursor looks, `.recaststyle` presets, command palette | verified (unit) |
+| Editor | Face-cam panel, cursor FX controls (smoothing, trail, click bounce), Library poster thumbnails, export presets | implemented |
 | Export | MP4 (H.264), WebM, GIF, ProRes; HEVC where the platform provides it | implemented |
 | Export | Frame-clock exporter (never rAF), loudnorm to -14 LUFS, cancel leaves no partial file | implemented |
 | Captions | Local Whisper via `whisper.cpp`, SRT/VTT import/export, burn-in styles | partial - untested end to end |

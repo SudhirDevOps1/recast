@@ -16,6 +16,24 @@ All notable changes to Recast are documented here. Format: Keep a Changelog; ver
 - The hero version chip no longer advertises a stale version when release data cannot be fetched.
 - Small print and footer copy lifted to WCAG AA contrast (3.31:1 to about 5:1); Lighthouse accessibility is now 100.
 
+## [0.1.3] - 2026-11-10
+
+### Fixed
+- Editor preview showed random black frames - two stacked root causes, both now closed:
+  - the hidden per-segment `<video>` decode elements behind the canvas preview were **never seeked or played**, so the preview sat frozen on frame 0 and the compositor filled the screen rect solid black whenever no frame was paintable. `packages/editor/src/frame-sync.ts` (FrameSync) drives them now: precise seeks while scrubbing (40 ms tolerance), playback at the clip's speed with a 120 ms hard resync, and a last-good-frame snapshot so the canvas never collapses to black mid-decode.
+  - segment files are written with `firstTimestampBehavior: 'offset'` (file time starts at 0) while seeks used raw capture-clock times - every segment after the first (~2 s) seeked past its end ("black every few seconds"). All preview and export seeks now map through `segmentLocalTimeUs()`.
+
+### Added
+- Opt-in face-cam picture-in-picture, full slice: **Face camera** toggle + device picker (default-device fallback on unplug) -> renderer-side MediaRecorder track (`cam-0.webm`, VP8/VP9, timeslice) written additively beside the screen pipeline, so a camera failure can never block or corrupt the screen take -> manifest `project.media.camera` -> compositor PiP (corner position, width %, round crop, mirror, shadow, border, margin, opacity) -> editor Cam panel -> exporter seek + draw. Honest caveat: cam timing follows the capture clock, so takes that use pause may drift slightly in the overlay.
+- Background image support: pick an image (copied into the session directory) and render it behind the screen card in preview and export.
+- Cursor FX controls now exposed in the panel: smoothing, motion trail, click bounce.
+- Library poster thumbnails: the ffmpeg poster frame is persisted as `thumbnail.png` instead of being re-spawned per visit, with a no-ffmpeg fallback that streams the first segment.
+- Export presets in the export view.
+- Premium UI polish pass.
+
+### Changed
+- Test suite grew to 12 files / 92 tests (was 9 / 76).
+
 ## [0.1.2] - 2026-11-10
 
 ### Fixed

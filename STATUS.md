@@ -1,6 +1,6 @@
 # STATUS — what is real, what is partial, what is not built
 
-Last updated: 2026-11-10 · **v0.1.3 in flight** — editor preview black-screen root-caused and fixed (two stacked causes): (1) the hidden decode `<video>` elements behind the canvas preview were never seeked or played — FrameSync now drives them (precise seeks while scrubbing, play-at-clip-speed while playing, last-good-frame snapshot instead of black fills); (2) segment files are written with `firstTimestampBehavior: 'offset'` (file time starts at 0) while seeks used raw capture-clock times — every segment after the first (~2 s) seeked past its end, matching the "black every few seconds" reports; all preview/export seeks now map through `segmentLocalTimeUs()`. New additive features: opt-in face-cam PiP (record → style → export), background image support, cursor smoothing/trail/click-bounce controls, Library poster thumbnails, export presets, premium UI polish. v0.1.2 (`v0.1.2` tag, 23 assets, Release workflow green) fixed the Windows `recast-media://` drive-letter re-rooting 404. Windows/macOS on-device QA pending real hardware.
+Last updated: 2026-11-10 · **v0.1.3 released** (`v0.1.3` tag, 23 assets, Release workflow green) — editor preview black-screen root-caused and fixed (two stacked causes): (1) the hidden decode `<video>` elements behind the canvas preview were never seeked or played — FrameSync now drives them (precise seeks while scrubbing, play-at-clip-speed while playing, last-good-frame snapshot instead of black fills); (2) segment files are written with `firstTimestampBehavior: 'offset'` (file time starts at 0) while seeks used raw capture-clock times — every segment after the first (~2 s) seeked past its end, matching the "black every few seconds" reports; all preview/export seeks now map through `segmentLocalTimeUs()`. New additive features: opt-in face-cam PiP (record → style → export), background image support, cursor smoothing/trail/click-bounce controls, Library poster thumbnails, export presets, premium UI polish. v0.1.2 (`v0.1.2` tag, 23 assets, Release workflow green) fixed the Windows `recast-media://` drive-letter re-rooting 404. Windows/macOS on-device QA pending real hardware.
 
 Legend: ✅ implemented & verified · 🟡 implemented but not yet verified on device/CI · 🟠 scaffolded, not complete · ❌ not built
 
@@ -8,7 +8,7 @@ Legend: ✅ implemented & verified · 🟡 implemented but not yet verified on d
 
 - ✅ `pnpm typecheck` — all 6 workspace projects green (tsc strict)
 - ✅ `pnpm lint` — ESLint flat config, 0 errors
-- ✅ `pnpm test` — 64/64 unit tests pass (zoom math, springs, clustering, time mapping, preset serialization, IPC schemas, filename sanitization, SRT/VTT)
+- ✅ `pnpm test` — 92/92 unit tests pass (zoom math, springs, clustering, time mapping, preset serialization, IPC schemas, filename sanitization, SRT/VTT)
 - ✅ `pnpm build` — electron-vite produces main (61.8 kB), preload and renderer bundles (3 entry points)
 - ✅ `scripts/fetch-ffmpeg.mjs` — downloads, verifies (registry integrity + SHA-256), pins hashes, stages into `resources/ffmpeg/<platform>-<arch>/`; linux-x64 fetched with real pinned hashes (ffmpeg 6.0-static 78.7 MB, ffprobe 4.0.2-static 64.5 MB); both binaries execute
 - ✅ Icons generated (icon.png 1024, icon.ico multi-size, tray templates)
@@ -78,7 +78,7 @@ Legend: ✅ implemented & verified · 🟡 implemented but not yet verified on d
 
 ## Testing
 
-- ✅ Unit suite (41 tests) green.
+- ✅ Unit suite (92 tests across 12 files) green.
 - 🟡 Playwright Electron smoke (launch → bridge → library) — written; runs in CI (`smoke` job), not yet green in a real run.
 - ❌ Golden-frame SSIM preview/export parity harness — planned next.
 - ❌ Cross-platform install QA (Windows 125/150/200 % scaling, mixed-DPI, portable, clean uninstall, macOS fresh-account TCC flow, Wayland portal run).
