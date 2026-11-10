@@ -60,6 +60,7 @@ export interface ExportDeps {
   hasFfmpeg: boolean;
   normalizeLufs: boolean;
   noiseGateDb: number | null;
+  keystrokeEvents?: Array<{ tUs: number; key: string }>;
 }
 
 export interface ExportProgress {
@@ -343,6 +344,7 @@ export async function runExport(
         showSafeGuides: false,
         clipIn: clipIntroAt(map, currentTUs),
         totalDurationUs: map.durationUs,
+        keystrokeEvents: deps.keystrokeEvents,
       });
       drawComposition(ctx, comp, project, drawDeps);
 

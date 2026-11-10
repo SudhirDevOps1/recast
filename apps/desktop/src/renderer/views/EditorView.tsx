@@ -44,6 +44,7 @@ export function EditorView() {
 
   const [cursorSamples, setCursorSamples] = useState<CursorSample[]>([]);
   const [cursorClicks, setCursorClicks] = useState<Array<{ tUs: number; x: number; y: number }>>([]);
+  const [keystrokes, setKeystrokes] = useState<Array<{ tUs: number; key: string }>>([]);
   const [captions, setCaptions] = useState<CaptionLine[]>([]);
   const [panel, setPanel] = useState<'motion' | 'style' | 'facecam' | 'audio' | 'captions'>('motion');
 
@@ -74,8 +75,14 @@ export function EditorView() {
         try {
           const data = await bridge().invoke('capture:readCursor', { sessionId: project.id } as never);
           if (!cancelled && data) {
-            setCursorSamples((data as { samples: CursorSample[]; clicks: typeof cursorClicks }).samples);
-            setCursorClicks((data as { samples: CursorSample[]; clicks: Array<{ tUs: number; x: number; y: number }> }).clicks);
+            const d = data as {
+              samples: CursorSample[];
+              clicks: typeof cursorClicks;
+              keys?: Array<{ tUs: number; key: string }>;
+            };
+            setCursorSamples(d.samples);
+            setCursorClicks(d.clicks);
+            if (d.keys) setKeystrokes(d.keys);
           }
         } catch {
           setCursorSamples([]);
@@ -166,6 +173,7 @@ export function EditorView() {
           zoomTrack={zoomTrack}
           captions={captions}
           cursorSamples={cursorSamples}
+          keystrokes={keystrokes}
           videoRefs={videoRefs}
           mediaUrls={mediaUrls}
           mediaVersion={mediaVersion}
@@ -271,6 +279,7 @@ function PreviewCanvas({
   zoomTrack,
   captions,
   cursorSamples,
+  keystrokes,
   videoRefs,
   mediaUrls,
   mediaVersion,
@@ -281,6 +290,7 @@ function PreviewCanvas({
   zoomTrack: FollowStep[];
   captions: CaptionLine[];
   cursorSamples: Array<{ tUs: number; x: number; y: number; type?: string }>;
+  keystrokes?: Array<{ tUs: number; key: string }>;
   videoRefs: React.MutableRefObject<Map<string, HTMLVideoElement>>;
   mediaUrls: Map<string, string>;
   mediaVersion: number;
@@ -365,6 +375,7 @@ function PreviewCanvas({
       showSafeGuides: false,
       clipIn,
       totalDurationUs: map.durationUs,
+      keystrokeEvents: keystrokes,
     });
 
     // Drive the decode videos to the exact frame the playhead wants. Screen

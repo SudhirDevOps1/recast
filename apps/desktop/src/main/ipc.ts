@@ -217,21 +217,38 @@ export async function registerIpcHandlers(): Promise<void> {
     // The renderer stopped its capture handle first; this finalizes on disk:
     // mark completed, build the project with auto-zoom, register in library.
     const sessionId = c.activeSessionId;
+
+    // Clean up auxiliary floating windows on stop so no zombie windows keep electron alive
+    if (c.toolbarWindow && !c.toolbarWindow.isDestroyed()) {
+      c.toolbarWindow.close();
+    }
+    c.toolbarWindow = null;
+    if (c.areaWindow && !c.areaWindow.isDestroyed()) {
+      c.areaWindow.close();
+    }
+    c.areaWindow = null;
+
     if (!sessionId) return { projectId: null };
-    // Stop the cursor sampler FIRST and flush its last batch — events drained
-    // after closeSession would land in a closed file.
-    const drained = c.inputSampler?.stop() ?? [];
-    if (drained.length > 0) c.sessions.appendInput(sessionId, drained);
-    c.inputSampler = null;
-    const manifest = c.sessions.closeSession(sessionId, 'completed');
-    const { renderStoppedMenu } = await import('./tray');
-    renderStoppedMenu();
-    if (!manifest) return { projectId: null };
-    const project = buildProjectFromSession({ sessionId, manifest });
-    saveProject(project);
-    upsertProjectMeta(project);
-    c.activeSessionId = null;
-    return { projectId: project.id };
+    try {
+      // Stop the cursor sampler FIRST and flush its last batch — events drained
+      // after closeSession would land in a closed file.
+      const drained = c.inputSampler?.stop() ?? [];
+      if (drained.length > 0) c.sessions.appendInput(sessionId, drained);
+      c.inputSampler = null;
+      const manifest = c.sessions.closeSession(sessionId, 'completed');
+      const { renderStoppedMenu } = await import('./tray');
+      renderStoppedMenu();
+      if (!manifest) return { projectId: null };
+      const project = buildProjectFromSession({ sessionId, manifest });
+      saveProject(project);
+      upsertProjectMeta(project);
+      c.activeSessionId = null;
+      return { projectId: project.id };
+    } catch {
+      c.inputSampler = null;
+      c.activeSessionId = null;
+      return { projectId: null };
+    }
   });
   register('recorder:getState', (): RecorderState => {
     const stats = (c.recorderHandle?.stats() as { phase: string; elapsedUs: number; bytes: number; droppedFrames: number; totalFrames: number } | undefined) ?? undefined;
@@ -587,6 +604,16 @@ export async function registerIpcHandlers(): Promise<void> {
         }
       });
     }
+
+    // Launch floating live toolbar if not already present
+    try {
+      void import('./windows').then(({ createToolbarWindow }) => {
+        const tb = createToolbarWindow();
+        tb.showInactive();
+      });
+    } catch {
+      /* toolbar window creation is best-effort */
+    }
   });
   register('capture:writeSegment', (payload) => {
     const { sessionId, file, data } = payload as { sessionId: string; file: string; data: ArrayBuffer };
@@ -632,7 +659,7 @@ export async function registerIpcHandlers(): Promise<void> {
     const { sessionId } = payload as { sessionId: string };
     // Project ids are `prj-<sessionId>`; media.dir is the authoritative path.
     const project = loadProject(`prj-${sessionId}`);
-    if (!project) return { samples: [], clicks: [] };
+    if (!project) return { samples: [], clicks: [], keys: [] };
     const factor = c.sessions.manifestFor(sessionId)?.displayScaleFactor ?? 1;
     return readCursorJsonl(project.media.dir, project.media.cursor?.file ?? 'cursor.jsonl', factor);
   });
@@ -644,6 +671,11 @@ export async function registerIpcHandlers(): Promise<void> {
     } catch {
       return null;
     }
+  });
+
+  register('capture:appendAnnotation', (payload) => {
+    const { sessionId, annotation } = payload as { sessionId: string; annotation: import('@recast/shared').Annotation };
+    c.sessions.appendAnnotation(sessionId, annotation);
   });
 
   // ---------------- attach everything to ipcMain ----------------

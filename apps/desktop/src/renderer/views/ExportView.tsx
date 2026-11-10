@@ -33,6 +33,7 @@ export function ExportView() {
   const [project, setProject] = useState<RecastProject | null>(null);
   const [zoomTrack, setZoomTrack] = useState<FollowStep[]>([]);
   const [cursorEvents, setCursorEvents] = useState<Array<{ tUs: number; x: number; y: number; type: string }>>([]);
+  const [keystrokes, setKeystrokes] = useState<Array<{ tUs: number; key: string }>>([]);
   const [captions, setCaptions] = useState<CaptionLine[]>([]);
   const cancelRef = useRef(false);
   const videoRefs = useRef<Map<string, HTMLVideoElement>>(new Map());
@@ -50,6 +51,9 @@ export function ExportView() {
       const cursor = await bridge().invoke('capture:readCursor', { sessionId });
       const samples = (cursor.samples ?? []) as Array<{ tUs: number; x: number; y: number }>;
       setCursorEvents(samples.map((s) => ({ ...s, type: 'move' })));
+      if (Array.isArray(cursor.keys)) {
+        setKeystrokes(cursor.keys as Array<{ tUs: number; key: string }>);
+      }
       const map = buildTimeMap(p.timeline.clips);
       const kfs = p.zoom.mode === 'manual' ? p.zoom.manualKeyframes : p.zoom.autoKeyframes;
       setZoomTrack(p.zoom.enabled ? buildZoomTrack(kfs, p.media.width || 1920, p.media.height || 1080, p.zoom.intensity, map.durationUs) : []);
@@ -174,6 +178,7 @@ export function ExportView() {
           hasFfmpeg: ffmpeg?.available ?? false,
           normalizeLufs: proj.audioEdits.normalizeLufs,
           noiseGateDb: proj.audioEdits.noiseGateDb ?? null,
+          keystrokeEvents: keystrokes,
         },
         captureMediaHost,
         (p) => setProgress({ ...p }),

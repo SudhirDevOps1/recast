@@ -78,6 +78,11 @@ export interface FacecamRect {
   opacity: number;
 }
 
+export interface KeycapEvent {
+  key: string;
+  ageMs: number;
+}
+
 export interface Composition {
   outW: number;
   outH: number;
@@ -104,6 +109,8 @@ export interface Composition {
   showSafeGuides: boolean;
   /** Face-cam PiP — null unless style.facecam.enabled and a camera segment exists. */
   facecam: FacecamRect | null;
+  /** Active keystroke overlays to display with keycaps */
+  keystrokes: KeycapEvent[];
 }
 
 export interface CursorSampleLike {
@@ -112,6 +119,7 @@ export interface CursorSampleLike {
   y: number;
   type: string;
   button?: string;
+  key?: string;
 }
 
 export interface ComposeDeps {
@@ -124,6 +132,8 @@ export interface ComposeDeps {
   clipIn?: { type: TransitionKind; progress: number } | null;
   /** Timeline duration — required for project fade in/out to evaluate. */
   totalDurationUs?: number;
+  /** Recorded keystrokes near time t (if available) */
+  keystrokeEvents?: Array<{ tUs: number; key: string }>;
 }
 
 /** Output canvas size for a project at a given short-edge resolution. */
@@ -271,6 +281,18 @@ export function computeComposition(project: RecastProject, tUs: number, outW: nu
     if (a > 0.001) fadeOverlay = { alpha: a };
   }
 
+  // Keystroke HUD events in the active window (last 1.2 s)
+  const keystrokes: KeycapEvent[] = [];
+  const rawKeys = deps.keystrokeEvents ?? [];
+  for (const k of rawKeys) {
+    if (tUs >= k.tUs && tUs - k.tUs <= 1_200_000) {
+      keystrokes.push({
+        key: k.key,
+        ageMs: (tUs - k.tUs) / 1000,
+      });
+    }
+  }
+
   return {
     outW,
     outH,
@@ -292,6 +314,7 @@ export function computeComposition(project: RecastProject, tUs: number, outW: nu
     fadeOverlay,
     showSafeGuides: deps.showSafeGuides ?? false,
     facecam,
+    keystrokes,
   };
 }
 
@@ -847,6 +870,58 @@ function drawCaptions(ctx: CanvasRenderingContext2D, comp: Composition): void {
   ctx.restore();
 }
 
+function drawKeystrokes(ctx: CanvasRenderingContext2D, comp: Composition): void {
+  if (comp.keystrokes.length === 0) return;
+  // Deduplicate keys active at the moment
+  const recent = comp.keystrokes.slice(-4);
+  const size = Math.max(14, comp.outH * 0.024);
+  const padX = size * 0.7;
+  const padY = size * 0.4;
+  const gap = size * 0.4;
+
+  ctx.save();
+  ctx.font = `600 ${size}px system-ui, -apple-system, sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+
+  // Measure total width
+  const items = recent.map((k) => {
+    const text = k.key.length === 1 ? k.key.toUpperCase() : k.key;
+    const w = ctx.measureText(text).width + padX * 2;
+    // Fade out as it ages (1200 ms max)
+    const alpha = clamp(1 - k.ageMs / 1200, 0, 1);
+    return { text, w, alpha };
+  });
+
+  const totalWidth = items.reduce((acc, it) => acc + it.w, 0) + (items.length - 1) * gap;
+  let startX = (comp.outW - totalWidth) / 2;
+  const y = comp.outH - comp.outH * 0.08;
+
+  for (const it of items) {
+    const h = size + padY * 2;
+    const r: Rect = { x: startX, y: y - h / 2, w: it.w, h };
+    ctx.globalAlpha = it.alpha;
+
+    // Keycap background
+    ctx.fillStyle = 'rgba(18, 22, 30, 0.88)';
+    roundRectPath(ctx, r, size * 0.35);
+    ctx.fill();
+
+    // Keycap border & drop shadow
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.18)';
+    roundRectPath(ctx, r, size * 0.35);
+    ctx.stroke();
+
+    // Keycap text
+    ctx.fillStyle = '#f1f3f9';
+    ctx.fillText(it.text, startX + it.w / 2, y);
+
+    startX += it.w + gap;
+  }
+  ctx.restore();
+}
+
 /** Draw a complete composition. Called identically by preview and export. */
 export function drawComposition(ctx: CanvasRenderingContext2D, comp: Composition, project: RecastProject, deps: DrawDeps): void {
   drawBackground(ctx, comp, deps);
@@ -906,6 +981,7 @@ export function drawComposition(ctx: CanvasRenderingContext2D, comp: Composition
   drawAnnotations(ctx, comp);
   drawCursor(ctx, comp);
   drawCaptions(ctx, comp);
+  drawKeystrokes(ctx, comp);
 
   if (comp.showSafeGuides) {
     ctx.save();

@@ -69,6 +69,13 @@ export class SessionService {
     if (lines) appendFileSync(s.inputFdPath, lines + '\n', 'utf8');
   }
 
+  appendAnnotation(sessionId: string, annotation: import('@recast/shared').Annotation): void {
+    const s = this.open;
+    if (!s || s.id !== sessionId) return;
+    const p = join(s.dir, 'annotations.jsonl');
+    appendFileSync(p, JSON.stringify(annotation) + '\n', 'utf8');
+  }
+
   writeInputTail(sessionId: string, events: InputEvent[]): void {
     this.appendInput(sessionId, events);
   }

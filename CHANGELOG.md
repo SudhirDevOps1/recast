@@ -2,9 +2,18 @@
 
 All notable changes to Recast are documented here. Format: Keep a Changelog; versioning: SemVer.
 
-## [Unreleased]
+## [0.1.4] - 2026-11-10
+
+### Fixed
+- App crash / hang on stop flow: hardened `stopRecordingFlow()` in the renderer and `recorder:stop` in the main process with try/catch/finally, guaranteed resource release, and explicit cleanup of auxiliary floating windows (`toolbarWindow`, `areaWindow`) preventing orphaned processes and UI lockups.
+- The hidden mobile menu no longer swallows clicks on small screens.
+- The hero version chip no longer advertises a stale version when release data cannot be fetched.
+- Small print and footer copy lifted to WCAG AA contrast (3.31:1 to about 5:1); Lighthouse accessibility is now 100.
 
 ### Added
+- **Suggest zooms** (P0-1): Auto-zoom suggestions based on click clustering and dwell detection (cursor stillness <= 8 px for >= 500 ms) in the Motion panel. Pure function covered by unit tests.
+- **Keystroke HUD** (P0-3): Real-time keycap overlays captured via `uiohook-napi` in the main sampler, batched into `cursor.jsonl`, and rendered through the shared compositor identically in preview and export.
+- **Live Annotation Toolbar** (P0-2): Floating, draggable annotation toolbar offering Pen, Highlighter, Arrow, Rect tools, and color palette with non-blocking vector logging.
 - Market research on the free open-source screen recorders (`docs/market-parity.md`): what Capptivo, OpenScreen, Recordly, Capturia, Focra, Reframed, screenize and OpenScreenStudio actually do, how their zoom, cursor, annotation, audio and export engines work, and where Recast stands against them - recorded as behaviour to copy, never as code.
 - `prompts/parity-build-prompt.md` - the build brief for closing that gap in P0-P3 order (suggest zooms, live annotation toolbar, keystroke HUD, fixed zoom regions, cursor loop + click sounds + spotlight, per-track audio, aspect re-aim, platform export presets, native capture, i18n).
 - Website download UX rebuild (`apps/website/`): platform-aware download tabs (Windows / macOS / Linux, with iPadOS and Android detected so a phone is never offered a 277 MB installer), an Apple Silicon / Intel switch that picks the matching DMG, a recommended-file tag, per-file sizes, a per-file SHA-256 preview (GitHub publishes a digest per release asset), a download toast carrying the file name and size, a direct `SHA256SUMS` link, a mobile sticky bar that offers to copy the page link, and a `noscript` note that states plainly what needs JavaScript.
@@ -13,10 +22,8 @@ All notable changes to Recast are documented here. Format: Keep a Changelog; ver
 - Enterprise documentation set: rewritten README (value props, capability table with honest state markers, mermaid architecture map, install matrix, audience-based doc map), new `docs/deployment.md`, `docs/security.md` and `docs/support.md`, a rebuilt `docs/architecture.md`, an at-a-glance table for platform support, and "Related" footers across the doc set.
 - Nightly build labelling now shows the real build version carried by the assets, and the release list marks the latest stable versus nightly explicitly.
 
-### Fixed
-- The hidden mobile menu no longer swallows clicks on small screens.
-- The hero version chip no longer advertises a stale version when release data cannot be fetched.
-- Small print and footer copy lifted to WCAG AA contrast (3.31:1 to about 5:1); Lighthouse accessibility is now 100.
+### Changed
+- Test suite grew to 13 files / 95 tests (added `packages/editor/tests/suggest-zooms.test.ts`).
 
 ## [0.1.3] - 2026-11-10
 

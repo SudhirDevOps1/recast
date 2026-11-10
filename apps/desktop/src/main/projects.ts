@@ -43,11 +43,13 @@ export function readCursorJsonl(
 ): {
   samples: CursorSample[];
   clicks: Array<{ tUs: number; x: number; y: number }>;
+  keys: Array<{ tUs: number; key: string }>;
 } {
   const samples: CursorSample[] = [];
   const clicks: Array<{ tUs: number; x: number; y: number }> = [];
+  const keys: Array<{ tUs: number; key: string }> = [];
   const p = join(sessionDir, file);
-  if (!existsSync(p)) return { samples, clicks };
+  if (!existsSync(p)) return { samples, clicks, keys };
   // Cursor samples are recorded in Electron DIP coordinates; the video frames
   // are physical pixels. Scale here so every consumer (auto-zoom, editor,
   // compositor, export) works in one consistent pixel space.
@@ -56,18 +58,20 @@ export function readCursorJsonl(
   for (const line of lines) {
     if (!line.trim()) continue;
     try {
-      const e = JSON.parse(line) as { tUs: number; type: string; x?: number; y?: number };
+      const e = JSON.parse(line) as { tUs: number; type: string; x?: number; y?: number; key?: string };
       if (e.type === 'move' && e.x != null && e.y != null) {
         samples.push({ tUs: e.tUs, x: e.x * sf, y: e.y * sf });
       } else if (e.type === 'down' && e.x != null && e.y != null) {
         clicks.push({ tUs: e.tUs, x: e.x * sf, y: e.y * sf });
         samples.push({ tUs: e.tUs, x: e.x * sf, y: e.y * sf });
+      } else if (e.type === 'key' && e.key) {
+        keys.push({ tUs: e.tUs, key: e.key });
       }
     } catch {
       /* skip malformed line */
     }
   }
-  return { samples, clicks };
+  return { samples, clicks, keys };
 }
 
 export interface BuildProjectInput {
@@ -129,6 +133,20 @@ export function buildProjectFromSession(input: BuildProjectInput): RecastProject
         manifest.video.height,
         project.zoom.intensity,
       );
+    }
+  }
+
+  // Load any annotations captured live during recording
+  const annotationsPath = join(project.media.dir, 'annotations.jsonl');
+  if (existsSync(annotationsPath)) {
+    try {
+      const lines = readFileSync(annotationsPath, 'utf8').split('\n');
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        project.annotations.push(JSON.parse(line));
+      }
+    } catch {
+      /* ignore malformed lines */
     }
   }
 

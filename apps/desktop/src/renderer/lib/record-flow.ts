@@ -491,13 +491,27 @@ export async function stopRecordingFlow(): Promise<string | null> {
   const handle = currentHandle;
   if (!handle) return null;
   const sessionId = useApp.getState().recorderState?.sessionId ?? '';
-  const { manifest, audioFiles } = await handle.stop();
-  logCapture('muxer', 'info', `stop flow finalized`, `${manifest.screen.segments.length} segment(s)${manifest.compatibility ? ' · compatibility mode' : ''}`);
-  for (const a of audioFiles) {
-    await bridge().invoke('capture:attachAudio', { sessionId, label: a.label, file: a.file, data: a.bytes });
+  try {
+    const { manifest, audioFiles } = await handle.stop();
+    logCapture('muxer', 'info', `stop flow finalized`, `${manifest.screen.segments.length} segment(s)${manifest.compatibility ? ' · compatibility mode' : ''}`);
+    for (const a of audioFiles) {
+      try {
+        await bridge().invoke('capture:attachAudio', { sessionId, label: a.label, file: a.file, data: a.bytes });
+      } catch (ae) {
+        logCapture('audio-init', 'warn', `attachAudio failed for ${a.label}`, (ae as Error).message);
+      }
+    }
+  } catch (err) {
+    logCapture('pipeline', 'error', 'handle.stop() encountered an error', (err as Error).message);
+  } finally {
+    releaseRendererRecorder();
   }
-  releaseRendererRecorder();
-  const { projectId } = await bridge().invoke('recorder:stop', undefined);
-  void manifest;
-  return projectId;
+
+  try {
+    const { projectId } = await bridge().invoke('recorder:stop', undefined);
+    return projectId;
+  } catch (e) {
+    logCapture('pipeline', 'error', 'bridge recorder:stop failed', (e as Error).message);
+    return null;
+  }
 }

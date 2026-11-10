@@ -1,15 +1,16 @@
 import { screen } from 'electron';
 import { RECORDING } from '@recast/shared';
 import type { InputEvent } from '@recast/shared';
-import type { UiohookMouseEvent, UiohookWheelEvent } from 'uiohook-napi';
+import type { UiohookMouseEvent, UiohookWheelEvent, UiohookKeyboardEvent } from 'uiohook-napi';
 
 type UiohookModule = {
-  /** Subscribe to a global input event ('mousedown' | 'mouseup' | 'wheel').
+  /** Subscribe to a global input event ('mousedown' | 'mouseup' | 'wheel' | 'keydown').
    * The handler parameter is `never` so concrete handlers stay assignable
    * (contravariance) without casts at the call sites. */
   on: (event: string, handler: (e: never) => void) => void;
   start: () => void;
   stop: () => void;
+  keyMap: Record<number, string>;
 };
 
 /**
@@ -26,8 +27,15 @@ async function loadUiohook(): Promise<UiohookModule | null> {
         start: () => void;
         stop: () => void;
       };
+      UiohookKey: Record<string, number>;
     };
     const hook = mod.uIOhook;
+    const keyMap: Record<number, string> = {};
+    if (mod.UiohookKey) {
+      for (const [name, code] of Object.entries(mod.UiohookKey)) {
+        keyMap[code] = name;
+      }
+    }
     return {
       on: (event, handler) => hook.on(event, handler),
       start: () => hook.start(),
@@ -38,6 +46,7 @@ async function loadUiohook(): Promise<UiohookModule | null> {
           /* already gone */
         }
       },
+      keyMap,
     };
   } catch {
     return null;
@@ -99,6 +108,12 @@ export class InputSampler {
           if (!this.running || this.pausedAtMs != null) return;
           const p = this.point();
           this.pending.push({ tUs: tUs(), type: 'wheel', x: p.x, y: p.y, wheelDy: e.rotation });
+        });
+        hook.on('keydown', (e: UiohookKeyboardEvent) => {
+          if (!this.running || this.pausedAtMs != null) return;
+          const keyName = hook.keyMap[e.keycode] || `Key${e.keycode}`;
+          // Record key event with timestamp
+          this.pending.push({ tUs: tUs(), type: 'key', key: keyName });
         });
         hook.start();
       } catch {

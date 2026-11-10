@@ -1,7 +1,7 @@
 import { Button, Field, IconButton, Select, Slider, Switch } from '@recast/ui';
 import { IconKeyframe, IconSparkle, IconTrash, IconX } from '@recast/ui';
 import {
-  computeAutoZoom,
+  suggestZooms,
   EASE_LABELS,
   formatClock,
   poseAt,
@@ -10,6 +10,7 @@ import {
   type FollowStep,
 } from '@recast/editor';
 import type { RecastProject, TransitionKind } from '@recast/shared';
+import { useState } from 'react';
 import { useApp, useEditor } from '../state/stores';
 import { relayoutProject } from './TimelineStrip';
 
@@ -49,11 +50,36 @@ export function MotionPanel({
   const setSelectedClip = useEditor((s) => s.setSelectedClip);
   const sel = project.timeline.clips.find((c) => c.id === selectedClipId) ?? null;
 
-  const recalcAuto = (): void => {
-    if (cursorSamples.length < 20) return;
-    const kfs = computeAutoZoom(cursorSamples, cursorClicks, project.media.width || 1920, project.media.height || 1080, project.zoom.intensity);
-    commit({ ...project, zoom: { ...project.zoom, mode: 'auto', autoKeyframes: kfs } });
-    showToast(`Auto zoom rebuilt — ${kfs.length} keyframes.`, 'success');
+  const [suggestHeuristic, setSuggestHeuristic] = useState<'combined' | 'dwell' | 'clicks'>('combined');
+
+  const runSuggestZooms = (): void => {
+    if (cursorSamples.length < 10 && cursorClicks.length === 0) {
+      showToast('No cursor data found in this recording to analyze.', 'error');
+      return;
+    }
+    const suggested = suggestZooms(
+      cursorSamples,
+      cursorClicks,
+      project.media.width || 1920,
+      project.media.height || 1080,
+      {
+        heuristic: suggestHeuristic,
+        intensity: project.zoom.intensity,
+      },
+    );
+    if (suggested.length === 0) {
+      showToast('No high-confidence zoom points found.', 'info');
+      return;
+    }
+    commit({
+      ...project,
+      zoom: {
+        ...project.zoom,
+        mode: 'manual',
+        manualKeyframes: suggested,
+      },
+    });
+    showToast(`${suggested.length} zoom suggestions applied as editable keyframes!`, 'success');
   };
 
   const updateClip = (fields: Partial<typeof sel & object>): void => {
@@ -183,12 +209,29 @@ export function MotionPanel({
           <Field label="Enabled">
             <Switch checked={project.zoom.enabled} onCheckedChange={(v) => commit({ ...project, zoom: { ...project.zoom, enabled: v } })} ariaLabel="Zoom enabled" />
           </Field>
+          <div className="rounded-lg border border-hairline p-3 space-y-2">
+            <div className="text-xs font-semibold" style={{ color: 'var(--text-secondary)' }}>
+              Zoom Intelligence
+            </div>
+            <div className="flex gap-2">
+              <Select
+                value={suggestHeuristic}
+                onValueChange={(v) => setSuggestHeuristic(v as 'combined' | 'dwell' | 'clicks')}
+                options={[
+                  { value: 'combined', label: 'Clicks + Dwell' },
+                  { value: 'clicks', label: 'Clicks only' },
+                  { value: 'dwell', label: 'Dwell pause only' },
+                ]}
+                ariaLabel="Suggestion heuristic"
+              />
+              <Button variant="primary" onClick={runSuggestZooms}>
+                <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
+                  <IconSparkle size={13} /> Suggest zooms
+                </span>
+              </Button>
+            </div>
+          </div>
           <div className="flex gap-2">
-            <Button onClick={recalcAuto} disabled={cursorSamples.length < 20}>
-              <span className="inline-flex items-center gap-2">
-                <IconSparkle size={14} /> Recompute auto zoom
-              </span>
-            </Button>
             <Button onClick={addKeyframeAtPlayhead}>
               <span className="inline-flex items-center gap-2">
                 <IconKeyframe size={14} /> Keyframe at playhead

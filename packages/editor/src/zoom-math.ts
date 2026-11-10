@@ -43,33 +43,59 @@ export interface FollowStep {
 // ---------------------------------------------------------------------------
 
 /**
- * Sampled at 60 Hz. A point is "interesting" when the cursor is moving fast
- * or the user clicked. Pure function of the input track.
+ * Sampled at 60 Hz. A point is "interesting" when the cursor is moving fast,
+ * dwelling in place, or the user clicked. Pure function of the input track.
  */
 export function detectInterestPoints(
   samples: CursorSample[],
   clickTimesUs: Array<{ tUs: number; x: number; y: number }>,
   sourceW: number,
   sourceH: number,
+  options?: { includeDwell?: boolean; dwellRadiusPx?: number; minDwellUs?: number; ignoreSpeed?: boolean },
 ): InterestPoint[] {
   const out: InterestPoint[] = [];
   // Speed threshold: ~15% of the frame diagonal per second.
   const diag = Math.hypot(sourceW, sourceH);
   const speedThreshold = diag * 0.15;
 
-  for (let i = 1; i < samples.length; i++) {
-    const a = samples[i - 1]!;
-    const b = samples[i]!;
-    const dt = (b.tUs - a.tUs) / 1e6;
-    if (dt <= 0) continue;
-    const speed = Math.hypot(b.x - a.x, b.y - a.y) / dt;
-    if (speed >= speedThreshold) {
-      out.push({ tUs: b.tUs, x: b.x, y: b.y, weight: 1 });
+  if (!options?.ignoreSpeed) {
+    for (let i = 1; i < samples.length; i++) {
+      const a = samples[i - 1]!;
+      const b = samples[i]!;
+      const dt = (b.tUs - a.tUs) / 1e6;
+      if (dt <= 0) continue;
+      const speed = Math.hypot(b.x - a.x, b.y - a.y) / dt;
+      if (speed >= speedThreshold) {
+        out.push({ tUs: b.tUs, x: b.x, y: b.y, weight: 1 });
+      }
     }
   }
   for (const c of clickTimesUs) {
     out.push({ tUs: c.tUs, x: c.x, y: c.y, weight: 2 });
   }
+
+  // Dwell heuristic: cursor stays within dwellRadiusPx for >= minDwellUs (Focra-style)
+  if (options?.includeDwell) {
+    const radius = options.dwellRadiusPx ?? 8;
+    const minUs = options.minDwellUs ?? 500_000;
+    let anchorIdx = 0;
+
+    for (let i = 1; i < samples.length; i++) {
+      const anchor = samples[anchorIdx]!;
+      const s = samples[i]!;
+      const dist = Math.hypot(s.x - anchor.x, s.y - anchor.y);
+      if (dist <= radius) {
+        if (s.tUs - anchor.tUs >= minUs) {
+          out.push({ tUs: Math.round((anchor.tUs + s.tUs) / 2), x: anchor.x, y: anchor.y, weight: 1.5 });
+          // Advance anchor past this dwell window to prevent duplicates
+          anchorIdx = i;
+        }
+      } else {
+        anchorIdx = i;
+      }
+    }
+  }
+
   out.sort((p, q) => p.tUs - q.tUs);
   return out;
 }
@@ -410,8 +436,45 @@ export function computeAutoZoom(
   sourceW: number,
   sourceH: number,
   intensity: ZoomIntensity,
+  options?: { includeDwell?: boolean; dwellRadiusPx?: number; minDwellUs?: number; ignoreSpeed?: boolean },
 ): ZoomKeyframe[] {
-  const interests = detectInterestPoints(samples, clicks, sourceW, sourceH);
+  const interests = detectInterestPoints(samples, clicks, sourceW, sourceH, options);
   const clusters = clusterInterests(interests, sourceW, sourceH);
   return autoKeyframes(clusters, sourceW, sourceH, intensity);
+}
+
+export interface SuggestionOptions {
+  heuristic: 'clicks' | 'dwell' | 'combined';
+  intensity: ZoomIntensity;
+  dwellRadiusPx?: number;
+  minDwellUs?: number;
+}
+
+/**
+ * Suggest Zooms: Analyzes the session's cursor track and generates proposed
+ * discrete zoom keyframes for the user to review, accept all, or reject.
+ */
+export function suggestZooms(
+  samples: CursorSample[],
+  clicks: Array<{ tUs: number; x: number; y: number }>,
+  sourceW: number,
+  sourceH: number,
+  options: SuggestionOptions,
+): ZoomKeyframe[] {
+  if (samples.length === 0 && clicks.length === 0) return [];
+  const effectiveClicks = options.heuristic === 'dwell' ? [] : clicks;
+  const includeDwell = options.heuristic === 'dwell' || options.heuristic === 'combined';
+  return computeAutoZoom(
+    samples,
+    effectiveClicks,
+    sourceW,
+    sourceH,
+    options.intensity,
+    {
+      includeDwell,
+      ignoreSpeed: options.heuristic === 'dwell',
+      dwellRadiusPx: options.dwellRadiusPx ?? 8,
+      minDwellUs: options.minDwellUs ?? 500_000,
+    },
+  );
 }

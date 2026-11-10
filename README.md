@@ -15,7 +15,7 @@ Everything runs 100% offline on your machine. macOS - Windows - Linux.
 [![CodeQL](https://github.com/SudhirDevOps1/recast/actions/workflows/codeql.yml/badge.svg)](https://github.com/SudhirDevOps1/recast/actions/workflows/codeql.yml)
 [![License: GPL-3.0-or-later](https://img.shields.io/badge/license-GPL--3.0--or--later-blue.svg)](LICENSE)
 [![Website](https://img.shields.io/badge/website-sudhirdevops1.github.io%2Frecast-7C5CFF)](https://sudhirdevops1.github.io/recast/)
-[![Latest release](https://img.shields.io/badge/download-v0.1.3-2EA043)](https://github.com/SudhirDevOps1/recast/releases/latest)
+[![Latest release](https://img.shields.io/badge/download-v0.1.4-2EA043)](https://github.com/SudhirDevOps1/recast/releases/latest)
 
 <img src="apps/website/assets/og.png" width="720" alt="Recast - record, auto-zoom, caption, export" />
 

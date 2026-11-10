@@ -246,9 +246,14 @@ export const IPC = {
   ),
   'capture:readCursor': def(
     z.object({ sessionId: z.string() }),
-    z.object({ samples: z.array(z.unknown()), clicks: z.array(z.unknown()) }),
+    z.object({
+      samples: z.array(z.unknown()),
+      clicks: z.array(z.unknown()),
+      keys: z.array(z.unknown()).optional(),
+    }),
   ),
   'capture:readCaptions': def(z.object({ path: z.string() }), z.string().nullable()),
+  'capture:appendAnnotation': def(z.object({ sessionId: z.string(), annotation: z.unknown() }), z.void()),
 
   /** Export host channels (renderer renders/encodes; main writes disk). */
   'export:beginChunked': def(z.object({ exportId: z.string(), destination: z.string() }), z.void()),
