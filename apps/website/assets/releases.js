@@ -191,11 +191,24 @@
         nameWrap.appendChild(tag);
       }
 
+      /* GitHub publishes a SHA-256 digest per asset — show the first bytes so
+         a file can be matched against SHA256SUMS without opening it. */
+      var digest = asset.digest || '';
+      if (/^sha256:[0-9a-f]{64}$/i.test(digest)) {
+        var sha = document.createElement('span');
+        sha.className = 'asset-sha';
+        sha.textContent = 'sha256:' + digest.slice(7, 19) + '…';
+        sha.title = 'SHA-256 ' + digest.slice(7);
+        a.appendChild(nameWrap);
+        a.appendChild(sha);
+      } else {
+        a.appendChild(nameWrap);
+      }
+
       var size = document.createElement('span');
       size.className = 'asset-size';
       size.textContent = fmtSize(asset.size);
 
-      a.appendChild(nameWrap);
       a.appendChild(size);
       li.appendChild(a);
       ul.appendChild(li);
@@ -505,6 +518,41 @@
       }
     });
   });
+
+  /* ------------------------------------------------- mobile sticky bar */
+
+  var sticky = $('#dl-sticky');
+  var stickyClose = $('#dl-sticky-close');
+  var stickyDismissed = false;
+
+  function setSticky(visible) {
+    if (!sticky || stickyDismissed) return;
+    sticky.hidden = !visible;
+    document.body.classList.toggle('has-sticky', visible);
+  }
+
+  if (sticky && state.mobile) {
+    sticky.hidden = false;
+    document.body.classList.add('has-sticky');
+
+    /* Hide the bar while the download section is already on screen — the
+       note and the file list are the better answer there. */
+    var section = document.querySelector('#download');
+    if (section && 'IntersectionObserver' in window) {
+      var observer = new IntersectionObserver(function (entries) {
+        setSticky(!entries[0].isIntersecting);
+      }, { threshold: 0.3 });
+      observer.observe(section);
+    }
+  }
+
+  if (stickyClose) {
+    stickyClose.addEventListener('click', function () {
+      stickyDismissed = true;
+      if (sticky) sticky.hidden = true;
+      document.body.classList.remove('has-sticky');
+    });
+  }
 
   /* --------------------------------------------------------- first paint */
 
