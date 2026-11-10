@@ -73,6 +73,13 @@
 *::before,
 *::after { box-sizing: border-box; }
 
+/*
+ * Author `display` rules beat the UA stylesheet's `[hidden] { display: none }`.
+ * Without this, a hidden full-screen overlay (the mobile menu) stays in the
+ * layout, invisible but still swallowing every click on the page.
+ */
+[hidden] { display: none !important; }
+
 html {
   scroll-behavior: smooth;
   scroll-padding-top: 110px;
@@ -371,9 +378,10 @@ kbd {
   justify-content: space-between;
   opacity: 0;
   transform: translateY(-8px);
+  pointer-events: none;
   transition: opacity 360ms var(--ease), transform 460ms var(--ease);
 }
-.mobile-menu.is-open { opacity: 1; transform: none; }
+.mobile-menu.is-open { opacity: 1; transform: none; pointer-events: auto; }
 .mobile-menu nav { display: grid; gap: 2px; }
 .mobile-menu nav a {
   display: flex; align-items: baseline; gap: 14px;
