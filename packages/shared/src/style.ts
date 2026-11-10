@@ -59,6 +59,41 @@ export const CaptionStyleSchema = z.object({
 });
 export type CaptionStyleConfig = z.infer<typeof CaptionStyleSchema>;
 
+/** Face-cam picture-in-picture (Screen-Studio style overlay). Rendered only
+ *  when the session actually recorded a camera track — the schema is honest
+ *  about availability: project.media.camera drives enablement at draw time. */
+export const FacecamSchema = z.object({
+  enabled: z.boolean().default(false),
+  /** Corner placement on the final composition. */
+  position: z.enum(['tl', 'tr', 'bl', 'br']).default('br'),
+  /** Display width as a fraction of output width (0.08–0.45). */
+  widthFraction: z.number().min(0.08).max(0.45).default(0.22),
+  /** Circular crop (crops the source to a centered square first). */
+  round: z.boolean().default(true),
+  /** Flip horizontally (self-view convention). */
+  mirror: z.boolean().default(true),
+  /** Margin from the composition edge as a fraction of output height. */
+  marginFraction: z.number().min(0.01).max(0.2).default(0.04),
+  shadow: z.boolean().default(true),
+  borderWidthPx: z.number().min(0).max(12).default(2),
+  borderColor: z.string().default('#FFFFFF26'),
+  opacity: z.number().min(0.3).max(1).default(1),
+});
+export type Facecam = z.infer<typeof FacecamSchema>;
+
+export const DEFAULT_FACECAM: Facecam = {
+  enabled: false,
+  position: 'br',
+  widthFraction: 0.22,
+  round: true,
+  mirror: true,
+  marginFraction: 0.04,
+  shadow: true,
+  borderWidthPx: 2,
+  borderColor: '#FFFFFF26',
+  opacity: 1,
+};
+
 export const StylePresetSchema = z.object({
   format: z.literal('recaststyle'),
   version: z.literal(1),
@@ -70,6 +105,9 @@ export const StylePresetSchema = z.object({
   frame: FrameSchema,
   cursor: CursorStyleSchema,
   captions: CaptionStyleSchema,
+  /** Face-cam placement. Optional-with-default keeps every existing
+   *  .recaststyle file and saved project parsing unchanged. */
+  facecam: FacecamSchema.default(DEFAULT_FACECAM),
 });
 export type StylePreset = z.infer<typeof StylePresetSchema>;
 
@@ -123,6 +161,7 @@ function preset(
       position: 'bottom',
       ...captions,
     },
+    facecam: DEFAULT_FACECAM,
   };
 }
 

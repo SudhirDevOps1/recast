@@ -307,12 +307,25 @@ export function RecorderView() {
             ) : null}
           </div>
         </Field>
-        <Field label="Face camera" hint="Recorded as a separate picture-in-picture track.">
+        <Field label="Face camera" hint="Recorded as a separate picture-in-picture track. A camera problem never blocks the screen take.">
           <div className="flex items-center gap-3">
             <Switch checked={opts.cameraEnabled} onCheckedChange={(v) => opts.set({ cameraEnabled: v })} ariaLabel="Record camera" />
             <IconCamera />
           </div>
         </Field>
+        {opts.cameraEnabled ? (
+          <Field label="Camera device" hint="Used for the face-cam overlay; style it in the editor's Cam panel.">
+            <Select
+              value={opts.cameraDeviceId ?? 'default'}
+              onValueChange={(v) => opts.set({ cameraDeviceId: v === 'default' ? null : v })}
+              options={(sources?.cameras ?? []).map((c) => ({
+                value: c.id || 'default',
+                label: c.default ? `${c.label} (default)` : c.label,
+              })).concat([{ value: 'default', label: 'System default' }])}
+              ariaLabel="Camera device"
+            />
+          </Field>
+        ) : null}
         <Field label="Microphone device" hint="Used for the recording when the microphone is on.">
           <Select
             value={opts.micDeviceId ?? 'default'}
@@ -422,7 +435,7 @@ export function RecorderView() {
         windowId: opts.selectedWindowId ?? undefined,
         micDeviceId: opts.micEnabled ? (opts.micDeviceId ?? 'default') : null,
         systemAudio: opts.systemAudio,
-        cameraDeviceId: opts.cameraEnabled ? 'default' : null,
+        cameraDeviceId: opts.cameraEnabled ? (opts.cameraDeviceId ?? 'default') : null,
         countdownSec: opts.countdownSec,
         fps: opts.fps,
         quality: opts.quality,

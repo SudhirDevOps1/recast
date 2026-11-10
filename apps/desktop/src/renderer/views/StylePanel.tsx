@@ -144,10 +144,46 @@ export function StylePanel({
               { value: 'gradient', label: 'Gradient' },
               { value: 'mesh', label: 'Mesh gradient' },
               { value: 'echo', label: 'Blurred echo' },
+              { value: 'image', label: 'Image…' },
             ]}
             ariaLabel="Background type"
           />
         </Field>
+        {bg.type === 'image' ? (
+          <div className="space-y-2">
+            {bg.imageFile ? (
+              <div className="flex items-center gap-3 rounded-lg border border-hairline p-2">
+                <img
+                  src={`recast-media://local/${bg.imageFile.split(/[\\/]/).map(encodeURIComponent).join('/')}`}
+                  alt="Background"
+                  className="h-14 w-24 rounded-md object-cover"
+                  style={{ background: 'var(--bg-sunken)' }}
+                />
+                <div className="min-w-0 flex-1 truncate text-xs" style={{ color: 'var(--text-muted)' }}>
+                  {bg.imageFile.split(/[\\/]/).pop()}
+                </div>
+                <Button size="sm" onClick={() => setBackground({ imageFile: undefined })} aria-label="Remove background image">
+                  Remove
+                </Button>
+              </div>
+            ) : null}
+            <Button
+              className="w-full"
+              onClick={async () => {
+                const r = await bridge().invoke('styles:pickBackgroundImage', { projectId: project.id });
+                if (r.path) setBackground({ type: 'image', imageFile: r.path });
+                else if (r.error) showToast(r.error, 'error');
+              }}
+            >
+              <span className="inline-flex items-center gap-2">
+                <IconUpload size={14} /> {bg.imageFile ? 'Change image…' : 'Choose image…'}
+              </span>
+            </Button>
+            <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
+              The image is copied into the session folder and travels with the recording.
+            </p>
+          </div>
+        ) : null}
         {bg.type === 'solid' ? (
           <Field label="Color">
             <ColorPicker value={bg.color ?? '#101418'} onChange={(color) => setBackground({ color })} ariaLabel="Background color" />
@@ -255,6 +291,15 @@ export function StylePanel({
         </Field>
         <Field label={`Idle fade — ${style.cursor.idleFadeMs === 0 ? 'never' : `${style.cursor.idleFadeMs} ms`}`}>
           <Slider value={style.cursor.idleFadeMs} min={0} max={5000} step={100} ariaLabel="Idle fade" onValueChange={(v) => setCursor({ idleFadeMs: v })} />
+        </Field>
+        <Field label={`Motion smoothing — ${Math.round(style.cursor.cursorSmoothing * 100)}%`}>
+          <Slider value={style.cursor.cursorSmoothing ?? 0} min={0} max={1} step={0.05} ariaLabel="Cursor smoothing" onValueChange={(v) => setCursor({ cursorSmoothing: v })} />
+        </Field>
+        <Field label="Motion trail">
+          <Switch checked={style.cursor.trail ?? false} onCheckedChange={(v) => setCursor({ trail: v })} ariaLabel="Cursor motion trail" />
+        </Field>
+        <Field label="Click bounce">
+          <Switch checked={style.cursor.clickBounce ?? false} onCheckedChange={(v) => setCursor({ clickBounce: v })} ariaLabel="Click bounce" />
         </Field>
       </section>
 

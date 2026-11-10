@@ -282,6 +282,11 @@ export const IPC = {
 
   'styles:import': def(z.void(), z.object({ preset: StylePresetSchema.nullable(), error: z.string().optional() })),
   'styles:export': def(z.object({ preset: StylePresetSchema, targetPath: z.string().optional() }), z.object({ path: z.string().nullable() })),
+  /** Pick a background image and copy it into the session dir (additive). */
+  'styles:pickBackgroundImage': def(
+    z.object({ projectId: z.string() }),
+    z.object({ path: z.string().nullable(), error: z.string().optional() }),
+  ),
 
   'export:estimate': def(
     z.object({ projectId: z.string(), format: z.enum(['mp4', 'webm', 'hevc', 'prores', 'gif']), resolution: z.enum(['720p', '1080p', '1440p', '2160p', 'source']), fps: z.number() }),

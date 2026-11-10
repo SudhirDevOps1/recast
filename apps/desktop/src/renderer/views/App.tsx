@@ -77,12 +77,23 @@ export default function App() {
       {/* Custom title bar */}
       <header
         data-tauri-drag-region=""
-        className="flex items-center justify-between border-b border-hairline px-4"
+        className="glass flex items-center justify-between border-b border-hairline px-4"
         style={{ height: 'var(--titlebar-height)', WebkitAppRegion: 'drag' } as React.CSSProperties}
       >
         <div className="flex items-center gap-3" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
-          <span className="text-[15px] font-bold tracking-tight" style={{ marginLeft: platform?.platform === 'darwin' ? 64 : 0 }}>
-            Recast
+          <span className="flex items-center gap-2.5">
+            <span
+              aria-hidden="true"
+              className="flex h-6 w-6 items-center justify-center rounded-lg"
+              style={{ background: 'linear-gradient(135deg, var(--accent), var(--accent-press))', boxShadow: '0 0 0 1px var(--glass-hairline), 0 2px 8px var(--accent-glow)' }}
+            >
+              <svg width="11" height="11" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+                <path d="M3 1.8v8.4l6.4-4.2L3 1.8Z" fill="var(--accent-contrast)" />
+              </svg>
+            </span>
+            <span className="text-[15px] font-bold tracking-tight" style={{ marginLeft: platform?.platform === 'darwin' ? 64 : 0 }}>
+              Recast
+            </span>
           </span>
           {useApp.getState().recorderState ? (
             <Badge tone="recording">

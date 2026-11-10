@@ -97,6 +97,7 @@ export function buildProjectFromSession(input: BuildProjectInput): RecastProject
     audio: manifest.audio
       ? { file: manifest.audio.file, startUs: 0, endUs: manifest.screen.segments.at(-1)?.endUs ?? 0 }
       : null,
+    camera: manifest.camera?.segments[0] ?? null,
     cursor: { file: 'cursor.jsonl', available: existsSync(join(recordingsDir(), sessionId, 'cursor.jsonl')) },
   };
 

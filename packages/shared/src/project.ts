@@ -131,6 +131,9 @@ export const RecastProjectSchema = z.object({
     cursor: z
       .object({ file: z.string().default('cursor.jsonl'), available: z.boolean() })
       .nullable(),
+    /** Face-cam segment when the session recorded one (single WebM covering
+     *  the capture clock from session start). Null for older sessions. */
+    camera: SegmentSchema.nullable().default(null),
   }),
   timeline: z.object({
     clips: z.array(ClipSchema),
@@ -216,6 +219,7 @@ export function makeEmptyProject(
       segments: [],
       audio: null,
       cursor: null,
+      camera: null,
     },
     timeline: { clips: [], durationUs: 0 },
     zoom: { enabled: true, mode: 'auto', intensity: 'balanced', autoKeyframes: [], manualKeyframes: [] },

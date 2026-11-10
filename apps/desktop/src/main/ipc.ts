@@ -1,5 +1,5 @@
 import { ipcMain, dialog, shell, BrowserWindow, screen, app, desktopCapturer } from 'electron';
-import { promises as fs } from 'node:fs';
+import { promises as fs, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import {
   type IpcChannel,
@@ -286,17 +286,24 @@ export async function registerIpcHandlers(): Promise<void> {
     const out: Array<{ segmentId: string; dataUrl: string }> = [];
     const first = project.media.segments[0]!;
     const source = join(project.media.dir, first.file);
+    // Persisted poster frame: written once into the session dir and recorded
+    // in the library store, so later Library visits skip the ffmpeg spawn.
+    const posterPath = join(project.media.dir, 'thumbnail.png');
+    const existing = project.media.segments.length > 0 && existsSync(posterPath) ? posterPath : null;
     if (runner) {
       try {
-        const tmp = join(project.media.dir, `thumb-${projectId}.png`);
-        await runner.thumbnail(source, 1.0, tmp, 320);
-        const buf = await fs.readFile(tmp);
+        if (!existing) {
+          await runner.thumbnail(source, 1.0, posterPath, 320);
+          upsertProjectMeta({ ...project, media: { ...project.media } }, { thumbnailFile: 'thumbnail.png' });
+        }
+        const buf = await fs.readFile(posterPath);
         out.push({ segmentId: first.id, dataUrl: `data:image/png;base64,${buf.toString('base64')}` });
-        await fs.rm(tmp, { force: true }).catch(() => undefined);
       } catch {
         /* thumbnails are best-effort */
       }
     } else {
+      // No ffmpeg: the renderer can stream the first segment directly — the
+      // <img> shows the first decoded frame instead of a placeholder icon.
       out.push({ segmentId: first.id, dataUrl: mediaUrlFor(source) });
     }
     return { thumbnails: out };
@@ -335,6 +342,27 @@ export async function registerIpcHandlers(): Promise<void> {
     if (canceled || !filePath) return { path: null };
     await fs.writeFile(filePath, JSON.stringify(preset, null, 2), 'utf8');
     return { path: filePath };
+  });
+  // Background image: pick a picture and COPY it into the session dir so the
+  // project stays self-contained (and stays under the recast-media allowlist).
+  register('styles:pickBackgroundImage', async (payload) => {
+    const { projectId } = payload as { projectId: string };
+    const project = loadProject(projectId);
+    if (!project) return { path: null, error: 'Project not found.' };
+    const { canceled, filePaths } = await dialog.showOpenDialog({
+      filters: [{ name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'webp', 'avif'] }],
+      properties: ['openFile'],
+    });
+    if (canceled || filePaths.length === 0) return { path: null };
+    try {
+      const src = filePaths[0]!;
+      const ext = (src.match(/\.([a-z0-9]+)$/i)?.[1] ?? 'png').toLowerCase();
+      const dest = join(project.media.dir, `background-${Date.now().toString(36)}.${ext}`);
+      await fs.copyFile(src, dest);
+      return { path: dest };
+    } catch (e) {
+      return { path: null, error: (e as Error).message };
+    }
   });
 
   // ---------------- export ----------------
@@ -638,7 +666,7 @@ async function listAudioDevices(kind: 'audioinput' | 'videoinput'): Promise<Arra
   return [];
 }
 
-function upsertProjectMeta(project: import('@recast/shared').RecastProject): void {
+function upsertProjectMeta(project: import('@recast/shared').RecastProject, patch?: { thumbnailFile?: string | null }): void {
   const c = context();
   c.library.upsertProject({
     id: project.id,
@@ -649,7 +677,7 @@ function upsertProjectMeta(project: import('@recast/shared').RecastProject): voi
     width: project.media.width,
     height: project.media.height,
     hasCaptions: Boolean(project.captions),
-    thumbnailFile: null,
+    thumbnailFile: patch?.thumbnailFile ?? null,
   });
 }
 

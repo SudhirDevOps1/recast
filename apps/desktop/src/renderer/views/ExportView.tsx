@@ -8,6 +8,15 @@ import { buildTimeMap, buildZoomTrack, cuesAt, parseSrt, type CaptionLine, type 
 import { captureMediaHost, beginChunkedExport } from '../lib/export-host';
 import type { RecastProject } from '@recast/shared';
 
+/** Quick-apply export bundles — every field stays editable below. */
+const EXPORT_PRESETS: Array<{ label: string; format: 'mp4' | 'webm' | 'hevc' | 'prores' | 'gif'; resolution: '720p' | '1080p' | '1440p' | '2160p' | 'source'; fps: 24 | 30 | 60 }> = [
+  { label: 'YouTube 1080p', format: 'mp4', resolution: '1080p', fps: 30 },
+  { label: 'Smooth 60 fps', format: 'mp4', resolution: '1080p', fps: 60 },
+  { label: '4K master', format: 'mp4', resolution: '2160p', fps: 30 },
+  { label: 'Light 720p', format: 'mp4', resolution: '720p', fps: 24 },
+  { label: 'WebM lossless-ish', format: 'webm', resolution: 'source', fps: 30 },
+];
+
 /** Export: format, resolution, honest estimates, used-path display, verify. */
 export function ExportView() {
   const projectId = useApp((s) => s.projectId);
@@ -27,6 +36,8 @@ export function ExportView() {
   const [captions, setCaptions] = useState<CaptionLine[]>([]);
   const cancelRef = useRef(false);
   const videoRefs = useRef<Map<string, HTMLVideoElement>>(new Map());
+  const cameraRef = useRef<HTMLVideoElement | null>(null);
+  const [bgImage, setBgImage] = useState<HTMLImageElement | null>(null);
 
   useEffect(() => {
     if (!projectId) return;
@@ -59,6 +70,28 @@ export function ExportView() {
       .catch(() => setEstimate(null));
   }, [projectId, project, format, resolution, fps]);
 
+  // Background image decode for the compositor (same source as preview).
+  const bg = project?.style.frame.background;
+  useEffect(() => {
+    if (!bg || bg.type !== 'image' || !bg.imageFile) {
+      setBgImage(null);
+      return;
+    }
+    let cancelled = false;
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      if (!cancelled) setBgImage(img);
+    };
+    img.onerror = () => {
+      if (!cancelled) setBgImage(null);
+    };
+    img.src = `recast-media://local/${bg.imageFile.split(/[\\/]/).map(encodeURIComponent).join('/')}`;
+    return () => {
+      cancelled = true;
+    };
+  }, [bg?.type, bg?.imageFile]);
+
   if (!project) {
     return <div className="p-8 text-secondary">No project selected — open one from the Library first.</div>;
   }
@@ -81,6 +114,21 @@ export function ExportView() {
       videoRefs.current.set(segmentId, v);
     }
     return v;
+  }
+
+  function getCameraElement(): HTMLVideoElement | null {
+    const proj = project;
+    if (!proj?.media.camera) return null;
+    if (!cameraRef.current) {
+      const cam = proj.media.camera;
+      const v = document.createElement('video');
+      v.crossOrigin = 'anonymous';
+      v.src = `recast-media://local/${proj.media.dir.split(/[\\/]/).map(encodeURIComponent).join('/')}/${encodeURIComponent(cam.file)}`;
+      v.muted = true;
+      v.preload = 'auto';
+      cameraRef.current = v;
+    }
+    return cameraRef.current;
   }
 
   async function pickDestination(): Promise<string | null> {
@@ -120,7 +168,8 @@ export function ExportView() {
           cursorEvents,
           getCaptionsAt: (t) => cuesAt(captions, t),
           getVideoElement,
-          getBackgroundImage: null,
+          getCameraElement,
+          getBackgroundImage: () => bgImage,
           preferHardware: settings.preferHardwareEncoder,
           hasFfmpeg: ffmpeg?.available ?? false,
           normalizeLufs: proj.audioEdits.normalizeLufs,
@@ -146,6 +195,37 @@ export function ExportView() {
         <h1 className="text-2xl font-bold">Export</h1>
         <Button onClick={() => navigate('editor')}>Back to editor</Button>
       </div>
+
+      <section>
+        <div className="mb-2 text-[11px] font-bold uppercase tracking-wide" style={{ color: 'var(--text-muted)' }}>
+          Presets
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {EXPORT_PRESETS.map((p) => {
+            const active = format === p.format && resolution === p.resolution && fps === p.fps;
+            return (
+              <button
+                key={p.label}
+                type="button"
+                aria-pressed={active}
+                onClick={() => {
+                  setFormat(p.format);
+                  setResolution(p.resolution);
+                  setFps(p.fps);
+                }}
+                className="rounded-full border px-3 py-1.5 text-xs font-semibold transition-all"
+                style={{
+                  borderColor: active ? 'var(--accent)' : 'var(--hairline-strong)',
+                  background: active ? 'var(--accent-subtle)' : 'transparent',
+                  color: active ? 'var(--accent)' : 'var(--text-secondary)',
+                }}
+              >
+                {p.label}
+              </button>
+            );
+          })}
+        </div>
+      </section>
 
       <div className="grid grid-cols-2 gap-4">
         <Field label="Format">

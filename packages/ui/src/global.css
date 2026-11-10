@@ -62,3 +62,60 @@ kbd {
   font-family: var(--font-mono);
   font-size: var(--text-xs);
 }
+
+/* ---------------------------------------------------------------------------
+ * Premium layer — preview loading shimmer, glass surfaces, kbd chips.
+ * Reduced-motion safe (see tokens.css media query).
+ * ------------------------------------------------------------------------- */
+
+@keyframes recast-shimmer {
+  0% { background-position: -160% 0; }
+  100% { background-position: 260% 0; }
+}
+
+.preview-loading {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+  background: radial-gradient(120% 120% at 50% 20%, rgba(124, 140, 248, 0.05), transparent 55%);
+  pointer-events: none;
+}
+
+.preview-loading-dot {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 3px solid var(--hairline);
+  border-top-color: var(--accent);
+  animation: recast-spin 900ms linear infinite;
+}
+
+@keyframes recast-spin {
+  to { transform: rotate(360deg); }
+}
+
+.glass {
+  background: var(--glass);
+  backdrop-filter: blur(14px) saturate(1.2);
+  -webkit-backdrop-filter: blur(14px) saturate(1.2);
+}
+
+kbd {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 5px;
+  border: 1px solid var(--hairline-strong);
+  background: var(--surface);
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .preview-loading-dot { animation: none; }
+}

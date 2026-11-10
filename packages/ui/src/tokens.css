@@ -7,14 +7,17 @@
 :root {
   color-scheme: dark;
 
-  /* Surfaces */
-  --bg: #0e1015;
-  --bg-sunken: #0a0c10;
-  --surface: #161a22;
-  --surface-raised: #1c212b;
+  /* Surfaces — slightly deeper for a premium studio feel */
+  --bg: #0d0f14;
+  --bg-sunken: #090b0f;
+  --surface: #151923;
+  --surface-raised: #1b202b;
   --surface-hover: #232936;
   --hairline: rgba(255, 255, 255, 0.08);
   --hairline-strong: rgba(255, 255, 255, 0.14);
+  /* Glass panels (title bar, floating overlays) */
+  --glass: rgba(21, 25, 35, 0.82);
+  --glass-hairline: rgba(255, 255, 255, 0.1);
 
   /* Text */
   --text-primary: #e8ebf2;
@@ -27,6 +30,7 @@
   --accent-press: #6a79e8;
   --accent-subtle: rgba(124, 140, 248, 0.14);
   --accent-contrast: #0b0e12;
+  --accent-glow: rgba(124, 140, 248, 0.28);
 
   /* Functional (used sparingly, never decoratively) */
   --success: #4ade80;
