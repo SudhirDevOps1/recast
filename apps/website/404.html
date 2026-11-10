@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Not found — Recast</title>
+  <meta name="robots" content="noindex" />
+  <link rel="icon" type="image/svg+xml" href="assets/favicon.svg" />
+  <link rel="stylesheet" href="assets/style.css" />
+  <style>
+    .nf { min-height: 100dvh; display: grid; place-items: center; padding: 120px 24px 80px; }
+    .nf-inner { text-align: center; max-width: 560px; }
+    .nf-code {
+      font-family: var(--font-mono); font-size: 11px; letter-spacing: .18em;
+      text-transform: uppercase; color: var(--accent-2); margin: 0 0 18px;
+    }
+    .nf h1 { font-size: clamp(34px, 6vw, 56px); letter-spacing: -.04em; margin: 0 0 16px; line-height: 1.02; }
+    .nf p { color: var(--muted); margin: 0 0 30px; }
+    .nf-actions { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+  </style>
+</head>
+<body>
+  <main class="nf">
+    <div class="nf-inner">
+      <p class="nf-code">404 — nothing here</p>
+      <h1>This frame was cut.</h1>
+      <p>The page you asked for does not exist. The recording, however, is still on your machine.</p>
+      <div class="nf-actions">
+        <a class="btn btn-primary" href="/recast/">Back to Recast</a>
+        <a class="btn btn-ghost" href="https://github.com/SudhirDevOps1/recast" target="_blank" rel="noopener">Open GitHub</a>
+      </div>
+    </div>
+  </main>
+</body>
+</html>
