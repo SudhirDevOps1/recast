@@ -1696,6 +1696,7 @@ kbd {
 }
 
 .dl-shell {
+  position: relative;
   border-radius: var(--r-xl);
   border: 1px solid var(--line-2);
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.008));
@@ -1842,7 +1843,8 @@ kbd {
 }
 .dl-foot span { display: inline-flex; align-items: center; gap: 6px; }
 .dl-foot svg { color: var(--accent-2); }
-.dl-foot a { margin-left: auto; color: var(--text-2); }
+.dl-foot a { display: inline-flex; align-items: center; gap: 6px; color: var(--text-2); }
+.dl-foot a:last-child { margin-left: auto; }
 .dl-foot a:hover { color: #fff; }
 
 /* ----------------------------------------------------------------- faq */
@@ -2446,4 +2448,145 @@ kbd {
   .rel-tag { grid-column: 1 / -1; font-size: 12px; }
   .rel-side { justify-content: flex-end; }
   .term-note { font-size: 9.5px; }
+}
+/* ============================================ download: no-JS tab control */
+
+.os-radio {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 1px; height: 1px;
+  margin: 0; padding: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Panels are driven entirely by :checked, so a failed or blocked script can
+   never leave the platform tabs dead. JS only fills the asset lists. */
+.os-panel { display: none; }
+#os-windows:checked ~ .dl-panels > #panel-windows,
+#os-macos:checked ~ .dl-panels > #panel-macos,
+#os-linux:checked ~ .dl-panels > #panel-linux { display: block; }
+
+#os-windows:checked ~ .dl-top label[for="os-windows"],
+#os-macos:checked ~ .dl-top label[for="os-macos"],
+#os-linux:checked ~ .dl-top label[for="os-linux"] {
+  color: #fff;
+  background: linear-gradient(180deg, rgba(124, 92, 255, 0.35), rgba(124, 92, 255, 0.18));
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.12) inset, 0 6px 16px -10px rgba(124, 92, 255, 0.9);
+}
+
+#os-windows:focus-visible ~ .dl-top label[for="os-windows"],
+#os-macos:focus-visible ~ .dl-top label[for="os-macos"],
+#os-linux:focus-visible ~ .dl-top label[for="os-linux"] {
+  outline: 2px solid var(--accent-2);
+  outline-offset: 2px;
+}
+
+.os-tab { user-select: none; -webkit-user-select: none; }
+
+/* ==================================================== download: mobile note */
+
+.dl-mobile {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 15px 22px;
+  border-bottom: 1px solid var(--line);
+  background: linear-gradient(90deg, rgba(124, 92, 255, 0.12), rgba(124, 92, 255, 0.02) 65%);
+}
+.dl-mobile-copy { display: grid; gap: 3px; font-size: 13px; line-height: 1.5; color: var(--text-2); }
+.dl-mobile-copy strong { font-size: 13.5px; font-weight: 600; color: #fff; }
+.dl-mobile .btn { flex: none; }
+
+/* ================================================= download: Mac arch choice */
+
+.arch-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin: 14px 0 2px;
+  font-size: 12px;
+  color: var(--muted-2);
+}
+.arch-label { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; }
+.arch-chip {
+  font-family: var(--font-body);
+  font-size: 11.5px;
+  color: var(--text-2);
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 4px 11px;
+  cursor: pointer;
+  transition: color 220ms var(--ease), border-color 220ms var(--ease), background 220ms var(--ease);
+}
+.arch-chip:hover { color: #fff; border-color: var(--line-2); }
+.arch-chip.is-active {
+  color: #fff;
+  border-color: var(--accent-line);
+  background: var(--accent-soft);
+}
+.arch-note { font-family: var(--font-mono); font-size: 10px; color: var(--muted-2); }
+
+/* ======================================================== download: feedback */
+
+.dl-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  z-index: 95;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: min(560px, calc(100vw - 32px));
+  padding: 12px 14px 12px 16px;
+  border-radius: 14px;
+  border: 1px solid var(--line-2);
+  background: rgba(9, 13, 20, 0.94);
+  backdrop-filter: blur(18px) saturate(140%);
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
+  box-shadow: 0 24px 60px -30px rgba(0, 0, 0, 1);
+  font-size: 13px;
+  color: var(--text-2);
+  animation: toast-in 320ms var(--spring) both;
+}
+.dl-toast[hidden] { display: none; }
+@keyframes toast-in {
+  from { opacity: 0; transform: translate(-50%, 14px); }
+  to { opacity: 1; transform: translate(-50%, 0); }
+}
+.dl-toast-dot {
+  flex: none;
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: var(--green);
+  box-shadow: 0 0 0 0 rgba(74, 222, 128, 0.5);
+  animation: pulse 2.4s var(--ease-soft) infinite;
+}
+.dl-toast-text { flex: 1 1 auto; }
+.dl-toast-link { flex: none; color: var(--accent-3); white-space: nowrap; }
+.dl-toast-link:hover { color: #fff; }
+.dl-toast-close {
+  flex: none;
+  width: 24px; height: 24px;
+  display: grid; place-items: center;
+  border-radius: 50%;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--muted);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  transition: color 200ms var(--ease), border-color 200ms var(--ease);
+}
+.dl-toast-close:hover { color: #fff; border-color: var(--line-2); }
+
+@media (max-width: 680px) {
+  .dl-mobile { flex-direction: column; align-items: flex-start; }
+  .dl-toast { bottom: 14px; }
+  .arch-row { margin-top: 12px; }
 }

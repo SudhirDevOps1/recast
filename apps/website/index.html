@@ -26,7 +26,7 @@
 
   <link rel="preload" href="assets/fonts/geist-var.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="preload" href="assets/fonts/space-grotesk-var.woff2" as="font" type="font/woff2" crossorigin />
-  <link rel="stylesheet" href="assets/style.css?v=4" />
+  <link rel="stylesheet" href="assets/style.css?v=5" />
   <script>document.documentElement.classList.replace('no-js', 'js');</script>
 
   <script type="application/ld+json">
@@ -698,20 +698,32 @@
         </header>
 
         <div class="dl-shell" data-reveal>
+          <input class="os-radio" type="radio" name="os" id="os-windows" value="windows" checked />
+          <input class="os-radio" type="radio" name="os" id="os-macos" value="macos" />
+          <input class="os-radio" type="radio" name="os" id="os-linux" value="linux" />
+
+          <div class="dl-mobile" id="dl-mobile" hidden>
+            <span class="dl-mobile-copy">
+              <strong>Recast is a desktop app — it won't run on this phone.</strong>
+              <span>Open this page on your computer, or send yourself the link. The tabs below still list the real files.</span>
+            </span>
+            <button class="btn btn-ghost btn-sm" type="button" data-copy-url>Copy page link</button>
+          </div>
+
           <div class="dl-top">
-            <div class="os-tabs" role="tablist" aria-label="Operating system">
-              <button class="os-tab is-active" role="tab" id="tab-windows" aria-controls="panel-windows" aria-selected="true" data-os="windows">
+            <div class="os-tabs" role="radiogroup" aria-label="Operating system">
+              <label class="os-tab" for="os-windows" id="tab-windows">
                 <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" fill="currentColor"><path d="M3 5.6 10.4 4.5v7H3V5.6Zm0 12.8 7.4 1.1v-7H3v5.9Zm8.6 1.3L21 21V12.6h-9.4v7Zm0-15.9v6.8H21V3l-9.4 1.8Z"/></svg>
                 Windows
-              </button>
-              <button class="os-tab" role="tab" id="tab-macos" aria-controls="panel-macos" aria-selected="false" data-os="macos" tabindex="-1">
+              </label>
+              <label class="os-tab" for="os-macos" id="tab-macos">
                 <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" fill="currentColor"><path d="M16.4 12.7c0-2.3 1.9-3.4 2-3.5-1.1-1.6-2.8-1.8-3.4-1.9-1.4-.1-2.7.8-3.4.8-.7 0-1.8-.8-3-.8-1.5 0-2.9.9-3.7 2.3-1.6 2.8-.4 6.9 1.1 9.2.8 1.1 1.7 2.3 2.9 2.3 1.2 0 1.6-.7 3-.7s1.8.8 3 .7c1.2 0 2-1.1 2.8-2.2.9-1.3 1.2-2.5 1.3-2.6-.1 0-2.6-1-2.6-3.6ZM14.2 5.6c.6-.8 1.1-1.9 1-3-1 0-2.1.6-2.8 1.4-.6.7-1.1 1.9-1 3 1.1.1 2.2-.6 2.8-1.4Z"/></svg>
                 macOS
-              </button>
-              <button class="os-tab" role="tab" id="tab-linux" aria-controls="panel-linux" aria-selected="false" data-os="linux" tabindex="-1">
+              </label>
+              <label class="os-tab" for="os-linux" id="tab-linux">
                 <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" fill="currentColor"><path d="M12 2c-2.2 0-3.3 1.8-3.2 4.1.1 1.6.1 2.4-.6 3.8-.8 1.5-2.2 2.9-2.4 4.7-.1 1.2.4 2 .4 2.7 0 .6-.5 1.3-.3 2 .1.5.7.9 1.4 1 .7.1 1.6.1 2.3.3.8.2 1.6.4 2.4.4s1.6-.2 2.4-.4c.7-.2 1.6-.2 2.3-.3.7-.1 1.3-.5 1.4-1 .2-.7-.3-1.4-.3-2 0-.7.5-1.5.4-2.7-.2-1.8-1.6-3.2-2.4-4.7-.7-1.4-.7-2.2-.6-3.8C15.3 3.8 14.2 2 12 2Zm-1.5 4.2c.4 0 .7.5.7 1.1s-.3 1.1-.7 1.1-.7-.5-.7-1.1.3-1.1.7-1.1Zm3 0c.4 0 .7.5.7 1.1s-.3 1.1-.7 1.1-.7-.5-.7-1.1.3-1.1.7-1.1ZM12 8.6c.8 0 1.9.9 1.9 1.6 0 .5-.8 1.4-1.9 1.4s-1.9-.9-1.9-1.4c0-.7 1.1-1.6 1.9-1.6Z"/></svg>
                 Linux
-              </button>
+              </label>
             </div>
             <div class="dl-tools">
               <label class="switch">
@@ -724,7 +736,7 @@
           </div>
 
           <div class="dl-panels">
-            <div class="os-panel is-active" role="tabpanel" id="panel-windows" aria-labelledby="tab-windows" data-os="windows">
+            <div class="os-panel" role="region" id="panel-windows" aria-labelledby="tab-windows" data-os="windows">
               <div class="dl-primary">
                 <div class="dl-primary-copy">
                   <span class="dl-os-name">Windows</span>
@@ -740,7 +752,7 @@
               <p class="dl-hint">NSIS installer is per-user, no admin prompt. MSI for enterprise and GPO. Portable runs from a USB stick. ARM64 builds are native, not emulated.</p>
             </div>
 
-            <div class="os-panel" role="tabpanel" id="panel-macos" aria-labelledby="tab-macos" data-os="macos" hidden>
+            <div class="os-panel" role="region" id="panel-macos" aria-labelledby="tab-macos" data-os="macos">
               <div class="dl-primary">
                 <div class="dl-primary-copy">
                   <span class="dl-os-name">macOS</span>
@@ -752,11 +764,19 @@
                   <span class="btn-chip" aria-hidden="true"><svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12 12 4"/><path d="M5 4h7v7"/></svg></span>
                 </a>
               </div>
+
+              <div class="arch-row" data-arch-row="macos">
+                <span class="arch-label">This Mac has:</span>
+                <button class="arch-chip is-active" type="button" data-arch="arm64" aria-pressed="true">Apple Silicon</button>
+                <button class="arch-chip" type="button" data-arch="x64" aria-pressed="false">Intel</button>
+                <span class="arch-note" id="mac-arch-note">Picking the arm64 build</span>
+              </div>
+
               <ul class="dl-list" data-list="macos" aria-live="polite"><li class="dl-loading">Loading assets…</li></ul>
               <p class="dl-hint">First launch: right-click the app → Open (Gatekeeper, unsigned builds). System audio capture needs macOS 14.2 or newer.</p>
             </div>
 
-            <div class="os-panel" role="tabpanel" id="panel-linux" aria-labelledby="tab-linux" data-os="linux" hidden>
+            <div class="os-panel" role="region" id="panel-linux" aria-labelledby="tab-linux" data-os="linux">
               <div class="dl-primary">
                 <div class="dl-primary-copy">
                   <span class="dl-os-name">Linux</span>
@@ -780,7 +800,7 @@
 
           <div class="dl-foot">
             <span><svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3H7a3 3 0 0 0-3 3v7"/><path d="m10 5-3 3 3 3"/></svg> Auto-update with a documented rollback</span>
-            <span><svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8.5 6.2 11.7 13 5"/></svg> SHA256SUMS on every release</span>
+            <a class="dl-foot-link" id="sums-link" href="https://github.com/SudhirDevOps1/recast/releases/latest" target="_blank" rel="noopener"><svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8.5 6.2 11.7 13 5"/></svg> Download SHA256SUMS</a>
             <a href="https://github.com/SudhirDevOps1/recast/releases" target="_blank" rel="noopener">All releases &amp; changelog →</a>
           </div>
 
@@ -939,7 +959,14 @@
     </div>
   </footer>
 
-  <script src="assets/releases.js?v=4" defer></script>
-  <script src="assets/app.js?v=4" defer></script>
+  <div class="dl-toast" id="dl-toast" role="status" aria-live="polite" hidden>
+    <span class="dl-toast-dot" aria-hidden="true"></span>
+    <span class="dl-toast-text" id="dl-toast-text"></span>
+    <a class="dl-toast-link" id="dl-toast-link" href="https://github.com/SudhirDevOps1/recast/releases" target="_blank" rel="noopener" hidden>Direct link</a>
+    <button class="dl-toast-close" type="button" id="dl-toast-close" aria-label="Dismiss">×</button>
+  </div>
+
+  <script src="assets/releases.js?v=5" defer></script>
+  <script src="assets/app.js?v=5" defer></script>
 </body>
 </html>

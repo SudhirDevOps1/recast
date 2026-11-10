@@ -26,6 +26,7 @@
     "smoke": "pnpm --filter @recast/desktop smoke",
     "fetch:ffmpeg": "node scripts/fetch-ffmpeg.mjs",
     "icons": "node scripts/make-icons.mjs",
+    "check:website": "node scripts/check-website.mjs",
     "dist:win": "pnpm --filter @recast/desktop dist:win",
     "dist:win:arm64": "pnpm --filter @recast/desktop dist:win:arm64",
     "dist:mac": "pnpm --filter @recast/desktop dist:mac",

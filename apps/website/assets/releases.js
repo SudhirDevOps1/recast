@@ -2,9 +2,11 @@
  * Recast website — release data from the public GitHub API.
  *
  * Two unauthenticated requests per page load (release list + repo stars),
- * plus one more only if the visitor opts into nightly builds. Everything
- * degrades to a plain link when the API is rate-limited or the visitor is
- * offline. No cookies, no analytics, no third-party scripts.
+ * plus one more only if the visitor opts into nightly builds. Every request
+ * has an 8 s timeout, and every failure degrades to a plain GitHub link —
+ * the page never sits on "Loading assets…" forever.
+ *
+ * No cookies, no analytics, no third-party scripts.
  */
 (function () {
   'use strict';
@@ -12,6 +14,10 @@
   var REPO = 'SudhirDevOps1/recast';
   var API = 'https://api.github.com/repos/' + REPO;
   var RELEASES_URL = 'https://github.com/' + REPO + '/releases';
+  var LATEST_URL = RELEASES_URL + '/latest';
+  var TIMEOUT_MS = 8000;
+
+  var OS_NAME = { windows: 'Windows', macos: 'macOS', linux: 'Linux' };
 
   var FILTERS = {
     windows: /\.(exe|msi)$/i,
@@ -34,12 +40,27 @@
   function $(sel, root) { return (root || document).querySelector(sel); }
   function $$(sel, root) { return Array.prototype.slice.call((root || document).querySelectorAll(sel)); }
 
-  function getJSON(url) {
-    return fetch(url, { headers: { Accept: 'application/vnd.github+json' } })
-      .then(function (r) {
-        if (!r.ok) throw new Error('HTTP ' + r.status);
-        return r.json();
-      });
+  function getJSON(url, timeout) {
+    var controller = 'AbortController' in window ? new AbortController() : null;
+    var timer = 0;
+
+    if (controller) {
+      timer = window.setTimeout(function () { controller.abort(); }, timeout || TIMEOUT_MS);
+    }
+
+    return fetch(url, {
+      headers: { Accept: 'application/vnd.github+json' },
+      signal: controller ? controller.signal : undefined
+    }).then(function (r) {
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.json();
+    }).then(function (data) {
+      if (timer) window.clearTimeout(timer);
+      return data;
+    }, function (err) {
+      if (timer) window.clearTimeout(timer);
+      throw err;
+    });
   }
 
   function fmtSize(bytes) {
@@ -56,11 +77,36 @@
     }
   }
 
-  function detectOS() {
+  /* The tag is often "nightly"; the real version lives in the asset names. */
+  function buildVersion(release) {
+    if (!release) return '';
+    var assets = release.assets || [];
+    for (var i = 0; i < assets.length; i++) {
+      var m = /^Recast[-_](\d+\.\d+\.\d+)/i.exec(assets[i].name || '');
+      if (m) return m[1];
+    }
+    var tag = String(release.tag_name || '').replace(/^v/i, '');
+    return /^\d+\.\d+\.\d+$/.test(tag) ? tag : '';
+  }
+
+  function detectPlatform() {
     var ua = navigator.userAgent || '';
-    if (/Mac|iPhone|iPad|iPod/i.test(ua)) return 'macos';
-    if (/Linux|X11|CrOS/i.test(ua) && !/Android/i.test(ua)) return 'linux';
-    return 'windows';
+    var touchPoints = navigator.maxTouchPoints || 0;
+
+    // iPadOS 13+ reports a desktop "Macintosh" user agent, but is still touch
+    // first and cannot run a .dmg.
+    var mobile = /Android|iPhone|iPad|iPod|IEMobile|Windows Phone|Mobile/i.test(ua) ||
+      (touchPoints > 1 && /Macintosh/i.test(ua));
+
+    if (mobile) {
+      return { mobile: true, os: null, arch: 'arm64' };
+    }
+
+    if (/Mac|iPhone|iPad|iPod/i.test(ua)) return { mobile: false, os: 'macos', arch: 'arm64' };
+    if (/Linux|X11|CrOS/i.test(ua)) return { mobile: false, os: 'linux', arch: null };
+    if (/Windows|Win32|Win64/i.test(ua)) return { mobile: false, os: 'windows', arch: null };
+
+    return { mobile: false, os: 'windows', arch: null };
   }
 
   function assetsFor(os, assets) {
@@ -80,19 +126,39 @@
     return list;
   }
 
-  function recommendedFor(os, assets) {
+  function recommendedFor(os, assets, arch) {
     var list = assetsFor(os, assets);
     var test = RECOMMENDED[os];
+
+    if (os === 'macos') {
+      test = arch === 'x64' ? /x64\.dmg$/i : /arm64\.dmg$/i;
+    }
+
     for (var i = 0; i < list.length; i++) if (test.test(list[i].name)) return list[i];
     return list[0] || null;
   }
+
+  /* -------------------------------------------------------------- state */
+
+  var platform = detectPlatform();
+
+  var state = {
+    mobile: platform.mobile,
+    os: platform.mobile ? 'windows' : (platform.os || 'windows'),
+    arch: platform.arch === 'x64' ? 'x64' : 'arm64',
+    release: null,
+    assets: [],
+    failed: false
+  };
+
+  /* ------------------------------------------------------------ rendering */
 
   function renderList(os, assets) {
     var ul = $('[data-list="' + os + '"]');
     if (!ul) return;
 
     var list = assetsFor(os, assets);
-    var pick = recommendedFor(os, assets);
+    var pick = recommendedFor(os, assets, state.arch);
     ul.textContent = '';
 
     if (!list.length) {
@@ -107,6 +173,10 @@
       var li = document.createElement('li');
       var a = document.createElement('a');
       a.href = asset.browser_download_url;
+      a.target = '_blank';
+      a.rel = 'noopener';
+      a.setAttribute('data-name', asset.name);
+      a.setAttribute('data-size', fmtSize(asset.size));
 
       var nameWrap = document.createElement('span');
       nameWrap.className = 'asset-name';
@@ -133,48 +203,78 @@
     });
   }
 
+  function applyPrimaryCTA() {
+    var label = $('#hero-download-label');
+    var hero = $('#hero-download');
+    var cta = $('#cta-download');
+
+    if (state.mobile) {
+      if (label) label.textContent = 'Choose your desktop download';
+      if (hero) hero.href = '#download';
+      if (cta) cta.href = '#download';
+      return;
+    }
+
+    var os = state.os;
+    var pick = recommendedFor(os, state.assets, state.arch);
+    var url = pick ? pick.browser_download_url : (state.release ? state.release.html_url : LATEST_URL);
+
+    if (label) label.textContent = 'Download for ' + OS_NAME[os];
+    if (hero) { hero.href = url; hero.target = '_blank'; hero.rel = 'noopener'; }
+    if (cta) { cta.href = url; cta.target = '_blank'; cta.rel = 'noopener'; }
+  }
+
   function renderRelease(release) {
     if (!release) return;
-    var assets = release.assets || [];
+
+    state.release = release;
+    state.assets = release.assets || [];
 
     ['windows', 'macos', 'linux'].forEach(function (os) {
-      renderList(os, assets);
+      renderList(os, state.assets);
 
       var primary = $('[data-primary]', $('#panel-' + os) || document);
-      var pick = recommendedFor(os, assets);
-      if (primary) primary.href = pick ? pick.browser_download_url : release.html_url;
+      var pick = recommendedFor(os, state.assets, state.arch);
+      if (primary) {
+        primary.href = pick ? pick.browser_download_url : release.html_url;
+        primary.target = '_blank';
+        primary.rel = 'noopener';
+        if (pick) {
+          primary.setAttribute('data-name', pick.name);
+          primary.setAttribute('data-size', fmtSize(pick.size));
+        }
+      }
     });
 
     var meta = $('#dl-meta');
     if (meta) {
-      meta.textContent = release.tag_name + ' · ' + fmtDate(release.published_at) + ' · ' +
-        (release.prerelease ? 'prerelease' : 'stable');
+      var build = buildVersion(release);
+      var tagNumber = String(release.tag_name || '').replace(/^v/i, '');
+      var bits = [release.tag_name, fmtDate(release.published_at)];
+      if (build && build !== tagNumber) bits.push('build ' + build);
+      bits.push(release.prerelease ? 'prerelease' : 'stable');
+      meta.textContent = bits.join(' · ');
     }
 
     var ver = $('#hero-version');
     if (ver && release.tag_name) ver.textContent = release.tag_name;
 
-    var os = detectOS();
-    applyPrimaryCTA(os, assets, release);
-  }
-
-  function applyPrimaryCTA(os, assets, release) {
-    var label = $('#hero-download-label');
-    if (label) {
-      label.textContent = 'Download for ' + (os === 'macos' ? 'macOS' : os === 'linux' ? 'Linux' : 'Windows');
+    var sums = $('#sums-link');
+    if (sums) {
+      var sumAsset = null;
+      for (var i = 0; i < state.assets.length; i++) {
+        if (/^SHA256SUMS$/i.test(state.assets[i].name)) { sumAsset = state.assets[i]; break; }
+      }
+      sums.href = sumAsset ? sumAsset.browser_download_url : release.html_url;
+      sums.target = '_blank';
+      sums.rel = 'noopener';
     }
 
-    var pick = recommendedFor(os, assets);
-    var url = pick ? pick.browser_download_url : (release ? release.html_url : RELEASES_URL);
-
-    var hero = $('#hero-download');
-    if (hero) hero.href = url;
-
-    var cta = $('#cta-download');
-    if (cta) cta.href = url;
+    updateMacNote();
+    applyPrimaryCTA();
   }
 
-  /* ---------------------------------------------------- release list */
+  /* ------------------------------------------------------ release list */
 
   function renderReleases(list) {
     var ol = $('#rel-list');
@@ -208,7 +308,12 @@
 
       var sub = document.createElement('span');
       sub.className = 'rel-sub';
-      sub.textContent = fmtDate(rel.published_at) + ' · ' + (rel.assets || []).length + ' files';
+      var build = buildVersion(rel);
+      var tagNumber = String(rel.tag_name || '').replace(/^v/i, '');
+      var subBits = [fmtDate(rel.published_at)];
+      if (isNightly && build && build !== tagNumber) subBits.push('build ' + build);
+      subBits.push((rel.assets || []).length + ' files');
+      sub.textContent = subBits.join(' · ');
 
       main.appendChild(name);
       main.appendChild(sub);
@@ -254,6 +359,8 @@
   }
 
   function showFallback() {
+    state.failed = true;
+
     ['windows', 'macos', 'linux'].forEach(function (os) {
       var ul = $('[data-list="' + os + '"]');
       if (!ul) return;
@@ -263,7 +370,7 @@
       a.href = RELEASES_URL;
       a.target = '_blank';
       a.rel = 'noopener';
-      a.textContent = 'Get it from GitHub Releases';
+      a.textContent = 'Open releases on GitHub';
       li.appendChild(a);
       ul.appendChild(li);
     });
@@ -273,61 +380,148 @@
 
     var fallback = $('#dl-fallback');
     if (fallback) fallback.hidden = false;
+
+    var label = $('#hero-download-label');
+    if (label && !state.mobile) label.textContent = 'Download for ' + OS_NAME[state.os];
   }
 
-  /* ------------------------------------------------------------ OS tabs */
+  /* ---------------------------------------------------------- mac chip */
 
-  var tabs = $$('.os-tab');
-  var panels = $$('.os-panel');
+  function updateMacNote() {
+    var note = $('#mac-arch-note');
+    if (note) note.textContent = state.arch === 'x64' ? 'Picking the Intel build' : 'Picking the arm64 build';
 
-  function selectOS(os, focus) {
-    tabs.forEach(function (tab) {
-      var on = tab.getAttribute('data-os') === os;
-      tab.classList.toggle('is-active', on);
-      tab.setAttribute('aria-selected', on ? 'true' : 'false');
-      tab.tabIndex = on ? 0 : -1;
-      if (on && focus) tab.focus({ preventScroll: true });
+    $$('.arch-chip').forEach(function (chip) {
+      var on = chip.getAttribute('data-arch') === state.arch;
+      chip.classList.toggle('is-active', on);
+      chip.setAttribute('aria-pressed', on ? 'true' : 'false');
     });
 
-    panels.forEach(function (panel) {
-      var on = panel.getAttribute('data-os') === os;
-      panel.classList.toggle('is-active', on);
-      panel.hidden = !on;
-    });
+    if (state.release) {
+      var primary = $('[data-primary]', $('#panel-macos'));
+      var pick = recommendedFor('macos', state.assets, state.arch);
+      if (primary) {
+        primary.href = pick ? pick.browser_download_url : state.release.html_url;
+        if (pick) {
+          primary.setAttribute('data-name', pick.name);
+          primary.setAttribute('data-size', fmtSize(pick.size));
+        }
+      }
+    }
   }
 
-  tabs.forEach(function (tab, index) {
-    tab.addEventListener('click', function () {
-      selectOS(tab.getAttribute('data-os'), false);
-    });
+  /* ------------------------------------------------------------- toast */
 
-    tab.addEventListener('keydown', function (e) {
-      var next = null;
-      if (e.key === 'ArrowRight') next = (index + 1) % tabs.length;
-      else if (e.key === 'ArrowLeft') next = (index - 1 + tabs.length) % tabs.length;
-      else if (e.key === 'Home') next = 0;
-      else if (e.key === 'End') next = tabs.length - 1;
-      if (next === null) return;
-      e.preventDefault();
-      selectOS(tabs[next].getAttribute('data-os'), true);
+  var toast = $('#dl-toast');
+  var toastText = $('#dl-toast-text');
+  var toastLink = $('#dl-toast-link');
+  var toastClose = $('#dl-toast-close');
+  var toastTimer = 0;
+
+  function hideToast() {
+    if (!toast) return;
+    toast.hidden = true;
+    if (toastTimer) { window.clearTimeout(toastTimer); toastTimer = 0; }
+  }
+
+  function showToast(message, href) {
+    if (!toast) return;
+    if (toastText) toastText.textContent = message;
+    if (toastLink) {
+      if (href) {
+        toastLink.href = href;
+        toastLink.hidden = false;
+      } else {
+        toastLink.hidden = true;
+      }
+    }
+    toast.hidden = false;
+    if (toastTimer) window.clearTimeout(toastTimer);
+    toastTimer = window.setTimeout(hideToast, 10000);
+  }
+
+  if (toastClose) toastClose.addEventListener('click', hideToast);
+
+  /* Every real file link confirms itself: a 277 MB download has no other
+     feedback for the first few seconds. */
+  document.addEventListener('click', function (e) {
+    var a = e.target && e.target.closest ? e.target.closest('a[href]') : null;
+    if (!a) return;
+
+    var href = a.getAttribute('href') || '';
+    if (!/\/releases\/download\//.test(href)) return;
+
+    var name = a.getAttribute('data-name') || '';
+    var size = a.getAttribute('data-size') || '';
+    var message = 'Download starting' + (name ? ' · ' + name : '') + (size ? ' · ' + size : '') +
+      '. If nothing happens, use the direct link.';
+    showToast(message, href);
+  });
+
+  /* ------------------------------------------------------------- tabs */
+
+  var radios = $$('.os-radio');
+
+  radios.forEach(function (radio) {
+    radio.addEventListener('change', function () {
+      if (!radio.checked) return;
+      state.os = radio.value;
+      applyPrimaryCTA();
     });
   });
 
-  var initialOS = detectOS();
-  selectOS(initialOS, false);
+  $$('.arch-chip').forEach(function (chip) {
+    chip.addEventListener('click', function () {
+      state.arch = chip.getAttribute('data-arch') === 'x64' ? 'x64' : 'arm64';
+      if (state.assets.length) renderList('macos', state.assets);
+      updateMacNote();
+    });
+  });
 
-  /* --------------------------------------------------------- star count */
+  /* Copy the page URL — the mobile note offers it, and the desktop page can
+     hand a link to another machine. */
+  $$('[data-copy-url]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var url = window.location.href;
+      var original = btn.textContent;
 
-  getJSON(API)
-    .then(function (repo) {
-      var el = $('#star-count');
-      if (!el) return;
-      if (repo.stargazers_count > 0) {
-        el.textContent = repo.stargazers_count.toLocaleString();
-        el.hidden = false;
+      function done() {
+        btn.textContent = 'Copied';
+        window.setTimeout(function () { btn.textContent = original; }, 1600);
       }
-    })
-    .catch(function () { /* cosmetic only */ });
+
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(url).then(done, fallback);
+      } else {
+        fallback();
+      }
+
+      function fallback() {
+        var ta = document.createElement('textarea');
+        ta.value = url;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.select();
+        try { document.execCommand('copy'); done(); } catch (e) { /* nothing */ }
+        document.body.removeChild(ta);
+      }
+    });
+  });
+
+  /* --------------------------------------------------------- first paint */
+
+  if (state.mobile) {
+    var mobileNote = $('#dl-mobile');
+    if (mobileNote) mobileNote.hidden = false;
+  } else if (platform.os) {
+    var initial = document.getElementById('os-' + platform.os);
+    if (initial) initial.checked = true;
+    state.os = platform.os;
+  }
+
+  updateMacNote();
+  applyPrimaryCTA();
 
   /* ------------------------------------------------------------ releases */
 
@@ -346,6 +540,8 @@
       if (stable) {
         latest = stable;
         renderRelease(stable);
+      } else {
+        showFallback();
       }
 
       renderReleases(list);
@@ -354,7 +550,7 @@
       showFallback();
       releaseListFallback();
       var label = $('#hero-download-label');
-      if (label) label.textContent = 'Download';
+      if (label && !state.mobile) label.textContent = 'Download';
     });
 
   var nightlyToggle = $('#nightly-toggle');

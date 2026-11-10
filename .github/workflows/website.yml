@@ -3,7 +3,10 @@ name: Website
 on:
   push:
     branches: [main]
-    paths: ['apps/website/**', '.github/workflows/website.yml']
+    paths:
+      - 'apps/website/**'
+      - 'scripts/check-website.mjs'
+      - '.github/workflows/website.yml'
   workflow_dispatch:
 
 permissions:
@@ -24,6 +27,15 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v7
+
+      # The site ships without a build step, so this is the only gate between a
+      # typo in an href and a 404 in production.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Check markup and assets
+        run: node scripts/check-website.mjs
 
       # A workflow token cannot create the Pages site (needs an admin). Fail
       # loudly with the exact one-time fix instead of a cryptic 403.
