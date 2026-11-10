@@ -1,7 +1,7 @@
 /**
  * Recast website — release data from the public GitHub API.
  *
- * Two unauthenticated requests per page load (latest release + repo stars),
+ * Two unauthenticated requests per page load (release list + repo stars),
  * plus one more only if the visitor opts into nightly builds. Everything
  * degrades to a plain link when the API is rate-limited or the visitor is
  * offline. No cookies, no analytics, no third-party scripts.
@@ -174,6 +174,85 @@
     if (cta) cta.href = url;
   }
 
+  /* ---------------------------------------------------- release list */
+
+  function renderReleases(list) {
+    var ol = $('#rel-list');
+    if (!ol || !list || !list.length) return;
+
+    var seenLatest = false;
+    ol.textContent = '';
+
+    list.slice(0, 4).forEach(function (rel) {
+      var isNightly = rel.prerelease || /nightly/i.test(rel.tag_name);
+      var isLatest = !isNightly && !seenLatest;
+      if (isLatest) seenLatest = true;
+
+      var li = document.createElement('li');
+      var a = document.createElement('a');
+      a.className = 'rel-item';
+      a.href = rel.html_url;
+      a.target = '_blank';
+      a.rel = 'noopener';
+
+      var tag = document.createElement('span');
+      tag.className = 'rel-tag';
+      tag.textContent = rel.tag_name;
+
+      var main = document.createElement('span');
+      main.className = 'rel-main';
+
+      var name = document.createElement('span');
+      name.className = 'rel-name';
+      name.textContent = rel.name || rel.tag_name;
+
+      var sub = document.createElement('span');
+      sub.className = 'rel-sub';
+      sub.textContent = fmtDate(rel.published_at) + ' · ' + (rel.assets || []).length + ' files';
+
+      main.appendChild(name);
+      main.appendChild(sub);
+
+      var side = document.createElement('span');
+      side.className = 'rel-side';
+
+      var badge = document.createElement('span');
+      badge.className = 'rel-badge' + (isNightly ? ' is-nightly' : isLatest ? ' is-latest' : '');
+      badge.textContent = isNightly ? 'nightly' : isLatest ? 'latest' : 'stable';
+      side.appendChild(badge);
+
+      var arrow = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      arrow.setAttribute('class', 'rel-arrow');
+      arrow.setAttribute('viewBox', '0 0 16 16');
+      arrow.setAttribute('width', '13');
+      arrow.setAttribute('height', '13');
+      arrow.setAttribute('fill', 'none');
+      arrow.setAttribute('stroke', 'currentColor');
+      arrow.setAttribute('stroke-width', '1.7');
+      arrow.setAttribute('stroke-linecap', 'round');
+      arrow.setAttribute('stroke-linejoin', 'round');
+      arrow.setAttribute('aria-hidden', 'true');
+      arrow.innerHTML = '<path d="M4 12 12 4"/><path d="M5 4h7v7"/>';
+      side.appendChild(arrow);
+
+      a.appendChild(tag);
+      a.appendChild(main);
+      a.appendChild(side);
+      li.appendChild(a);
+      ol.appendChild(li);
+    });
+  }
+
+  function releaseListFallback() {
+    var ol = $('#rel-list');
+    if (!ol) return;
+    ol.textContent = '';
+    var li = document.createElement('li');
+    li.className = 'rel-empty';
+    li.innerHTML = 'Live data unavailable right now — <a href="' + RELEASES_URL + '" target="_blank" rel="noopener">browse releases on GitHub</a>.';
+    ol.appendChild(li);
+  }
+
   function showFallback() {
     ['windows', 'macos', 'linux'].forEach(function (os) {
       var ul = $('[data-list="' + os + '"]');
@@ -254,13 +333,26 @@
 
   var latest = null;
 
-  getJSON(API + '/releases/latest')
-    .then(function (release) {
-      latest = release;
-      renderRelease(release);
+  getJSON(API + '/releases?per_page=6')
+    .then(function (list) {
+      var stable = null;
+      for (var i = 0; i < list.length; i++) {
+        var rel = list[i];
+        if (!rel.prerelease && !/nightly/i.test(rel.tag_name)) { stable = rel; break; }
+      }
+
+      if (!stable) stable = list[0] || null;
+
+      if (stable) {
+        latest = stable;
+        renderRelease(stable);
+      }
+
+      renderReleases(list);
     })
     .catch(function () {
       showFallback();
+      releaseListFallback();
       var label = $('#hero-download-label');
       if (label) label.textContent = 'Download';
     });

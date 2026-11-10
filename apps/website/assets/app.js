@@ -50,6 +50,7 @@
   var toggle = $('#menu-toggle');
   var menu = $('#mobile-menu');
   var lastFocus = null;
+  var openRaf = 0;
 
   function openMenu() {
     if (!menu || !toggle) return;
@@ -58,13 +59,18 @@
     document.body.style.overflow = 'hidden';
     toggle.setAttribute('aria-expanded', 'true');
     toggle.setAttribute('aria-label', 'Close menu');
-    requestAnimationFrame(function () { menu.classList.add('is-open'); });
+    if (openRaf) cancelAnimationFrame(openRaf);
+    openRaf = requestAnimationFrame(function () {
+      openRaf = 0;
+      menu.classList.add('is-open');
+    });
     var first = $('a', menu);
     if (first) first.focus({ preventScroll: true });
   }
 
   function closeMenu(restoreFocus) {
     if (!menu || !toggle) return;
+    if (openRaf) { cancelAnimationFrame(openRaf); openRaf = 0; }
     menu.classList.remove('is-open');
     toggle.setAttribute('aria-expanded', 'false');
     toggle.setAttribute('aria-label', 'Open menu');
@@ -360,6 +366,130 @@
     } else {
       start();
     }
+  }
+
+  /* --------------------------------------------------- animated counters */
+
+  var counters = $$('[data-count]');
+
+  function animateCount(el) {
+    var target = parseInt(el.getAttribute('data-count'), 10) || 0;
+    if (!target || reduceMotion) { el.textContent = String(target); return; }
+    var start = performance.now();
+    var dur = 900;
+
+    function tick(now) {
+      var k = clamp((now - start) / dur, 0, 1);
+      var eased = 1 - Math.pow(1 - k, 3);
+      el.textContent = String(Math.round(target * eased));
+      if (k < 1) requestAnimationFrame(tick);
+    }
+
+    requestAnimationFrame(tick);
+  }
+
+  if (counters.length) {
+    if ('IntersectionObserver' in window) {
+      var countObserver = new IntersectionObserver(function (entries) {
+        entries.forEach(function (entry) {
+          if (entry.isIntersecting) {
+            animateCount(entry.target);
+            countObserver.unobserve(entry.target);
+          }
+        });
+      }, { threshold: 0.6 });
+
+      counters.forEach(function (el) { countObserver.observe(el); });
+    } else {
+      counters.forEach(animateCount);
+    }
+  }
+
+  /* ------------------------------------------------------ pipeline steps */
+
+  var pipeSteps = $$('.pipe-step');
+
+  if (pipeSteps.length && 'IntersectionObserver' in window) {
+    var pipeObserver = new IntersectionObserver(function (entries) {
+      entries.forEach(function (entry) {
+        if (!entry.isIntersecting) return;
+        pipeSteps.forEach(function (step) {
+          step.classList.toggle('is-active', step === entry.target);
+        });
+      });
+    }, { rootMargin: '-45% 0px -45% 0px', threshold: 0 });
+
+    pipeSteps.forEach(function (step) { pipeObserver.observe(step); });
+  }
+
+  /* ------------------------------------------------------ copy to board */
+
+  $$('[data-copy]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var target = document.querySelector(btn.getAttribute('data-copy'));
+      if (!target) return;
+      var text = target.textContent.trim();
+      var original = btn.textContent;
+
+      function done() {
+        btn.textContent = 'Copied';
+        btn.classList.add('is-done');
+        window.setTimeout(function () {
+          btn.textContent = original;
+          btn.classList.remove('is-done');
+        }, 1600);
+      }
+
+      function fallback() {
+        var ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.select();
+        try { document.execCommand('copy'); done(); }
+        catch (e) { btn.textContent = 'Press Ctrl+C'; }
+        document.body.removeChild(ta);
+      }
+
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(done, fallback);
+      } else {
+        fallback();
+      }
+    });
+  });
+
+  /* ---------------------------------------------------- magnetic buttons */
+
+  if (!reduceMotion && window.matchMedia('(pointer: fine)').matches) {
+    $$('.btn-primary.btn-lg, #hero-download, #cta-download, #nav-download').forEach(function (btn) {
+      var raf = 0;
+      var tx = 0;
+      var ty = 0;
+
+      btn.classList.add('is-magnetic');
+
+      function apply() {
+        btn.style.setProperty('--bx', tx.toFixed(1) + 'px');
+        btn.style.setProperty('--by', ty.toFixed(1) + 'px');
+        raf = 0;
+      }
+
+      btn.addEventListener('pointermove', function (e) {
+        if (e.pointerType === 'touch') return;
+        var r = btn.getBoundingClientRect();
+        tx = clamp((e.clientX - (r.left + r.width / 2)) * 0.26, -7, 7);
+        ty = clamp((e.clientY - (r.top + r.height / 2)) * 0.3, -6, 6);
+        if (!raf) raf = requestAnimationFrame(apply);
+      }, { passive: true });
+
+      btn.addEventListener('pointerleave', function () {
+        tx = 0;
+        ty = 0;
+        if (!raf) raf = requestAnimationFrame(apply);
+      });
+    });
   }
 
   /* ------------------------------------------------------ demo parallax */

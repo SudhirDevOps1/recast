@@ -26,7 +26,7 @@
 
   <link rel="preload" href="assets/fonts/geist-var.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="preload" href="assets/fonts/space-grotesk-var.woff2" as="font" type="font/woff2" crossorigin />
-  <link rel="stylesheet" href="assets/style.css?v=2" />
+  <link rel="stylesheet" href="assets/style.css?v=4" />
   <script>document.documentElement.classList.replace('no-js', 'js');</script>
 
   <script type="application/ld+json">
@@ -61,6 +61,7 @@
         <a href="#features">Features</a>
         <a href="#showcase">Showcase</a>
         <a href="#how">How it works</a>
+        <a href="#pipeline">Internals</a>
         <a href="#compare">Compare</a>
         <a href="#download">Download</a>
       </nav>
@@ -85,9 +86,11 @@
       <a href="#features"><span>01</span>Features</a>
       <a href="#showcase"><span>02</span>Showcase</a>
       <a href="#how"><span>03</span>How it works</a>
-      <a href="#compare"><span>04</span>Compare</a>
-      <a href="#download"><span>05</span>Download</a>
-      <a href="#faq"><span>06</span>FAQ</a>
+      <a href="#pipeline"><span>04</span>Internals</a>
+      <a href="#compare"><span>05</span>Compare</a>
+      <a href="#download"><span>06</span>Download</a>
+      <a href="#releases"><span>07</span>Releases</a>
+      <a href="#faq"><span>08</span>FAQ</a>
     </nav>
     <div class="mobile-menu-foot">
       <a class="btn btn-primary" href="#download">Download Recast</a>
@@ -251,10 +254,10 @@
     <!-- -------------------------------------------------------------- stats -->
     <section class="stats-band" aria-label="Recast in numbers">
       <div class="container stats-grid">
-        <div class="stat" data-reveal><span class="stat-num" data-count="0">0</span><span class="stat-label">accounts required</span></div>
-        <div class="stat" data-reveal style="--i:1"><span class="stat-num" data-count="0">0</span><span class="stat-label">bytes uploaded</span></div>
-        <div class="stat" data-reveal style="--i:2"><span class="stat-num" data-count="0">0</span><span class="stat-label">trackers in the app</span></div>
-        <div class="stat" data-reveal style="--i:3"><span class="stat-num">100<span class="unit">%</span></span><span class="stat-label">of the render stays local</span></div>
+        <div class="stat" data-reveal><span class="stat-num"><span data-count="60">0</span><span class="unit">Hz</span></span><span class="stat-label">cursor sampling, in the background</span></div>
+        <div class="stat" data-reveal style="--i:1"><span class="stat-num"><span class="unit">≤</span><span data-count="2">0</span><span class="unit">s</span></span><span class="stat-label">of footage at risk if the app dies</span></div>
+        <div class="stat" data-reveal style="--i:2"><span class="stat-num"><span data-count="5">0</span></span><span class="stat-label">export formats from one timeline</span></div>
+        <div class="stat" data-reveal style="--i:3"><span class="stat-num"><span data-count="0">0</span></span><span class="stat-label">accounts, trackers and uploads</span></div>
       </div>
     </section>
 
@@ -379,6 +382,58 @@
         <div class="workshop" data-reveal role="note">
           <span class="workshop-dot" aria-hidden="true"></span>
           <p><strong>In the workshop:</strong> live annotations, face-cam picture-in-picture, tracked redaction and word-level caption timing. <a href="https://github.com/SudhirDevOps1/recast/blob/main/STATUS.md" target="_blank" rel="noopener">STATUS.md<img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23A78BFA' stroke-width='1.6' stroke-linecap='round'%3E%3Cpath d='M5 11 11 5M6 5h5v5'/%3E%3C/svg%3E" alt="" width="12" height="12" /></a> always tells the truth about what ships today.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ----------------------------------------------------------- use cases -->
+    <section class="section section-uses" id="use-cases">
+      <div class="container">
+        <header class="section-head">
+          <p class="eyebrow" data-reveal>Use cases</p>
+          <h2 data-reveal style="--i:1">Four recordings.<br /><span class="muted-word">One afternoon back.</span></h2>
+          <p class="section-lead" data-reveal style="--i:2">
+            Every recording is a different job. Recast keeps the same three-step flow and
+            changes only the framing — camera, aspect ratio, captions.
+          </p>
+        </header>
+
+        <div class="uses-grid">
+          <article class="use-card" data-reveal data-spotlight>
+            <span class="use-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="12" rx="2"/><path d="M8 21h8M12 17v4"/><path d="m10 8 4 2.5-4 2.5Z"/></svg>
+            </span>
+            <h3>Product demos</h3>
+            <p>Interest clustering turns your clicks into camera moves, so the viewer's eye lands where yours did — without a single manual zoom keyframe.</p>
+            <span class="use-chips"><i>auto-zoom</i><i>cursor FX</i><i>1080p60</i></span>
+          </article>
+
+          <article class="use-card" data-reveal data-spotlight style="--i:1">
+            <span class="use-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6 3 12l5 6"/><path d="m16 6 5 6-5 6"/><path d="m13 4-2 16"/></svg>
+            </span>
+            <h3>Bug reports</h3>
+            <p>A forty-second repro beats a paragraph. Trim to the failing clicks, show the keystrokes, and attach an MP4 that opens in any tracker.</p>
+            <span class="use-chips"><i>keystroke HUD</i><i>I/O trim</i><i>small MP4</i></span>
+          </article>
+
+          <article class="use-card" data-reveal data-spotlight style="--i:2">
+            <span class="use-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H19v15H6.5A2.5 2.5 0 0 0 4 20.5Z"/><path d="M4 5.5v15"/><path d="M8 7h7M8 10.5h5"/></svg>
+            </span>
+            <h3>Tutorials &amp; docs</h3>
+            <p>Record the whole walk-through once, then cut chapters with the timeline. Presets keep the look identical across a documentation series.</p>
+            <span class="use-chips"><i>presets</i><i>local captions</i><i>4:5</i></span>
+          </article>
+
+          <article class="use-card" data-reveal data-spotlight style="--i:3">
+            <span class="use-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m7.5 10.5 4.5 4.5 4.5-4.5"/><rect x="3" y="18" width="18" height="3" rx="1.5"/></svg>
+            </span>
+            <h3>Launches &amp; changelogs</h3>
+            <p>Ship the demo with the release: 9:16 for the feed, 1:1 for the changelog, GIF for the README — same take, no watermark on any of them.</p>
+            <span class="use-chips"><i>9:16</i><i>1:1</i><i>GIF</i></span>
+          </article>
         </div>
       </div>
     </section>
@@ -529,6 +584,68 @@
       </div>
     </section>
 
+    <!-- ----------------------------------------------------------- internals -->
+    <section class="section section-pipeline" id="pipeline">
+      <div class="container">
+        <div class="pipeline-grid">
+          <div class="pipeline-intro">
+            <p class="eyebrow" data-reveal>Under the hood</p>
+            <h2 data-reveal style="--i:1">Four processes.<br /><span class="muted-word">Zero uploads.</span></h2>
+            <p class="section-lead" data-reveal style="--i:2">
+              Recast is an Electron shell around four small, boring, well-tested pieces.
+              Each one has a single job and fails on its own without taking the recording with it.
+            </p>
+            <a class="link-arrow" data-reveal style="--i:3" href="https://github.com/SudhirDevOps1/recast/blob/main/docs/architecture.md" target="_blank" rel="noopener">
+              Read docs/architecture.md
+              <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12 12 4"/><path d="M5 4h7v7"/></svg>
+            </a>
+          </div>
+
+          <ol class="pipe-steps">
+            <li class="pipe-step is-active" data-step="0">
+              <span class="pipe-node" aria-hidden="true"><i></i></span>
+              <div class="pipe-body" data-reveal>
+                <span class="pipe-index">01 — Capture</span>
+                <h3>The display never leaves the GPU</h3>
+                <p>Electron's desktopCapturer hands over a live MediaStream; on Wayland the PipeWire portal does the same. Frames are composited and encoded in-process — nothing is uploaded, nothing is cached to a temp server.</p>
+                <code class="pipe-code">desktopCapturer · getDisplayMedia · 60 Hz cursor sampler</code>
+              </div>
+            </li>
+
+            <li class="pipe-step" data-step="1">
+              <span class="pipe-node" aria-hidden="true"><i></i></span>
+              <div class="pipe-body" data-reveal>
+                <span class="pipe-index">02 — Segment</span>
+                <h3>A crash costs you two seconds</h3>
+                <p>Every fragment is muxed to disk as it arrives, so a crash or a forced quit never costs more than the current segment. On relaunch the library offers the salvage, and the timeline rebuilds from the fragments.</p>
+                <code class="pipe-code">segment-writer · 2 s fragments · recovery on launch</code>
+              </div>
+            </li>
+
+            <li class="pipe-step" data-step="2">
+              <span class="pipe-node" aria-hidden="true"><i></i></span>
+              <div class="pipe-body" data-reveal>
+                <span class="pipe-index">03 — Compose</span>
+                <h3>One compositor, both directions</h3>
+                <p>Preview and export call the same canvas compositor with the same clock, so a frame cannot look different after you press export. Camera springs, cursor styling and captions are all evaluated at render time.</p>
+                <code class="pipe-code">canvas 2D · deterministic frame clock · same path for preview + export</code>
+              </div>
+            </li>
+
+            <li class="pipe-step" data-step="3">
+              <span class="pipe-node" aria-hidden="true"><i></i></span>
+              <div class="pipe-body" data-reveal>
+                <span class="pipe-index">04 — Encode</span>
+                <h3>Hardware first, and honest about it</h3>
+                <p>Hardware H.264 when the machine allows it, software next, FFmpeg last — and the encoder used is always printed in the export panel. The finished file is verified with ffprobe before it is handed back to you.</p>
+                <code class="pipe-code">VideoEncoder → x264 → ffmpeg · ffprobe verify · no partial files</code>
+              </div>
+            </li>
+          </ol>
+        </div>
+      </div>
+    </section>
+
     <!-- ------------------------------------------------------------ compare -->
     <section class="section section-compare" id="compare">
       <div class="container">
@@ -666,7 +783,51 @@
             <span><svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8.5 6.2 11.7 13 5"/></svg> SHA256SUMS on every release</span>
             <a href="https://github.com/SudhirDevOps1/recast/releases" target="_blank" rel="noopener">All releases &amp; changelog →</a>
           </div>
+
+          <div class="verify" data-reveal>
+            <div class="verify-copy">
+              <p class="eyebrow">Verify</p>
+              <h3>Check the bits before you run them</h3>
+              <p>Every release publishes <code>SHA256SUMS</code>. Compare the file you downloaded against the published hash — if it matches, you have exactly what CI built, not a mirror's copy.</p>
+            </div>
+            <div class="terminal">
+              <div class="term-bar">
+                <span class="term-dots" aria-hidden="true"><i></i><i></i><i></i></span>
+                <span class="term-title">verify.sh</span>
+                <button class="term-copy" type="button" data-copy="#verify-cmd" aria-label="Copy the checksum command">Copy</button>
+              </div>
+              <pre><code id="verify-cmd">sha256sum --check --ignore-missing SHA256SUMS</code></pre>
+              <p class="term-note">macOS <code>shasum -a 256 -c SHA256SUMS</code> · Windows <code>Get-FileHash</code></p>
+            </div>
+          </div>
         </div>
+      </div>
+    </section>
+
+    <!-- ------------------------------------------------------------ releases -->
+    <section class="section section-releases" id="releases">
+      <div class="container">
+        <header class="section-head rel-head">
+          <p class="eyebrow" data-reveal>Releases</p>
+          <h2 data-reveal style="--i:1">Every version.<br /><span class="muted-word">Still downloadable.</span></h2>
+          <p class="section-lead" data-reveal style="--i:2">
+            Read straight from the GitHub API when this page loads — so the list below is the
+            real one, not a changelog that drifted out of date.
+          </p>
+        </header>
+
+        <ol class="rel-list" id="rel-list" data-reveal aria-live="polite">
+          <li class="rel-skeleton" aria-hidden="true"></li>
+          <li class="rel-skeleton" aria-hidden="true"></li>
+          <li class="rel-skeleton" aria-hidden="true"></li>
+        </ol>
+
+        <p class="rel-foot">
+          <a class="link-arrow" href="https://github.com/SudhirDevOps1/recast/releases" target="_blank" rel="noopener">
+            Every release on GitHub
+            <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12 12 4"/><path d="M5 4h7v7"/></svg>
+          </a>
+        </p>
       </div>
     </section>
 
@@ -748,6 +909,8 @@
           <h2>Product</h2>
           <a href="#features">Features</a>
           <a href="#showcase">Showcase</a>
+          <a href="#pipeline">Internals</a>
+          <a href="#releases">Releases</a>
           <a href="#compare">Compare</a>
           <a href="#download">Download</a>
         </nav>
@@ -776,7 +939,7 @@
     </div>
   </footer>
 
-  <script src="assets/releases.js?v=2" defer></script>
-  <script src="assets/app.js?v=2" defer></script>
+  <script src="assets/releases.js?v=4" defer></script>
+  <script src="assets/app.js?v=4" defer></script>
 </body>
 </html>
