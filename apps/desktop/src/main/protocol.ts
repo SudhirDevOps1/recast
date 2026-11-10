@@ -2,6 +2,7 @@ import { protocol, net } from 'electron';
 import { createReadStream, existsSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { recordingsDir, projectsDir } from './paths';
+import { mediaPathFromUrl } from '@recast/shared/node';
 
 /**
  * `recast-media://` — read-only file streaming for recordings, thumbnails and
@@ -36,14 +37,12 @@ export function mediaUrlFor(absolutePath: string): string {
 export function handleMediaProtocol(): void {
   protocol.handle('recast-media', (request) => {
     const url = new URL(request.url);
-    // Media URLs carry an absolute POSIX path in the pathname —
-    // `recast-media://local//home/u/recordings/x.mp4` yields pathname
-    // `//home/u/...` (leading double slash from the absolute path's empty
-    // first segment). Canonicalize to a rooted absolute path instead of
-    // resolving against the process cwd, which made the handler 403/404
-    // depending on how the app was launched.
-    const decoded = decodeURIComponent(url.pathname);
-    const filePath = path.resolve(`/${decoded.replace(/^\/+/, '')}`);
+    // The renderer percent-encodes each path segment; mediaPathFromUrl decodes
+    // the pathname back to a rooted absolute path. Doing this inline used to
+    // break Windows: path.resolve('/C:/…') yields '\C:\…', which 404'd every
+    // media URL — black editor preview and dead export decode (fixed in
+    // v0.1.2; see mediaPathFromUrl in @recast/shared/node and its tests).
+    const filePath = mediaPathFromUrl(url.pathname);
 
     const allowed = ALLOWED_ROOTS.some((root) => filePath.startsWith(root));
     if (!allowed) {

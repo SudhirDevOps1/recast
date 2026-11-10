@@ -20,7 +20,7 @@ export default defineConfig({
     })],
     resolve: {
       alias: [
-        { find: /^@recast\/shared\/node$/, replacement: resolve(__dirname, '../../packages/shared/src/ffmpeg/index.ts') },
+        { find: /^@recast\/shared\/node$/, replacement: resolve(__dirname, '../../packages/shared/src/node.ts') },
         { find: /^@recast\/shared$/, replacement: resolve(__dirname, '../../packages/shared/src/index.ts') },
         { find: '@recast/editor', replacement: resolve(__dirname, '../../packages/editor/src/index.ts') },
         { find: '@recast/capture', replacement: resolve(__dirname, '../../packages/capture/src/index.ts') },
@@ -40,7 +40,7 @@ export default defineConfig({
     })],
     resolve: {
       alias: [
-        { find: /^@recast\/shared\/node$/, replacement: resolve(__dirname, '../../packages/shared/src/ffmpeg/index.ts') },
+        { find: /^@recast\/shared\/node$/, replacement: resolve(__dirname, '../../packages/shared/src/node.ts') },
         { find: /^@recast\/shared$/, replacement: resolve(__dirname, '../../packages/shared/src/index.ts') },
       ],
     },
