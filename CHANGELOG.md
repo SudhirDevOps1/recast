@@ -5,6 +5,8 @@ All notable changes to Recast are documented here. Format: Keep a Changelog; ver
 ## [Unreleased]
 
 ### Added
+- Market research on the free open-source screen recorders (`docs/market-parity.md`): what Capptivo, OpenScreen, Recordly, Capturia, Focra, Reframed, screenize and OpenScreenStudio actually do, how their zoom, cursor, annotation, audio and export engines work, and where Recast stands against them - recorded as behaviour to copy, never as code.
+- `prompts/parity-build-prompt.md` - the build brief for closing that gap in P0-P3 order (suggest zooms, live annotation toolbar, keystroke HUD, fixed zoom regions, cursor loop + click sounds + spotlight, per-track audio, aspect re-aim, platform export presets, native capture, i18n).
 - Website download UX rebuild (`apps/website/`): platform-aware download tabs (Windows / macOS / Linux, with iPadOS and Android detected so a phone is never offered a 277 MB installer), an Apple Silicon / Intel switch that picks the matching DMG, a recommended-file tag, per-file sizes, a per-file SHA-256 preview (GitHub publishes a digest per release asset), a download toast carrying the file name and size, a direct `SHA256SUMS` link, a mobile sticky bar that offers to copy the page link, and a `noscript` note that states plainly what needs JavaScript.
 - `scripts/check-website.mjs` — markup and asset audit (duplicate ids, in-page anchors, missing local files, `rel=noopener`, third-party scripts, asset-version drift, optional release-asset HEAD checks). Runs in the Website workflow before every Pages deploy.
 - `scripts/check-docs.mjs` — documentation audit (relative links, in-page anchors, code-fence balance). Runs in the CI docs job.

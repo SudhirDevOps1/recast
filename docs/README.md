@@ -42,6 +42,9 @@ administrator, an engineer joining the codebase, and a maintainer shipping a rel
 | Doc | What it covers |
 |---|---|
 | [roadmap.md](roadmap.md) | Phases with explicit acceptance criteria |
+| [market-parity.md](market-parity.md) | The free open-source competitors (Capptivo, OpenScreen, Recordly, Focra, Reframed, screenize), how they work, and where Recast stands |
+| [../prompts/parity-build-prompt.md](../prompts/parity-build-prompt.md) | Build prompt for the parity work |
+| [../prompts/build-prompt.md](../prompts/build-prompt.md) | The original master brief |
 | [STATUS.md](../STATUS.md) | What is real, what is partial, what is not built - updated per release |
 | [CHANGELOG.md](../CHANGELOG.md) | Release history |
 | [CONTRIBUTING.md](../CONTRIBUTING.md) | How to propose a change and get it merged |

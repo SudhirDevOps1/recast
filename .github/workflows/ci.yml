@@ -54,7 +54,7 @@ jobs:
             docs/README.md docs/architecture.md docs/recording.md docs/editing.md docs/export.md docs/ffmpeg.md \
             docs/platform-support.md docs/build.md docs/packaging.md docs/code-signing.md docs/keyboard-shortcuts.md \
             docs/troubleshooting.md docs/roadmap.md docs/deployment.md docs/security.md docs/support.md \
-            prompts/build-prompt.md apps/website/index.html"
+            docs/market-parity.md prompts/build-prompt.md prompts/parity-build-prompt.md apps/website/index.html"
           missing=0
           for f in $required; do
             if [ ! -f "$f" ]; then
