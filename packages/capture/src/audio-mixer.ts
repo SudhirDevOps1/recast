@@ -36,8 +36,8 @@ async function ensureWorkletModule(ctx: AudioContext): Promise<void> {
   }
   try {
     await ctx.audioWorklet.addModule(workletUrl);
-  } catch (err) {
-    // If blob URL was blocked by origin/CSP, retry with data URL
+  } catch {
+    // Blob URL was blocked by origin/CSP; retry with a data URL
     const dataUrl = `data:application/javascript;base64,${btoa(MIXER_WORKLET_SRC)}`;
     await ctx.audioWorklet.addModule(dataUrl);
     workletUrl = dataUrl;
