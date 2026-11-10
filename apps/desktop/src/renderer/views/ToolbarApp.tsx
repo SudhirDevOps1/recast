@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { bridge } from '../lib/bridge';
-import { IconPause, IconStop, IconButton, Badge } from '@recast/ui';
+import { IconPause, IconPlay, Badge } from '@recast/ui';
 
 type Tool = 'select' | 'pen' | 'highlighter' | 'arrow' | 'rect';
 
@@ -30,19 +30,25 @@ export default function ToolbarApp() {
     setTool(t);
   };
 
+  const handleStop = async (): Promise<void> => {
+    await bridge().invoke('recorder:triggerStop', undefined);
+    window.close();
+  };
+
   return (
     <div
       className="flex items-center gap-2.5 rounded-full border px-3 py-1.5"
       style={{
-        background: 'rgba(16,20,28,0.94)',
-        borderColor: 'rgba(255,255,255,0.14)',
-        backdropFilter: 'blur(16px)',
+        background: 'rgba(16,20,28,0.96)',
+        borderColor: 'rgba(255,255,255,0.18)',
+        backdropFilter: 'blur(20px)',
         height: '100%',
+        boxShadow: '0 8px 32px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.06)',
         WebkitAppRegion: 'drag',
       } as React.CSSProperties}
     >
       <Badge tone={paused ? 'warning' : 'recording'}>
-        <span className="inline-block h-2 w-2 rounded-full" style={{ background: paused ? 'var(--warning)' : 'var(--recording)' }} />
+        <span className="inline-block h-2 w-2 rounded-full animate-pulse" style={{ background: paused ? 'var(--warning)' : 'var(--recording)' }} />
         {paused ? 'paused' : 'rec'}
       </Badge>
       <span className="tabular text-xs font-semibold mr-1" style={{ color: '#e8ebf2' }}>
@@ -127,29 +133,37 @@ export default function ToolbarApp() {
         ))}
       </span>
 
-      {/* Playback Controls */}
-      <span style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties} className="flex items-center gap-1">
-        <IconButton
-          label={paused ? 'Resume' : 'Pause'}
+      {/* Prominent Playback & Stop Controls */}
+      <span style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties} className="flex items-center gap-1.5 ml-auto">
+        <button
           onClick={() => {
             void bridge().invoke(paused ? 'recorder:resume' : 'recorder:pause', undefined);
             window.dispatchEvent(new CustomEvent('toolbar:toggle-pause'));
           }}
-        >
-          <IconPause size={13} />
-        </IconButton>
-        <IconButton
-          label="Stop"
-          danger
-          onClick={() => {
-            void (async () => {
-              await bridge().invoke('recorder:stop', undefined);
-              window.close();
-            })();
+          className="flex items-center gap-1 px-2.5 py-1 text-xs rounded transition-colors"
+          style={{
+            background: 'rgba(255,255,255,0.08)',
+            color: '#e8ebf2',
           }}
+          title={paused ? 'Resume recording' : 'Pause recording'}
         >
-          <IconStop size={13} />
-        </IconButton>
+          {paused ? <IconPlay size={12} /> : <IconPause size={12} />}
+          <span>{paused ? 'Resume' : 'Pause'}</span>
+        </button>
+
+        <button
+          onClick={() => void handleStop()}
+          className="flex items-center gap-1.5 px-3 py-1 text-xs font-bold rounded-full transition-all"
+          style={{
+            background: '#EF4444',
+            color: '#FFFFFF',
+            boxShadow: '0 0 10px rgba(239, 68, 68, 0.5)',
+          }}
+          title="Stop recording & open editor"
+        >
+          <span className="w-2.5 h-2.5 bg-white rounded-xs" />
+          <span>Stop</span>
+        </button>
       </span>
     </div>
   );

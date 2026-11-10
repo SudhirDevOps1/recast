@@ -107,18 +107,21 @@ export function buildProjectFromSession(input: BuildProjectInput): RecastProject
 
   // Timeline: one clip per segment, back to back.
   let t = 0;
-  project.timeline.clips = manifest.screen.segments.map((seg) => ({
-    id: `clip-${seg.id}`,
-    segmentId: seg.id,
-    track: 'screen' as const,
-    sourceInUs: seg.startUs,
-    sourceOutUs: seg.endUs,
-    timelineInUs: t,
-    speed: 1,
-    transitionIn: 'none' as const,
-    transitionMs: 450,
-  }));
-  t = manifest.screen.segments.reduce((acc, seg) => acc + (seg.endUs - seg.startUs), 0);
+  project.timeline.clips = manifest.screen.segments.map((seg) => {
+    const clip = {
+      id: `clip-${seg.id}`,
+      segmentId: seg.id,
+      track: 'screen' as const,
+      sourceInUs: seg.startUs,
+      sourceOutUs: seg.endUs,
+      timelineInUs: t,
+      speed: 1,
+      transitionIn: 'none' as const,
+      transitionMs: 450,
+    };
+    t += Math.max(0, seg.endUs - seg.startUs);
+    return clip;
+  });
   project.timeline.durationUs = t;
 
   // Cursor → auto-zoom keyframes. Samples are scaled from DIP to the video's

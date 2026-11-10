@@ -76,7 +76,7 @@ export function createToolbarWindow(): BrowserWindow {
   const c = context();
   if (c.toolbarWindow) return c.toolbarWindow;
   const win = new BrowserWindow({
-    width: 440,
+    width: 580,
     height: 56,
     frame: false,
     resizable: false,

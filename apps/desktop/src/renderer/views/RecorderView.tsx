@@ -91,6 +91,15 @@ export function RecorderView() {
     return () => window.removeEventListener('focus', onFocus);
   }, [refreshSources]);
 
+  // Listen for Stop requested from floating toolbar or system tray
+  useEffect(() => {
+    const off = bridge().on('recorder:requestStop', () => {
+      void finishRecording();
+    });
+    return off;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Mic meter via a lightweight getUserMedia loop (never recorded here).
   useEffect(() => {
     if (!opts.micEnabled) {
@@ -247,6 +256,12 @@ export function RecorderView() {
               ))}
             </div>
           </details>
+        ) : null}
+        {opts.selectedWindowId ? (
+          <div className="rounded-lg border px-3 py-2 text-xs flex items-center gap-2" style={{ borderColor: 'var(--accent)', background: 'var(--accent-subtle, rgba(124,140,248,0.12))', color: '#e8ebf2' }}>
+            <span className="font-semibold text-accent">Window capture active:</span>
+            <span>Keep your chosen window open and visible on screen (not minimized) while recording so Windows can capture its frames.</span>
+          </div>
         ) : null}
         {platform?.capabilities.areaSelection ? (
           <Button

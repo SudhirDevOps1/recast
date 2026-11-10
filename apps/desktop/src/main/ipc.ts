@@ -213,6 +213,17 @@ export async function registerIpcHandlers(): Promise<void> {
   register('recorder:resume', () => {
     c.inputSampler?.resume();
   });
+  register('recorder:triggerStop', () => {
+    if (c.mainWindow && !c.mainWindow.isDestroyed()) {
+      c.mainWindow.show();
+      c.mainWindow.focus();
+      c.mainWindow.webContents.send('recorder:requestStop');
+    }
+    if (c.toolbarWindow && !c.toolbarWindow.isDestroyed()) {
+      c.toolbarWindow.close();
+    }
+    c.toolbarWindow = null;
+  });
   register('recorder:stop', async () => {
     // The renderer stopped its capture handle first; this finalizes on disk:
     // mark completed, build the project with auto-zoom, register in library.

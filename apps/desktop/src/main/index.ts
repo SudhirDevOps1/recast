@@ -1,4 +1,8 @@
 import { app, globalShortcut, powerMonitor, ipcMain } from 'electron';
+
+// Ensure canonical app name immediately before evaluating any paths
+app.setName('Recast');
+
 import { DEFAULT_HOTKEYS, URL_SCHEME } from '@recast/shared';
 import { setContext, context } from './context';
 import { LibraryStore } from './store';

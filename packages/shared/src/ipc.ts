@@ -229,6 +229,7 @@ export const IPC = {
   'recorder:pause': def(z.void(), z.void()),
   'recorder:resume': def(z.void(), z.void()),
   'recorder:stop': def(z.void(), z.object({ projectId: z.string().nullable() })),
+  'recorder:triggerStop': def(z.void(), z.void()),
   'recorder:getState': def(z.void(), RecorderStateSchema),
 
   /** Internal capture-host channels (renderer → main disk writes). */
@@ -362,6 +363,7 @@ export const EVENTS = {
     message: z.string().nullable(),
   }),
   'session:crashed': z.object({ sessionId: z.string() }),
+  'recorder:requestStop': z.void(),
   'recorder:hotkey': z.object({ action: z.enum(['toggle-record', 'toggle-pause']) }),
   'app:open-project': z.object({ 0: z.string() }).or(z.string()),
   'app:export-project': z.object({ 0: z.string() }).or(z.string()),

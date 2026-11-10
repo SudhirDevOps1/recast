@@ -1,7 +1,7 @@
-import { protocol, net } from 'electron';
+import { protocol } from 'electron';
 import { createReadStream, existsSync, statSync } from 'node:fs';
 import path from 'node:path';
-import { recordingsDir, projectsDir } from './paths';
+import { recordingsDir, projectsDir, exportsDir, dataRoot } from './paths';
 import { mediaPathFromUrl } from '@recast/shared/node';
 
 /**
@@ -28,7 +28,24 @@ export function registerMediaProtocol(): void {
   ]);
 }
 
-const ALLOWED_ROOTS = [recordingsDir(), projectsDir()];
+/** Dynamic, cross-platform and case-insensitive check against authorized media directories. */
+function isAllowedMediaPath(filePath: string): boolean {
+  const normFile = path.resolve(filePath).toLowerCase();
+  const roots = [
+    recordingsDir(),
+    projectsDir(),
+    exportsDir(),
+    dataRoot(),
+  ];
+  if (process.env.APPDATA) {
+    roots.push(path.join(process.env.APPDATA, 'Recast'));
+    roots.push(path.join(process.env.APPDATA, '@recast', 'desktop'));
+  }
+  return roots.some((root) => {
+    const normRoot = path.resolve(root).toLowerCase();
+    return normFile.startsWith(normRoot);
+  });
+}
 
 export function mediaUrlFor(absolutePath: string): string {
   return `recast-media://local/${absolutePath.split(path.sep).map(encodeURIComponent).join('/')}`;
@@ -44,7 +61,7 @@ export function handleMediaProtocol(): void {
     // v0.1.2; see mediaPathFromUrl in @recast/shared/node and its tests).
     const filePath = mediaPathFromUrl(url.pathname);
 
-    const allowed = ALLOWED_ROOTS.some((root) => filePath.startsWith(root));
+    const allowed = isAllowedMediaPath(filePath);
     if (!allowed) {
       return new Response('Forbidden', { status: 403 });
     }
