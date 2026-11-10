@@ -680,10 +680,17 @@ export async function registerIpcHandlers(): Promise<void> {
     const rawSessionId = sessionId.replace(/^prj-/, '');
     const projectId = sessionId.startsWith('prj-') ? sessionId : `prj-${sessionId}`;
     const project = loadProject(projectId);
-    const mediaDir = project?.media?.dir ?? join(recordingsDir(), rawSessionId);
+    const mediaDir = project?.media?.dir || join(recordingsDir(), rawSessionId);
     const factor = c.sessions.manifestFor(rawSessionId)?.displayScaleFactor ?? 1;
     const cursorFile = project?.media?.cursor?.file ?? 'cursor.jsonl';
-    return readCursorJsonl(mediaDir, cursorFile, factor);
+    const res = readCursorJsonl(mediaDir, cursorFile, factor);
+    if (res.samples.length === 0 && res.clicks.length === 0) {
+      const fallbackDir = join(recordingsDir(), rawSessionId);
+      if (fallbackDir !== mediaDir) {
+        return readCursorJsonl(fallbackDir, cursorFile, factor);
+      }
+    }
+    return res;
   });
   register('capture:readCaptions', async (payload) => {
     const { path } = payload as { path: string };

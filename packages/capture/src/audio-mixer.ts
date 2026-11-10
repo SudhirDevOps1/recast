@@ -27,10 +27,21 @@ let workletUrl: string | null = null;
 
 async function ensureWorkletModule(ctx: AudioContext): Promise<void> {
   if (!workletUrl) {
-    const blob = new Blob([MIXER_WORKLET_SRC], { type: 'application/javascript' });
-    workletUrl = URL.createObjectURL(blob);
+    try {
+      const blob = new Blob([MIXER_WORKLET_SRC], { type: 'application/javascript' });
+      workletUrl = URL.createObjectURL(blob);
+    } catch {
+      workletUrl = `data:application/javascript;base64,${btoa(MIXER_WORKLET_SRC)}`;
+    }
   }
-  await ctx.audioWorklet.addModule(workletUrl);
+  try {
+    await ctx.audioWorklet.addModule(workletUrl);
+  } catch (err) {
+    // If blob URL was blocked by origin/CSP, retry with data URL
+    const dataUrl = `data:application/javascript;base64,${btoa(MIXER_WORKLET_SRC)}`;
+    await ctx.audioWorklet.addModule(dataUrl);
+    workletUrl = dataUrl;
+  }
 }
 
 export class AudioCapture {

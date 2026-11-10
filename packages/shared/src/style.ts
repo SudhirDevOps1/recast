@@ -191,7 +191,15 @@ export const BUILTIN_PRESETS: StylePreset[] = [
     position: 'bottom',
   }),
   preset('clean-light', 'Clean Light', 'source', cleanFrame({ type: 'transparent' }), {
-    look: 'native',
+    look: 'pointer',
+    sizePx: 26,
+    color: '#0B0E12',
+    outlineColor: '#FFFFFF',
+    outlineWidthPx: 1.5,
+    cursorSmoothing: 0.35,
+    clickBounce: true,
+    ripple: true,
+    rippleColor: '#3B82F6',
   }),
   preset('clean-dark', 'Clean Dark', 'source', cleanFrame({ type: 'transparent' }), {
     look: 'pointer',

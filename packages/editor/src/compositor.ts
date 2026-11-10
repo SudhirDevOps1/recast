@@ -1,4 +1,4 @@
-import { clamp } from '@recast/shared';
+import { clamp, buildTimeMap, timelineToSource } from '@recast/shared';
 import type { Annotation, RecastProject, Redaction, TransitionKind } from '@recast/shared';
 import type { ZoomPose } from './zoom-math';
 import { evalEase } from './easing';
@@ -228,7 +228,10 @@ export function computeComposition(project: RecastProject, tUs: number, outW: nu
   };
 
   // Cursor mapping: source coords → output coords through the visible region.
-  const cursor = mapCursor(project, tUs, deps.cursorEvents, screenRect, visibleSrc, style.cursor);
+  const timeMap = buildTimeMap(project.timeline.clips);
+  const hit = timelineToSource(timeMap, tUs);
+  const sourceTUs = hit ? hit.sourceUs : tUs;
+  const cursor = mapCursor(project, sourceTUs, deps.cursorEvents, screenRect, visibleSrc, style.cursor);
 
   // Clip intro transition: offset/zoom the screen card before cursor and
   // annotation mapping so overlays ride along with the motion.
@@ -702,7 +705,7 @@ function drawRedactions(ctx: CanvasRenderingContext2D, comp: Composition, deps: 
 
 function drawCursor(ctx: CanvasRenderingContext2D, comp: Composition): void {
   const c = comp.cursor;
-  if (!c || !c.visible || comp.cursorStyle.look === 'native') return;
+  if (!c || !c.visible) return;
   const style = comp.cursorStyle;
   ctx.save();
   ctx.globalAlpha = c.alpha;
@@ -754,16 +757,16 @@ function drawCursor(ctx: CanvasRenderingContext2D, comp: Composition): void {
       ctx.stroke();
     }
   } else {
-    // Pointer arrow path, scaled to `size`.
+    // Pointer arrow path, scaled to `size` (iconic precision pointer).
     const s = size / 24;
     ctx.beginPath();
     ctx.moveTo(c.x, c.y);
-    ctx.lineTo(c.x + 4.2 * s, c.y + 14.6 * s);
-    ctx.lineTo(c.x + 8.0 * s, c.y + 10.4 * s);
-    ctx.lineTo(c.x + 13.6 * s, c.y + 12.4 * s);
-    ctx.lineTo(c.x + 14.6 * s, c.y + 9.4 * s);
-    ctx.lineTo(c.x + 9.0 * s, c.y + 7.4 * s);
-    ctx.lineTo(c.x + 13.2 * s, c.y + 4.4 * s);
+    ctx.lineTo(c.x, c.y + 17 * s);
+    ctx.lineTo(c.x + 4.5 * s, c.y + 13 * s);
+    ctx.lineTo(c.x + 8.5 * s, c.y + 21 * s);
+    ctx.lineTo(c.x + 11.5 * s, c.y + 19.5 * s);
+    ctx.lineTo(c.x + 7.5 * s, c.y + 11.8 * s);
+    ctx.lineTo(c.x + 13 * s, c.y + 11.8 * s);
     ctx.closePath();
     fill();
     if (style.outlineWidthPx > 0) {

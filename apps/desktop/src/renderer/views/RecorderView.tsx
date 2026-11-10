@@ -27,6 +27,7 @@ export function RecorderView() {
   const previewRef = useRef<HTMLVideoElement | null>(null);
   const acquiredRef = useRef<AcquiredSources | null>(null);
   const cancelledRef = useRef(false);
+  const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
 
   const refreshSources = useCallback(async (): Promise<void> => {
     setRefreshingSources(true);
@@ -137,6 +138,41 @@ export function RecorderView() {
       cancelled = true;
     };
   }, [opts.micEnabled, refreshDevices]);
+
+  // Live face-cam preview when enabled in recorder options
+  useEffect(() => {
+    if (!opts.cameraEnabled) {
+      if (cameraStream) {
+        cameraStream.getTracks().forEach((t) => t.stop());
+        setCameraStream(null);
+      }
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video:
+            opts.cameraDeviceId && opts.cameraDeviceId !== 'default'
+              ? { deviceId: { exact: opts.cameraDeviceId } }
+              : { width: { ideal: 640 }, height: { ideal: 480 } },
+        });
+        if (cancelled) {
+          stream.getTracks().forEach((t) => t.stop());
+          return;
+        }
+        setCameraStream(stream);
+      } catch {
+        if (!cancelled) setCameraStream(null);
+      }
+    })();
+    return () => {
+      cancelled = true;
+      if (cameraStream) {
+        cameraStream.getTracks().forEach((t) => t.stop());
+      }
+    };
+  }, [opts.cameraEnabled, opts.cameraDeviceId]);
 
   const recording = recorderState?.phase === 'recording' || recorderState?.phase === 'paused';
   const paused = recorderState?.phase === 'paused';
@@ -320,17 +356,49 @@ export function RecorderView() {
           </div>
         </Field>
         {opts.cameraEnabled ? (
-          <Field label="Camera device" hint="Used for the face-cam overlay; style it in the editor's Cam panel.">
-            <Select
-              value={opts.cameraDeviceId ?? 'default'}
-              onValueChange={(v) => opts.set({ cameraDeviceId: v === 'default' ? null : v })}
-              options={(sources?.cameras ?? []).map((c) => ({
-                value: c.id || 'default',
-                label: c.default ? `${c.label} (default)` : c.label,
-              })).concat([{ value: 'default', label: 'System default' }])}
-              ariaLabel="Camera device"
-            />
-          </Field>
+          <>
+            <Field label="Camera device" hint="Used for the face-cam overlay; style it in the editor's Cam panel.">
+              <Select
+                value={opts.cameraDeviceId ?? 'default'}
+                onValueChange={(v) => opts.set({ cameraDeviceId: v === 'default' ? null : v })}
+                options={(sources?.cameras ?? []).map((c) => ({
+                  value: c.id || 'default',
+                  label: c.default ? `${c.label} (default)` : c.label,
+                })).concat([{ value: 'default', label: 'System default' }])}
+                ariaLabel="Camera device"
+              />
+            </Field>
+            <div className="flex items-center gap-4 p-3 rounded-xl border border-white/10 bg-white/5 my-2">
+              <div className="relative w-20 h-20 rounded-full overflow-hidden border-2 border-accent shadow-lg bg-black shrink-0">
+                {cameraStream ? (
+                  <video
+                    ref={(el) => {
+                      if (el && el.srcObject !== cameraStream) {
+                        el.srcObject = cameraStream;
+                        void el.play().catch(() => undefined);
+                      }
+                    }}
+                    autoPlay
+                    muted
+                    playsInline
+                    className="w-full h-full object-cover scale-x-[-1]"
+                  />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center text-[10px] text-muted">
+                    Connecting…
+                  </div>
+                )}
+              </div>
+              <div className="text-xs space-y-1">
+                <div className="font-semibold text-white flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" /> Live Face Cam
+                </div>
+                <p className="text-muted text-[11px] leading-relaxed">
+                  Will be captured as a separate picture-in-picture track. Move, resize, mirror, or add shadows in the editor anytime.
+                </p>
+              </div>
+            </div>
+          </>
         ) : null}
         <Field label="Microphone device" hint="Used for the recording when the microphone is on.">
           <Select
@@ -448,6 +516,10 @@ export function RecorderView() {
       });
 
       cancelledRef.current = false;
+      if (cameraStream) {
+        cameraStream.getTracks().forEach((t) => t.stop());
+        setCameraStream(null);
+      }
       acquiredRef.current = await acquireCaptureSources(showToast);
       logCapture('display-media', 'info', 'streams acquired before countdown');
 

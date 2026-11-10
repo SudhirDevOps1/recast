@@ -105,6 +105,10 @@ export function buildProjectFromSession(input: BuildProjectInput): RecastProject
     cursor: { file: 'cursor.jsonl', available: existsSync(join(recordingsDir(), sessionId, 'cursor.jsonl')) },
   };
 
+  if (manifest.camera?.segments[0]) {
+    project.style.facecam.enabled = true;
+  }
+
   // Timeline: one clip per segment, back to back.
   let t = 0;
   project.timeline.clips = manifest.screen.segments.map((seg) => {

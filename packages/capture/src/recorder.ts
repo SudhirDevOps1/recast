@@ -234,19 +234,16 @@ export async function startRecording(
     }
     lastFrameUs = tUs;
 
-    let encodable: VideoFrame = frame;
-    if (crop) {
-      encodable = new VideoFrame(frame, {
-        visibleRect: { x: crop.x, y: crop.y, width: crop.w, height: crop.h },
-        timestamp: tUs,
-        duration: 1_000_000 / opts.fps,
-      });
-      frame.close();
-    }
+    const encodable = new VideoFrame(frame, {
+      ...(crop ? { visibleRect: { x: crop.x, y: crop.y, width: crop.w, height: crop.h } } : {}),
+      timestamp: tUs,
+      duration: Math.round(1_000_000 / opts.fps),
+    });
+    frame.close();
     const keyFrame = Math.floor(tUs / (RECORDING.KEYFRAME_INTERVAL_S * 1_000_000)) !==
       Math.floor((tUs - 1_000_000 / opts.fps) / (RECORDING.KEYFRAME_INTERVAL_S * 1_000_000)) ||
       total === 1;
-    if (encoder && encoder.encodeQueueSize > 3) {
+    if (encoder && encoder.encodeQueueSize > 16) {
       dropped += 1;
       encodable.close();
     } else if (encoder) {

@@ -401,7 +401,13 @@ function PreviewCanvas({
       const seg = project.media.segments.find((s) => s.id === hit.clip.segmentId);
       screenLocalUs = segmentLocalTimeUs(hit.sourceUs, seg?.startUs ?? 0);
       if (playing) {
-        frameSync.play(hit.clip.segmentId, screenLocalUs, hit.clip.speed);
+        frameSync.play(hit.clip.segmentId, screenLocalUs, hit.clip.speed, 'keep');
+        for (const s of project.media.segments) {
+          if (s.id !== hit.clip.segmentId) {
+            const v = videoRefs.current.get(s.id);
+            if (v && !v.paused) v.pause();
+          }
+        }
       } else {
         frameSync.pauseAll();
         frameSync.seekTo(hit.clip.segmentId, screenLocalUs);
