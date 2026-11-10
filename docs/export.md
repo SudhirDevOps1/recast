@@ -42,3 +42,10 @@ The resolved path is displayed in the export UI and in the progress events — t
 ## Determinism
 
 Same project + same settings + same decoder → same frames in the same order, encoded with the same resolved config. The golden-frame SSIM harness (preview vs exported frame ≥ 0.995) is planned to lock this; until it runs in CI, determinism is a design property, not a measured claim.
+
+## Related
+
+- [editing.md](editing.md) - the edit being exported
+- [ffmpeg.md](ffmpeg.md) - the optional safety net
+- [architecture.md](architecture.md) - frame clock and determinism
+- [packaging.md](packaging.md) - how the app is shipped

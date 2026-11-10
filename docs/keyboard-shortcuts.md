@@ -39,3 +39,9 @@ Unavailable on Wayland (stated in the UI when detected).
 | Save now | `Ctrl+S` / `⌘S` (autosave runs every 5 s regardless) |
 
 Additions land here in the same PR as the feature — a shortcut that exists but isn't listed here is treated as a docs bug.
+
+## Related
+
+- [editing.md](editing.md) - what the shortcuts drive
+- [recording.md](recording.md) - capture controls
+- [../README.md](../README.md) - product overview

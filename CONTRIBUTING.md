@@ -43,3 +43,35 @@ Conventional commits: `feat:`, `fix:`, `docs:`, `refactor:`, `chore:`, `perf:`, 
 | Packaging | `apps/desktop/electron-builder.yml`, `packaging/` |
 
 See AGENTS.md for the working rules that govern this repo (crash-safe recording, compositor-as-contract, honest STATUS).
+
+## Documentation standards
+
+Documentation is part of the product here: the rule is that **a feature without docs is not done**.
+
+| Rule | Why |
+|---|---|
+| Never claim something "works" that was not tested on that OS | The project sells honesty over marketing; a wrong claim costs more than a missing one |
+| Update `STATUS.md` in the same commit as the change | STATUS.md is the running record of what is real |
+| Use the shared markers - verified / implemented / partial / not built / planned | Readers scan for state, not for prose |
+| Link with relative paths and keep them valid | `pnpm check:docs` fails the build on a dead link |
+| Add a "Related" footer when you create a doc | Every doc must say where to go next |
+| Record numbers, not adjectives | "cold start 1.9 s on the QA machine", not "blazingly fast" |
+
+New document? Put it in `docs/`, list it in `docs/README.md`, add it to the required-files list in
+`.github/workflows/ci.yml`, and give it an "At a glance" table plus a "Related" footer.
+
+```bash
+pnpm check:docs        # link, anchor and code-fence integrity
+pnpm check:website     # markup and asset integrity for the site
+```
+
+## Review
+
+| Area | What a reviewer checks |
+|---|---|
+| Correctness | Failing case covered by a test, not just the happy path |
+| Boundaries | New IPC channel declared once with zod schemas on both ends |
+| Design | Uses the tokens in `packages/ui/src/tokens.css`; no hardcoded colors, no emoji icons |
+| Robustness | Capture path stays crash-safe; the compositor stays a pure function of `(project, time)` |
+| Honesty | STATUS.md and `docs/*.md` updated; no claim outruns the tests |
+

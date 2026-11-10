@@ -59,3 +59,10 @@ pnpm dist:linux:extras # Flatpak + Snap (best-effort; also on nightly manual dis
 ## Website
 
 `apps/website/` deploys to GitHub Pages via `.github/workflows/website.yml` and lists real release assets per OS (GitHub API, with a graceful fallback link).
+
+## Related
+
+- [build.md](build.md) - local packaging commands
+- [code-signing.md](code-signing.md) - signing and notarization
+- [deployment.md](deployment.md) - enterprise rollout
+- [release pipeline](../.github/workflows/release.yml) - the release pipeline

@@ -36,3 +36,10 @@
 - Up to 4K60 (source resolution); quality caps 1080p/1440p/2160p at ingest.
 - Disk-space check before start and during the session; below 1 GB the UI warns.
 - Wayland: capture via the PipeWire portal only — cursor tracking and global hotkeys are limited and the UI says so. See platform-support.md.
+
+## Related
+
+- [editing.md](editing.md) - the editing model
+- [platform-support.md](platform-support.md) - what each OS supports
+- [troubleshooting.md](troubleshooting.md) - confirmed issues and fixes
+- [architecture.md](architecture.md) - process model and session service

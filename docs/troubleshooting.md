@@ -58,3 +58,9 @@ scoop install whisper-cpp       # Windows
 ## Recording is missing after a crash
 
 **Status:** by design, at most the last 2 seconds are lost. Closed fragments survive; check the Library — recovered sessions surface automatically on next launch with a notice.
+
+## Related
+
+- [support.md](support.md) - how to get help and what to attach
+- [platform-support.md](platform-support.md) - platform limitations
+- [recording.md](recording.md) - capture pipeline details

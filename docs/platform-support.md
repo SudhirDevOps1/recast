@@ -4,6 +4,18 @@ Nothing here says "works" unless it was tested on that OS. Untested = untested.
 
 Legend: ✅ tested working · 🟡 implemented, awaiting on-device verification · 🟠 partially implemented · ❌ not available · — not applicable
 
+## At a glance
+
+| Platform | Minimum | Packaging | Capture | System audio | Signing |
+|---|---|---|---|---|---|
+| Windows | 10 1809+ (x64, ARM64) | NSIS per-user, MSI for GPO, portable | screen, window, area | WASAPI loopback | not yet |
+| macOS | 12.3 | DMG (arm64, x64) | screen, window, area | 14.2+ loopback only | not yet |
+| Linux | X11 sessions; Wayland limited | AppImage, deb, rpm, tar.gz | screen, window, area on X11 | not available | not yet |
+
+Every cell in the matrices below is currently **implemented but awaiting on-device verification** for Windows
+and macOS: the code is complete and unit-covered, but a real machine pass is still open. The test log at the
+bottom records exactly what has been run.
+
 ## macOS
 
 | Capability | 12.3–14.1 | 14.2+ | Notes |
@@ -63,3 +75,10 @@ Minimum macOS: 12.3.
 | 2026-11-07 | Linux x64 (CI sandbox) | verify gate, build, ffmpeg fetch/pin | pass |
 | — | Windows 10/11 x64 | pending | — |
 | — | macOS 14 arm64 | pending | — |
+
+## Related
+
+- [deployment.md](deployment.md) - rollout per platform
+- [troubleshooting.md](troubleshooting.md) - confirmed issues and fixes
+- [support.md](support.md) - how to get help
+- [../STATUS.md](../STATUS.md) - what is real today

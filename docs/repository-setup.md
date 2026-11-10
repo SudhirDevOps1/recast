@@ -97,3 +97,9 @@ they're present and skips cleanly when they're not:
 | `WIN_CSC_LINK`, `WIN_CSC_KEY_PASSWORD` | Windows code signing |
 
 See [docs/code-signing.md](code-signing.md) for the full signing plan.
+
+## Related
+
+- [build.md](build.md) - local setup
+- [../CONTRIBUTING.md](../CONTRIBUTING.md) - review and merge flow
+- [../AGENTS.md](../AGENTS.md) - repository rules for coding agents

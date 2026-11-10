@@ -49,3 +49,9 @@ Prove before building UI:
 - [x] Opt-in crash reporting stance: **none by default; no telemetry** — decided against adding it
 - [ ] PERFORMANCE.md with measured numbers (budgets are targets today)
 - [ ] Cross-platform install QA matrix (see docs/platform-support.md test log)
+
+## Related
+
+- [../STATUS.md](../STATUS.md) - what is real today
+- [../CHANGELOG.md](../CHANGELOG.md) - release history
+- [platform-support.md](platform-support.md) - the device QA matrix

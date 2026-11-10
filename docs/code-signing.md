@@ -50,3 +50,9 @@ treats `CSC_LINK=''` as a file path, failing the build with
 electron-builder publishing is disabled (`--publish never` everywhere);
 releases are published by `release.yml` from uploaded artifacts plus
 `SHA256SUMS`.
+
+## Related
+
+- [packaging.md](packaging.md) - the artifacts that need signing
+- [deployment.md](deployment.md) - what IT sees on day one
+- [../SECURITY.md](../SECURITY.md) - the trust model
