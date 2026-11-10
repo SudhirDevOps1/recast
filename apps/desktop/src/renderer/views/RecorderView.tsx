@@ -82,7 +82,7 @@ export function RecorderView() {
 
   // Screen-changed detection: the set of windows/displays on screen drifts
   // while the picker sits open, so re-enumerate (with fresh thumbnails)
-  // whenever the app window regains focus and when displays are reconfigured.
+  // Whenever the app window regains focus and when displays are reconfigured.
   useEffect(() => {
     const onFocus = (): void => {
       if (recorderStateRef.current == null) void refreshSources();
@@ -90,15 +90,6 @@ export function RecorderView() {
     window.addEventListener('focus', onFocus);
     return () => window.removeEventListener('focus', onFocus);
   }, [refreshSources]);
-
-  // Listen for Stop requested from floating toolbar or system tray
-  useEffect(() => {
-    const off = bridge().on('recorder:requestStop', () => {
-      void finishRecording();
-    });
-    return off;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   // Mic meter via a lightweight getUserMedia loop (never recorded here).
   useEffect(() => {
@@ -490,6 +481,8 @@ export function RecorderView() {
       const acquired = acquiredRef.current;
       acquiredRef.current = null;
       await startRecordingFlow({ sessionId, startEpochMs, acquired: acquired! });
+      // Clean screen: automatically minimize main window so user's desktop/target app is clear!
+      void bridge().invoke('recorder:minimizeMainWindow', undefined);
     } catch (e) {
       setCountingDown(null);
       releaseAcquiredSources(acquiredRef.current);

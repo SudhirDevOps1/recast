@@ -40,7 +40,6 @@ export default function App() {
   useEffect(() => {
     const offState = bridge().on('recorder:state', (s) => {
       setRecorderState(s.phase === 'idle' ? null : s);
-      bridge().send('recorder:stats', { phase: s.phase, elapsedUs: s.elapsedUs / 1000, bytes: s.bytes });
     });
     const offOpen = bridge().on('app:open-project', (id) => {
       void openProject(typeof id === 'string' ? id : id[0]);
@@ -49,15 +48,36 @@ export default function App() {
       useApp.getState().showToast(`Recovered a crashed recording session (${sessionId}) — it is back in your Library.`, 'success');
       void refreshLibrary();
     });
+    // Persistent stop flow at root level — works regardless of active view
+    const offStop = bridge().on('recorder:requestStop', async () => {
+      const { stopRecordingFlow } = await import('../lib/record-flow');
+      const projectId = await stopRecordingFlow();
+      useApp.getState().setRecorderState(null);
+      void useApp.getState().refreshLibrary();
+      if (projectId) {
+        await openProject(projectId);
+      }
+    });
     const offHotkey = bridge().on('recorder:hotkey', ({ action }) => {
       if (action === 'toggle-record') {
-        navigate(useApp.getState().route === 'record' ? 'library' : 'record');
+        if (useApp.getState().recorderState) {
+          // If recording, hotkey stops cleanly and opens editor!
+          void bridge().invoke('recorder:triggerStop', undefined);
+        } else {
+          navigate(useApp.getState().route === 'record' ? 'library' : 'record');
+        }
+      } else if (action === 'toggle-pause') {
+        const s = useApp.getState().recorderState;
+        if (s) {
+          void bridge().invoke(s.phase === 'paused' ? 'recorder:resume' : 'recorder:pause', undefined);
+        }
       }
     });
     return () => {
       offState();
       offOpen();
       offCrash();
+      offStop();
       offHotkey();
     };
   }, [setRecorderState, refreshLibrary, navigate]);

@@ -281,6 +281,14 @@ export async function startRecordingFlow({ sessionId, startEpochMs, acquired }: 
             micMeterDb,
             diskFreeMb,
           });
+          // Broadcast live state to main process -> tray & floating toolbar!
+          bridge().send('recorder:stats', {
+            phase: stats.phase,
+            elapsedUs: stats.elapsedUs,
+            bytes: stats.bytes,
+            micMeterDb,
+            sessionId,
+          });
         });
       },
       onError: (message) => {

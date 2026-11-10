@@ -167,6 +167,29 @@ function preset(
 
 /** The six factory presets. Shipped in code; user presets are `.recaststyle` files. */
 export const BUILTIN_PRESETS: StylePreset[] = [
+  preset('cosmic-studio', 'Cosmic Studio', '16:9', {
+    paddingPx: 36,
+    radiusPx: 16,
+    borderWidthPx: 1,
+    borderColor: '#FFFFFF1F',
+    shadow: 'large',
+    background: { type: 'gradient', gradient: { from: '#1E2235', to: '#0B0D14', angleDeg: 140 } },
+  }, {
+    look: 'pointer',
+    sizePx: 28,
+    color: '#FFFFFF',
+    outlineColor: '#0B0D14',
+    outlineWidthPx: 2,
+    ripple: true,
+    rippleColor: '#7C8CF8',
+    cursorSmoothing: 0.45,
+    clickBounce: true,
+  }, {
+    style: 'boxed',
+    sizePx: 42,
+    highlightColor: '#7C8CF8',
+    position: 'bottom',
+  }),
   preset('clean-light', 'Clean Light', 'source', cleanFrame({ type: 'transparent' }), {
     look: 'native',
   }),
@@ -256,4 +279,4 @@ export function getBuiltinPreset(id: string): StylePreset | undefined {
   return BUILTIN_PRESETS.find((p) => p.id === id);
 }
 
-export const DEFAULT_PRESET_ID = 'clean-dark';
+export const DEFAULT_PRESET_ID = 'cosmic-studio';

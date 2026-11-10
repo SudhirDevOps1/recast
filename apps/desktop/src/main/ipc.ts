@@ -215,6 +215,9 @@ export async function registerIpcHandlers(): Promise<void> {
   });
   register('recorder:triggerStop', () => {
     if (c.mainWindow && !c.mainWindow.isDestroyed()) {
+      if (c.mainWindow.isMinimized()) {
+        c.mainWindow.restore();
+      }
       c.mainWindow.show();
       c.mainWindow.focus();
       c.mainWindow.webContents.send('recorder:requestStop');
@@ -223,6 +226,11 @@ export async function registerIpcHandlers(): Promise<void> {
       c.toolbarWindow.close();
     }
     c.toolbarWindow = null;
+  });
+  register('recorder:minimizeMainWindow', () => {
+    if (c.mainWindow && !c.mainWindow.isDestroyed()) {
+      c.mainWindow.minimize();
+    }
   });
   register('recorder:stop', async () => {
     // The renderer stopped its capture handle first; this finalizes on disk:

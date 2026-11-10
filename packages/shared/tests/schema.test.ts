@@ -9,8 +9,8 @@ import {
 } from '@recast/shared';
 
 describe('style presets', () => {
-  it('ships six valid builtins', () => {
-    expect(BUILTIN_PRESETS.length).toBe(6);
+  it('ships seven valid builtins', () => {
+    expect(BUILTIN_PRESETS.length).toBe(7);
     for (const p of BUILTIN_PRESETS) {
       expect(StylePresetSchema.safeParse(p).success).toBe(true);
     }

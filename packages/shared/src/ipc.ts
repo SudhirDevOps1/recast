@@ -230,6 +230,7 @@ export const IPC = {
   'recorder:resume': def(z.void(), z.void()),
   'recorder:stop': def(z.void(), z.object({ projectId: z.string().nullable() })),
   'recorder:triggerStop': def(z.void(), z.void()),
+  'recorder:minimizeMainWindow': def(z.void(), z.void()),
   'recorder:getState': def(z.void(), RecorderStateSchema),
 
   /** Internal capture-host channels (renderer → main disk writes). */

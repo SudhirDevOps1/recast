@@ -44,7 +44,7 @@ const api = {
     return () => ipcRenderer.removeListener(event, listener);
   },
 
-  send(channel: 'recorder:stats', payload: { phase: string; elapsedUs: number; bytes: number }): void {
+  send(channel: 'recorder:stats', payload: { phase: string; elapsedUs: number; bytes: number; micMeterDb?: number | null; sessionId?: string | null }): void {
     ipcRenderer.send(channel, payload);
   },
 

@@ -960,7 +960,7 @@ export function drawComposition(ctx: CanvasRenderingContext2D, comp: Composition
     ctx.imageSmoothingQuality = 'high';
     ctx.drawImage(frame as CanvasImageSource, sx, sy, sw, shh, comp.screenRect.x, comp.screenRect.y, comp.screenRect.w, comp.screenRect.h);
   } else {
-    ctx.fillStyle = '#000000';
+    ctx.fillStyle = 'rgba(20, 24, 35, 0.95)';
     ctx.fillRect(comp.screenRect.x, comp.screenRect.y, comp.screenRect.w, comp.screenRect.h);
   }
   drawRedactions(ctx, comp, deps);

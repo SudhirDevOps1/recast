@@ -297,6 +297,7 @@ function PreviewCanvas({
 }): React.ReactElement {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const videoHostRef = useRef<HTMLDivElement | null>(null);
   const [, setFrameTick] = useState(0);
   const [bgImage, setBgImage] = useState<HTMLImageElement | null>(null);
   // FrameSync owns the hidden videos: it seeks them when scrubbing, plays
@@ -311,8 +312,10 @@ function PreviewCanvas({
   }
   useEffect(() => () => frameSyncRef.current?.destroy(), []);
 
-  // Create hidden video elements once per segment set.
+  // Create hidden video elements once per segment set, attached to the DOM so
+  // Chromium's render tree and requestVideoFrameCallback stay actively ticking.
   useEffect(() => {
+    const host = videoHostRef.current;
     for (const [segId, url] of mediaUrls) {
       if (videoRefs.current.has(segId)) continue;
       const v = document.createElement('video');
@@ -321,6 +324,7 @@ function PreviewCanvas({
       v.muted = true;
       v.preload = 'auto';
       v.playbackRate = 1;
+      if (host) host.appendChild(v);
       videoRefs.current.set(segId, v);
     }
     frameSyncRef.current?.setVideos(videoRefs.current);
@@ -447,6 +451,8 @@ function PreviewCanvas({
   return (
     <div ref={containerRef} className="relative min-h-0 flex-1" style={{ background: 'var(--bg-sunken)' }}>
       <canvas ref={canvasRef} className="absolute inset-0 h-full w-full" aria-label="Preview" />
+      {/* Hidden DOM attachment host for video decoders to ensure Chromium's rVFC never suspends */}
+      <div ref={videoHostRef} style={{ position: 'fixed', top: -9999, left: -9999, width: 1, height: 1, opacity: 0, pointerEvents: 'none' }} aria-hidden="true" />
       {/* Loading shimmer: only while no frame has ever decoded — real content
           replaces it the moment the first frame presents. */}
       {!frameSyncRef.current?.hasAnyFrame ? (

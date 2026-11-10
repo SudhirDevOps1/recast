@@ -91,9 +91,12 @@ export function createToolbarWindow(): BrowserWindow {
       contextIsolation: true,
       sandbox: true,
       nodeIntegration: false,
+      backgroundThrottling: false,
     },
   });
   win.setAlwaysOnTop(true, 'floating');
+  // Exclude floating toolbar from screen recording so it is never baked into footage
+  win.setContentProtection(true);
   const devUrl = process.env.RECAST_DEV_URL ?? process.env.ELECTRON_RENDERER_URL;
   if (devUrl) void win.loadURL(`${devUrl.replace(/\/$/, '')}/toolbar.html`);
   else void win.loadFile(join(__dirname, '../renderer/toolbar.html'));

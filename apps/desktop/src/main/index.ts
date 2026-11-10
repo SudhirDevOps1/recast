@@ -1,4 +1,4 @@
-import { app, globalShortcut, powerMonitor, ipcMain } from 'electron';
+import { app, globalShortcut, powerMonitor, ipcMain, BrowserWindow } from 'electron';
 
 // Ensure canonical app name immediately before evaluating any paths
 app.setName('Recast');
@@ -182,11 +182,27 @@ function registerRecordingAppEvents(): void {
   });
 }
 
-// Recording state → tray, from the renderer's stats stream.
-ipcMain.on('recorder:stats', (_e, stats: { phase: string; elapsedUs: number; bytes: number }) => {
+// Recording state → tray & broadcast to all floating windows (ToolbarApp etc.)
+ipcMain.on('recorder:stats', (_e, stats: { phase: string; elapsedUs: number; bytes: number; micMeterDb?: number | null; sessionId?: string | null }) => {
   if (stats.phase === 'recording' || stats.phase === 'paused') {
     renderRecordingMenu(Date.now() - stats.elapsedUs / 1000, stats.bytes, stats.phase === 'paused');
   } else {
     renderStoppedMenu();
   }
+  const c = context();
+  const payload = {
+    phase: stats.phase,
+    sessionId: stats.sessionId ?? c.activeSessionId,
+    elapsedUs: stats.elapsedUs,
+    bytes: stats.bytes,
+    droppedFrames: 0,
+    totalFrames: 0,
+    micMeterDb: stats.micMeterDb ?? null,
+    diskFreeMb: c.lastDiskFreeMb ?? 0,
+  };
+  BrowserWindow.getAllWindows().forEach((w) => {
+    if (!w.isDestroyed()) {
+      w.webContents.send('recorder:state', payload);
+    }
+  });
 });

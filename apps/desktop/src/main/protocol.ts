@@ -1,5 +1,6 @@
 import { protocol } from 'electron';
 import { createReadStream, existsSync, statSync } from 'node:fs';
+import { Readable } from 'node:stream';
 import path from 'node:path';
 import { recordingsDir, projectsDir, exportsDir, dataRoot } from './paths';
 import { mediaPathFromUrl } from '@recast/shared/node';
@@ -97,7 +98,9 @@ export function handleMediaProtocol(): void {
         });
       }
       const slice = createReadStream(filePath, { start, end });
-      return new Response(slice as unknown as ReadableStream, {
+      request.signal.addEventListener('abort', () => slice.destroy());
+      const webStream = Readable.toWeb(slice);
+      return new Response(webStream as unknown as ReadableStream, {
         status: 206,
         headers: {
           'Content-Type': mime,
@@ -110,7 +113,9 @@ export function handleMediaProtocol(): void {
     }
 
     const stream = createReadStream(filePath);
-    return new Response(stream as unknown as ReadableStream, {
+    request.signal.addEventListener('abort', () => stream.destroy());
+    const webStream = Readable.toWeb(stream);
+    return new Response(webStream as unknown as ReadableStream, {
       status: 200,
       headers: {
         'Content-Type': mime,
