@@ -1,4 +1,4 @@
-import { BrowserWindow, app, nativeTheme } from 'electron';
+import { BrowserWindow, app } from 'electron';
 import { join } from 'node:path';
 import { context } from './context';
 
@@ -10,17 +10,38 @@ import { context } from './context';
 
 const PRELOAD = join(__dirname, '../preload/index.js');
 
+const TITLEBAR_DARK = { color: '#0e1015', symbolColor: '#e8ebf2' };
+const TITLEBAR_LIGHT = { color: '#f7f8fa', symbolColor: '#171a20' };
+
+/**
+ * The window chrome (native title-bar overlay + backgroundColor) is drawn by
+ * the OS, so it cannot read CSS tokens. Apply the app theme to it explicitly,
+ * otherwise switching to light leaves dark native window controls on a light
+ * header (or invisible light-on-light buttons).
+ */
+export function applyWindowTheme(win: BrowserWindow | null, theme: string): void {
+  if (!win || win.isDestroyed() || process.platform === 'darwin') return;
+  const light = theme === 'light';
+  win.setBackgroundColor(light ? '#f7f8fa' : '#0e1015');
+  try {
+    win.setTitleBarOverlay({ ...(light ? TITLEBAR_LIGHT : TITLEBAR_DARK), height: 44 });
+  } catch {
+    /* Older Linux WMs do not support the overlay; the app frame still works. */
+  }
+}
+
 export function createMainWindow(): BrowserWindow {
   const mac = process.platform === 'darwin';
+  const light = context().settings.theme === 'light';
   const win = new BrowserWindow({
     width: 1180,
     height: 780,
     minWidth: 900,
     minHeight: 600,
     show: false,
-    backgroundColor: nativeTheme.shouldUseDarkColors ? '#0e1015' : '#f7f8fa',
+    backgroundColor: light ? '#f7f8fa' : '#0e1015',
     titleBarStyle: mac ? 'hiddenInset' : 'hidden',
-    titleBarOverlay: mac ? false : { color: '#0e1015', symbolColor: '#e8ebf2', height: 44 },
+    titleBarOverlay: mac ? false : { ...(light ? TITLEBAR_LIGHT : TITLEBAR_DARK), height: 44 },
     trafficLightPosition: mac ? { x: 16, y: 15 } : undefined,
     webPreferences: {
       preload: PRELOAD,

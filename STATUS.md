@@ -1,8 +1,36 @@
 # STATUS — what is real, what is partial, what is not built
 
-Last updated: 2026-11-10 · **v0.1.4 released** (`v0.1.4` tag) — process stop lifecycle hardened (fail-safe error handling and window cleanup preventing hung processes/app lockups after stop); P0 Market Parity implemented: Suggest Zooms with dwell heuristic (Focra-style $\le 8$ px for $\ge 500$ ms) and click clustering, Keystroke HUD with floating glass keycaps via uiohook-napi and shared compositor, Live Annotation Toolbar with draggable floating surface, multi-tool vector logging, and color presets. v0.1.3 (`v0.1.3` tag) fixed preview black-screen and delivered face-cam PiP. Unit tests pass (95/95).
+Last updated: 2026-11-11 · **v0.1.4 released** (`v0.1.4` tag) — process stop lifecycle hardened (fail-safe error handling and window cleanup preventing hung processes/app lockups after stop); P0 Market Parity implemented: Suggest Zooms with dwell heuristic (Focra-style $\le 8$ px for $\ge 500$ ms) and click clustering, Keystroke HUD with floating glass keycaps via uiohook-napi and shared compositor, Live Annotation Toolbar with draggable floating surface, multi-tool vector logging, and color presets. v0.1.3 (`v0.1.3` tag) fixed preview black-screen and delivered face-cam PiP. Unit tests pass (95/95). Unreleased UI/UX premium pass (interaction states, library rebuild, black-preview redraw fix) is described in the section below and in [docs/premium-plan.md](docs/premium-plan.md).
 
 Legend: ✅ implemented & verified · 🟡 implemented but not yet verified on device/CI · 🟠 scaffolded, not complete · ❌ not built
+
+## UI / UX premium pass (2026-11-11)
+
+The full audit, feel spec and feature roadmap live in [docs/premium-plan.md](docs/premium-plan.md). The honesty rule there
+applies here too: a box is only ticked when typecheck, lint, tests, build, docs checks **and** a visual pass in a real
+window passed.
+
+- ✅ **Interaction-state layer** (`packages/ui/src/global.css`): `Button`, `IconButton`, `Select`, `Slider`, `Switch`,
+  `Dialog`, `Card`, panel tabs and the nav rail define idle / hover / press / focus-visible / disabled. Component colours
+  moved out of the inline `background` shorthand into `--rc-*` custom properties, which is why hover states now win over
+  the inline style. Reduced-motion turns off every animation and transform.
+- ✅ **Editor preview no longer opens black.** Root cause was not the decoder: `FrameSync` fired its redraw signal, but the
+  canvas draw effect did not depend on it, so the placeholder painted before the videos loaded was never replaced. The
+  redraw tick is now an effect dependency — verified in a captured window screenshot (real recording painted at t=0).
+- ✅ **Face-cam PiP actually renders.** The camera WebM written by MediaRecorder has no duration/cues, so Chromium refused
+  to seek it and the compositor drew only the border. Takes are now losslessly remuxed to an indexed WebM on write, and
+  older recordings are healed on first open; verified by sampling the preview canvas and the element's seekable duration.
+- ✅ **Library rebuilt**: count header, search, four sort modes, poster thumbnails fetched four at a time with skeleton
+  placeholders, staggered entrance, hover play affordance, two-step delete, error handling on open and delete.
+- ✅ **Reactive recording badge + real clock** in the title bar and recorder view (`mm:ss` / `h:mm:ss`).
+- ✅ **Tone-correct toasts** (`warning` / `check` / `sparkle`, `role="alert"` for errors), view transitions, scrollable
+  editor tab strip with tab semantics.
+- ✅ **Timeline legibility**: segment blocks under 60 px no longer render a truncated id and two trim grips; the block is
+  still selectable and trimmable.
+- ✅ **Motion panel overflow fixed**: the suggest-heuristic select is full width with the action below it inside the 320 px rail.
+- 🟡 Recordly/Capptivo parity features F1–F8 in [docs/premium-plan.md](docs/premium-plan.md) (zoom regions, cursor loop +
+  click sounds, spotlight, suggestion review tray, per-track audio, aspect re-aim, rename/presets): **not built** — they are
+  the next phases, not claims.
 
 ## Verified in this repository (2026-11-07, Linux CI-equivalent sandbox)
 

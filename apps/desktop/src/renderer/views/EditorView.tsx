@@ -218,7 +218,7 @@ export function EditorView() {
 
       {/* Right panel */}
       <aside className="w-80 shrink-0 overflow-auto border-l border-hairline p-4">
-        <div className="mb-3 flex gap-1">
+        <div className="rc-tabstrip mb-3" role="tablist" aria-label="Editor panels">
           <PanelTab label="Motion" active={panel === 'motion'} onClick={() => setPanel('motion')} />
           <PanelTab label="Style" active={panel === 'style'} onClick={() => setPanel('style')} />
           <PanelTab label="Cam" active={panel === 'facecam'} onClick={() => setPanel('facecam')} />
@@ -227,7 +227,7 @@ export function EditorView() {
           <PanelTab label="CC" active={panel === 'captions'} onClick={() => setPanel('captions')} />
         </div>
 
-        <div key={panel} className="panel-in">
+        <div key={panel} className="panel-in" role="tabpanel" aria-label={`${panel} panel`}>
           {panel === 'motion' && (
             <MotionPanel
               project={project}
@@ -269,12 +269,16 @@ export const CAMERA_ELEMENT_ID = '__camera__';
 function PanelTab({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
   return (
     <button
+      type="button"
+      role="tab"
+      aria-selected={active}
       onClick={onClick}
-      className="rounded-md px-3 py-1.5 text-sm font-semibold transition-colors"
-      style={{
-        background: active ? 'var(--accent-subtle)' : 'transparent',
-        color: active ? 'var(--accent)' : 'var(--text-muted)',
-      }}
+      className="rc-tab rounded-md px-2 py-1.5 text-xs font-semibold"
+      style={
+        active
+          ? ({ '--rc-tab-bg': 'var(--accent-subtle)', '--rc-tab-fg': 'var(--accent)' } as React.CSSProperties)
+          : undefined
+      }
     >
       {label}
     </button>
@@ -307,7 +311,7 @@ function PreviewCanvas({
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const videoHostRef = useRef<HTMLDivElement | null>(null);
-  const [, setFrameTick] = useState(0);
+  const [frameTick, setFrameTick] = useState(0);
   const [bgImage, setBgImage] = useState<HTMLImageElement | null>(null);
   // FrameSync owns the hidden videos: it seeks them when scrubbing, plays
   // them at clip speed when playing, and serves a last-good-frame snapshot
@@ -447,7 +451,11 @@ function PreviewCanvas({
         return frameSync.getFrame(CAMERA_ELEMENT_ID, camUs);
       },
     });
-  }, [project, currentTimeUs, playing, zoomTrack, captions, cursorSamples, videoRefs, mediaVersion, bgImage]);
+    // `frameTick` is the redraw signal from FrameSync: a decoder finishing its
+    // load / seek / presented frame must repaint, otherwise the canvas keeps
+    // the placeholder it drew before the first frame was paintable (black
+    // preview until something else moved the playhead).
+  }, [project, currentTimeUs, playing, zoomTrack, captions, cursorSamples, videoRefs, mediaVersion, bgImage, frameTick]);
 
   // Keep the canvas sized to its container (device pixel ratio aware).
   useEffect(() => {

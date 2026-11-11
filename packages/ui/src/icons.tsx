@@ -252,3 +252,10 @@ export const IconMaximize = (p: P) => (
     <path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" />
   </Base>
 );
+
+export const IconSearch = (p: P) => (
+  <Base {...p}>
+    <circle cx={11} cy={11} r={6.5} />
+    <path d="m16 16 4.5 4.5" />
+  </Base>
+);

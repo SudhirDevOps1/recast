@@ -1,4 +1,4 @@
-import { forwardRef, type ButtonHTMLAttributes, type ReactNode } from 'react';
+import { forwardRef, type ButtonHTMLAttributes, type CSSProperties, type ReactNode } from 'react';
 
 type Variant = 'primary' | 'secondary' | 'ghost' | 'danger';
 type Size = 'sm' | 'md' | 'lg';
@@ -14,17 +14,51 @@ const sizeStyle: Record<Size, string> = {
   lg: 'height:40px;padding:0 18px;font-size:var(--text-lg);border-radius:var(--radius-lg)',
 };
 
-function variantStyle(variant: Variant): string {
+type CSSVars = Record<`--${string}`, string>;
+
+/**
+ * Variant colours are exposed as custom properties, never as a complete
+ * `background` shorthand. That is what lets global.css own the hover / press /
+ * disabled states instead of losing to an inline style.
+ */
+function variantVars(variant: Variant): CSSVars {
   switch (variant) {
     case 'primary':
-      return 'background:var(--accent);color:var(--accent-contrast);border:1px solid transparent';
+      return {
+        '--rc-btn-bg': 'var(--accent)',
+        '--rc-btn-bg-hover': 'var(--accent-hover)',
+        '--rc-btn-bg-active': 'var(--accent-press)',
+        '--rc-btn-fg': 'var(--accent-contrast)',
+        '--rc-btn-bd': 'transparent',
+      };
     case 'secondary':
-      return 'background:var(--surface-raised);color:var(--text-primary);border:1px solid var(--hairline-strong)';
+      return {
+        '--rc-btn-bg': 'var(--surface-raised)',
+        '--rc-btn-bg-hover': 'var(--surface-hover)',
+        '--rc-btn-bg-active': 'var(--surface)',
+        '--rc-btn-fg': 'var(--text-primary)',
+        '--rc-btn-bd': 'var(--hairline-strong)',
+        '--rc-btn-bd-hover': 'var(--text-muted)',
+      };
     case 'danger':
-      return 'background:transparent;color:var(--danger);border:1px solid var(--hairline-strong)';
+      return {
+        '--rc-btn-bg': 'transparent',
+        '--rc-btn-bg-hover': 'rgba(248, 113, 113, 0.12)',
+        '--rc-btn-bg-active': 'rgba(248, 113, 113, 0.18)',
+        '--rc-btn-fg': 'var(--danger)',
+        '--rc-btn-bd': 'var(--hairline-strong)',
+        '--rc-btn-bd-hover': 'var(--danger)',
+      };
     case 'ghost':
     default:
-      return 'background:transparent;color:var(--text-secondary);border:1px solid transparent';
+      return {
+        '--rc-btn-bg': 'transparent',
+        '--rc-btn-bg-hover': 'var(--surface-hover)',
+        '--rc-btn-bg-active': 'var(--surface)',
+        '--rc-btn-fg': 'var(--text-secondary)',
+        '--rc-btn-fg-hover': 'var(--text-primary)',
+        '--rc-btn-bd': 'transparent',
+      };
   }
 }
 
@@ -52,11 +86,11 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
   return (
     <button
       ref={ref}
+      data-variant={variant}
       className={`rc-button ${className ?? ''}`}
       style={{
-        ...cssProps(variantStyle(variant)),
+        ...(variantVars(variant) as CSSProperties),
         ...cssProps(sizeStyle[size]),
-        transition: 'background var(--dur-fast) var(--ease-out)',
         cursor: 'default',
         ...style,
       }}
@@ -70,26 +104,24 @@ export function IconButton({
   children,
   active,
   danger,
+  style,
   ...rest
 }: ButtonHTMLAttributes<HTMLButtonElement> & { label: string; active?: boolean; danger?: boolean }) {
   return (
     <button
       aria-label={label}
       title={label}
+      aria-pressed={active === undefined ? undefined : active}
       className="rc-icon-button"
       style={{
         width: 30,
         height: 30,
-        display: 'inline-flex',
-        alignItems: 'center',
-        justifyContent: 'center',
         borderRadius: 'var(--radius-md)',
-        border: '1px solid transparent',
-        background: active ? 'var(--accent-subtle)' : 'transparent',
-        color: danger ? 'var(--danger)' : active ? 'var(--accent)' : 'var(--text-secondary)',
-        transition: 'all var(--dur-fast) var(--ease-out)',
-        cursor: 'default',
-        ...rest.style,
+        ...({
+          '--rc-icon-bg': active ? 'var(--accent-subtle)' : 'transparent',
+          '--rc-icon-fg': danger ? 'var(--danger)' : active ? 'var(--accent)' : 'var(--text-secondary)',
+        } as CSSProperties),
+        ...style,
       }}
       {...rest}
     >

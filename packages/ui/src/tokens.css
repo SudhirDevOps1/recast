@@ -100,6 +100,9 @@
   --accent-press: #4a5be0;
   --accent-subtle: rgba(90, 108, 240, 0.12);
   --accent-contrast: #ffffff;
+  --glass: rgba(247, 248, 250, 0.86);
+  --glass-hairline: rgba(16, 20, 24, 0.08);
+  --accent-glow: rgba(90, 108, 240, 0.22);
   --shadow-1: 0 1px 2px rgba(20, 24, 34, 0.08);
   --shadow-2: 0 4px 16px rgba(20, 24, 34, 0.1);
   --shadow-3: 0 12px 40px rgba(20, 24, 34, 0.14);

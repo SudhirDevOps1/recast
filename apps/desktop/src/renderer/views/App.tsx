@@ -1,7 +1,7 @@
-import { useEffect } from 'react';
+import { useCallback, useEffect } from 'react';
 import { useApp, useEditor } from '../state/stores';
 import { bridge } from '../lib/bridge';
-import { IconFilm, IconRecord, IconSettings, IconFolder, IconCommand, IconX, Badge } from '@recast/ui';
+import { IconFilm, IconRecord, IconSettings, IconFolder, IconCommand, IconCheck, IconWarning, IconSparkle, Badge } from '@recast/ui';
 import { Library } from './Library';
 import { RecorderView } from './RecorderView';
 import { EditorView } from './EditorView';
@@ -19,6 +19,7 @@ export default function App() {
   const navigate = useApp((s) => s.navigate);
   const platform = useApp((s) => s.platform);
   const toast = useApp((s) => s.toast);
+  const recorderState = useApp((s) => s.recorderState);
   const setRecorderState = useApp((s) => s.setRecorderState);
   const refreshPlatform = useApp((s) => s.refreshPlatform);
   const refreshFfmpeg = useApp((s) => s.refreshFfmpeg);
@@ -37,6 +38,24 @@ export default function App() {
       });
   }, [refreshPlatform, refreshFfmpeg, refreshLibrary]);
 
+  const openProject = useCallback(
+    async (id: string): Promise<void> => {
+      try {
+        const project = await bridge().invoke('library:open', { id });
+        if (!project) {
+          useApp.getState().showToast('That recording could not be opened — its project file is missing.', 'error');
+          return;
+        }
+        useEditor.getState().setProject(project);
+        // Set the app-store id too — Export reads useApp.projectId.
+        navigate('editor', id);
+      } catch (e) {
+        useApp.getState().showToast(`Could not open the recording: ${(e as Error).message}`, 'error');
+      }
+    },
+    [navigate],
+  );
+
   useEffect(() => {
     const offState = bridge().on('recorder:state', (s) => {
       setRecorderState(s.phase === 'idle' ? null : s);
@@ -48,14 +67,19 @@ export default function App() {
       useApp.getState().showToast(`Recovered a crashed recording session (${sessionId}) — it is back in your Library.`, 'success');
       void refreshLibrary();
     });
-    // Persistent stop flow at root level — works regardless of active view
+    // Persistent stop flow at root level — works regardless of active view.
+    // A failed stop must still leave the app in a usable state: the recorder
+    // state is cleared in `finally`, never only on the happy path.
     const offStop = bridge().on('recorder:requestStop', async () => {
-      const { stopRecordingFlow } = await import('../lib/record-flow');
-      const projectId = await stopRecordingFlow();
-      useApp.getState().setRecorderState(null);
-      void useApp.getState().refreshLibrary();
-      if (projectId) {
-        await openProject(projectId);
+      try {
+        const { stopRecordingFlow } = await import('../lib/record-flow');
+        const projectId = await stopRecordingFlow();
+        if (projectId) await openProject(projectId);
+      } catch (e) {
+        useApp.getState().showToast(`Could not finish the recording: ${(e as Error).message}`, 'error');
+      } finally {
+        useApp.getState().setRecorderState(null);
+        void useApp.getState().refreshLibrary();
       }
     });
     const offHotkey = bridge().on('recorder:hotkey', ({ action }) => {
@@ -80,17 +104,7 @@ export default function App() {
       offStop();
       offHotkey();
     };
-  }, [setRecorderState, refreshLibrary, navigate]);
-
-  async function openProject(id: string): Promise<void> {
-    const project = await bridge().invoke('library:open', { id });
-    if (project) {
-      useEditor.getState().setProject(project);
-      // Set the app-store id too — Export reads useApp.projectId.
-      navigate('editor', id);
-    }
-  }
-  void editorOpen;
+  }, [setRecorderState, refreshLibrary, navigate, openProject]);
 
   return (
     <div className="flex h-full flex-col">
@@ -115,10 +129,19 @@ export default function App() {
               Recast
             </span>
           </span>
-          {useApp.getState().recorderState ? (
+          {recorderState ? (
             <Badge tone="recording">
-              <span className="inline-block h-2 w-2 rounded-full" style={{ background: 'var(--recording)' }} />
-              Recording
+              <span
+                className="rc-live-dot inline-block h-2 w-2 rounded-full"
+                data-paused={recorderState.phase === 'paused' ? 'true' : undefined}
+                style={{ background: 'var(--recording)' }}
+              />
+              {recorderState.phase === 'paused' ? 'Paused' : 'Recording'}
+              {recorderState.elapsedUs > 0 ? (
+                <span className="tabular" style={{ opacity: 0.85 }}>
+                  {formatElapsed(recorderState.elapsedUs)}
+                </span>
+              ) : null}
             </Badge>
           ) : null}
         </div>
@@ -147,11 +170,13 @@ export default function App() {
 
         {/* View */}
         <main className="min-w-0 flex-1 overflow-auto">
-          {route === 'library' && <Library />}
-          {route === 'record' && <RecorderView />}
-          {route === 'editor' && <EditorView />}
-          {route === 'export' && <ExportView />}
-          {route === 'settings' && <SettingsView />}
+          <div key={route} className="rc-view h-full">
+            {route === 'library' && <Library />}
+            {route === 'record' && <RecorderView />}
+            {route === 'editor' && <EditorView />}
+            {route === 'export' && <ExportView />}
+            {route === 'settings' && <SettingsView />}
+          </div>
         </main>
       </div>
 
@@ -163,17 +188,19 @@ export default function App() {
 
       {toast ? (
         <div
-          role="status"
-          className="fixed bottom-5 left-1/2 z-50 -translate-x-1/2 rounded-xl border px-4 py-2 text-sm shadow-2"
+          role={toast.tone === 'error' ? 'alert' : 'status'}
+          data-tone={toast.tone}
+          className="rc-toast fixed bottom-5 left-1/2 z-50 -translate-x-1/2 rounded-xl border px-4 py-2 pl-5 text-sm"
           style={{
             background: 'var(--surface-raised)',
             borderColor: toast.tone === 'error' ? 'var(--danger)' : toast.tone === 'success' ? 'var(--success)' : 'var(--hairline-strong)',
             color: toast.tone === 'error' ? 'var(--danger)' : 'var(--text-primary)',
-          }}
+            ['--toast-accent' as string]: toast.tone === 'error' ? 'var(--danger)' : toast.tone === 'success' ? 'var(--success)' : 'var(--accent)',
+          } as React.CSSProperties}
         >
           <span className="inline-flex items-center gap-3">
             <span className="inline-flex items-center gap-2">
-              {toast.tone !== 'info' ? <IconX size={12} /> : null}
+              {toast.tone === 'error' ? <IconWarning size={13} /> : toast.tone === 'success' ? <IconCheck size={13} /> : <IconSparkle size={13} />}
               {toast.message}
             </span>
             {toast.action ? (
@@ -218,13 +245,25 @@ function NavButton({
       title={label}
       disabled={disabled}
       onClick={onClick}
-      className="flex h-10 w-10 items-center justify-center rounded-lg transition-colors disabled:opacity-40"
-      style={{
-        background: active ? 'var(--accent-subtle)' : 'transparent',
-        color: active ? 'var(--accent)' : 'var(--text-secondary)',
-      }}
+      className="rc-nav-button flex h-10 w-10 items-center justify-center rounded-lg"
+      style={
+        {
+          '--rc-nav-bg': active ? 'var(--accent-subtle)' : 'transparent',
+          '--rc-nav-fg': active ? 'var(--accent)' : 'var(--text-secondary)',
+        } as React.CSSProperties
+      }
     >
       {icon}
     </button>
   );
+}
+
+/** 0:07 / 1:03:04 — the badge is read at a glance, never in full microseconds. */
+function formatElapsed(us: number): string {
+  const total = Math.max(0, Math.floor(us / 1_000_000));
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  const mm = h > 0 ? String(m).padStart(2, '0') : String(m);
+  return `${h > 0 ? `${h}:` : ''}${mm}:${String(s).padStart(2, '0')}`;
 }

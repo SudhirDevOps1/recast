@@ -229,7 +229,7 @@ export function MotionPanel({
             <div className="text-xs font-semibold" style={{ color: 'var(--text-secondary)' }}>
               Zoom Intelligence
             </div>
-            <div className="flex gap-2">
+            <div className="flex flex-col gap-2">
               <Select
                 value={suggestHeuristic}
                 onValueChange={(v) => setSuggestHeuristic(v as 'combined' | 'dwell' | 'clicks')}
@@ -239,6 +239,7 @@ export function MotionPanel({
                   { value: 'dwell', label: 'Dwell pause only' },
                 ]}
                 ariaLabel="Suggestion heuristic"
+                fullWidth
               />
               <Button variant="primary" onClick={runSuggestZooms}>
                 <span className="inline-flex items-center gap-1.5 whitespace-nowrap">

@@ -3,6 +3,7 @@ import { useApp, useRecorder } from '../state/stores';
 import { bridge } from '../lib/bridge';
 import { Button, Field, Select, Switch, Slider, Badge, IconRecord, IconStop, IconPause, IconPlay, IconMonitor, IconMic, IconSpeaker, IconCamera, IconRefresh } from '@recast/ui';
 import type { DeviceInfo, ListSourcesResponse } from '@recast/shared';
+import { formatClock } from '@recast/shared';
 import { startRecordingFlow, stopRecordingFlow, rendererRecorderHandle, acquireCaptureSources, releaseAcquiredSources, RecordingError, type AcquiredSources } from '../lib/record-flow';
 import { logCapture } from '../lib/capture-log';
 
@@ -182,12 +183,13 @@ export function RecorderView() {
       <div className="flex h-full flex-col items-center justify-center gap-6">
         <Badge tone={paused ? 'warning' : 'recording'}>
           <span
-            className={`inline-block h-2 w-2 rounded-full ${paused ? '' : 'animate-pulse'}`}
+            className="rc-live-dot inline-block h-2 w-2 rounded-full"
+            data-paused={paused ? 'true' : undefined}
             style={{ background: paused ? 'var(--warning)' : 'var(--recording)' }}
           />
           {paused ? 'Paused' : 'Recording'}
         </Badge>
-        <div className="tabular text-4xl font-bold">{Math.floor((recorderState?.elapsedUs ?? 0) / 1_000_000)}s</div>
+        <div className="tabular text-5xl font-bold tracking-tight">{formatClock(recorderState?.elapsedUs ?? 0)}</div>
         <div className="text-sm" style={{ color: 'var(--text-secondary)' }}>
           {(recorderState?.bytes ?? 0) / 1_000_000 > 0.1
             ? `${((recorderState?.bytes ?? 0) / 1_000_000).toFixed(1)} MB · ${(recorderState?.droppedFrames ?? 0)} dropped frames`

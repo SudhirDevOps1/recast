@@ -6,6 +6,7 @@ import * as TooltipPrimitive from '@radix-ui/react-tooltip';
 import * as TabsPrimitive from '@radix-ui/react-tabs';
 import type { ReactNode } from 'react';
 import { cssProps } from './primitives';
+import { IconX, IconCheck } from '../icons';
 
 const overlayStyle = cssProps(
   'position:fixed;inset:0;background:rgba(6,8,12,0.6);backdrop-filter:blur(6px);z-index:60',
@@ -34,12 +35,16 @@ export function Dialog({
   return (
     <DialogPrimitive.Root open={open} onOpenChange={onOpenChange}>
       <DialogPrimitive.Portal>
-        <DialogPrimitive.Overlay style={overlayStyle} />
+        <DialogPrimitive.Overlay className="rc-dialog-overlay" style={overlayStyle} />
         <DialogPrimitive.Content
+          className="rc-dialog-content"
           style={{ ...contentStyle, ...(width ? { width } : {}) }}
           aria-describedby={undefined}
         >
-          <DialogPrimitive.Title style={{ margin: 0, fontSize: 'var(--text-xl)', fontWeight: 700 }}>
+          <DialogPrimitive.Close className="rc-dialog-close" aria-label="Close dialog">
+            <IconX size={14} />
+          </DialogPrimitive.Close>
+          <DialogPrimitive.Title style={{ margin: 0, fontSize: 'var(--text-xl)', fontWeight: 700, paddingRight: 28 }}>
             {title}
           </DialogPrimitive.Title>
           {description ? (
@@ -69,13 +74,13 @@ export function Dialog({
 }
 
 const selectTriggerStyle = cssProps(
-  'height:34px;padding:0 12px;background:var(--surface-raised);border:1px solid var(--hairline-strong);border-radius:var(--radius-md);color:var(--text-primary);font-size:var(--text-md);display:flex;align-items:center;gap:8px;justify-content:space-between;min-width:180px',
+  'height:34px;padding:0 12px;border:1px solid var(--hairline-strong);border-radius:var(--radius-md);color:var(--text-primary);font-size:var(--text-md);display:flex;align-items:center;gap:8px;justify-content:space-between;min-width:180px',
 );
 const selectContentStyle = cssProps(
   'background:var(--surface-raised);border:1px solid var(--hairline);border-radius:var(--radius-lg);box-shadow:var(--shadow-2);padding:4px;z-index:70;max-height:320px;overflow:auto',
 );
 const selectItemStyle = cssProps(
-  'padding:6px 10px;border-radius:var(--radius-sm);font-size:var(--text-md);color:var(--text-primary);outline:none',
+  'padding:6px 10px;border-radius:var(--radius-sm);font-size:var(--text-md);outline:none',
 );
 
 export function Select({
@@ -85,6 +90,7 @@ export function Select({
   placeholder,
   disabled,
   ariaLabel,
+  fullWidth,
 }: {
   value: string;
   onValueChange: (v: string) => void;
@@ -92,10 +98,16 @@ export function Select({
   placeholder?: string;
   disabled?: boolean;
   ariaLabel?: string;
+  /** Stretch to the container instead of the 180 px default (stacked rows). */
+  fullWidth?: boolean;
 }) {
   return (
     <SelectPrimitive.Root value={value} onValueChange={onValueChange} disabled={disabled}>
-      <SelectPrimitive.Trigger style={selectTriggerStyle} aria-label={ariaLabel}>
+      <SelectPrimitive.Trigger
+        className="rc-select-trigger"
+        style={fullWidth ? { ...selectTriggerStyle, minWidth: 0, width: '100%' } : selectTriggerStyle}
+        aria-label={ariaLabel}
+      >
         <SelectPrimitive.Value placeholder={placeholder} />
         <SelectPrimitive.Icon style={{ color: 'var(--text-muted)' }}>
           <svg width={10} height={10} viewBox="0 0 10 10" aria-hidden="true">
@@ -115,6 +127,9 @@ export function Select({
                 className="rc-select-item"
               >
                 <SelectPrimitive.ItemText>{o.label}</SelectPrimitive.ItemText>
+                <SelectPrimitive.ItemIndicator>
+                  <IconCheck size={13} />
+                </SelectPrimitive.ItemIndicator>
               </SelectPrimitive.Item>
             ))}
           </SelectPrimitive.Viewport>
@@ -155,6 +170,7 @@ export function Slider({
         <SliderPrimitive.Range style={{ background: 'var(--accent)', borderRadius: 999, height: '100%' }} />
       </SliderPrimitive.Track>
       <SliderPrimitive.Thumb
+        className="rc-slider-thumb"
         style={{
           width: 14,
           height: 14,
@@ -181,6 +197,7 @@ export function Switch({
 }) {
   return (
     <SwitchPrimitive.Root
+      className="rc-switch"
       checked={checked}
       onCheckedChange={onCheckedChange}
       aria-label={ariaLabel}
@@ -191,7 +208,6 @@ export function Switch({
         borderRadius: 999,
         background: checked ? 'var(--accent)' : 'var(--hairline-strong)',
         position: 'relative',
-        transition: 'background var(--dur-fast) var(--ease-out)',
         outline: 'none',
         border: 'none',
       }}
@@ -200,12 +216,13 @@ export function Switch({
         style={{
           position: 'absolute',
           top: 3,
-          left: checked ? 18 : 3,
+          left: 3,
           width: 15,
           height: 15,
           borderRadius: '50%',
           background: '#fff',
-          transition: 'left var(--dur-fast) var(--ease-out)',
+          transform: checked ? 'translateX(15px)' : 'none',
+          transition: 'transform var(--dur-base) var(--ease-out)',
           boxShadow: 'var(--shadow-1)',
         }}
       />
@@ -252,12 +269,14 @@ export function Tabs({
   return (
     <TabsPrimitive.Root value={value} onValueChange={onValueChange}>
       <TabsPrimitive.List
-        style={{ display: 'flex', gap: 2, borderBottom: '1px solid var(--hairline)', paddingBottom: -1 }}
+        className="rc-tabstrip"
+        style={{ display: 'flex', gap: 2, borderBottom: '1px solid var(--hairline)', marginBottom: -1 }}
       >
         {tabs.map((t) => (
           <TabsPrimitive.Trigger
             key={t.value}
             value={t.value}
+            className="rc-tab"
             style={{
               padding: '8px 14px',
               fontSize: 'var(--text-md)',

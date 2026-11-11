@@ -96,7 +96,7 @@ export function CommandPalette() {
   return (
     <div className="fixed inset-0 z-[90] flex items-start justify-center pt-[15vh]" style={{ background: 'rgba(6,8,12,0.6)' }} onClick={() => setOpen(false)}>
       <div
-        className="w-[520px] overflow-hidden rounded-xl border border-hairline shadow-3"
+        className="anim-pop w-[520px] overflow-hidden rounded-xl border border-hairline shadow-3"
         style={{ background: 'var(--surface)' }}
         onClick={(e) => e.stopPropagation()}
         role="dialog"

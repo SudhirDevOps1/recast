@@ -116,6 +116,353 @@ kbd {
   line-height: 1.6;
 }
 
+/* ---------------------------------------------------------------------------
+ * Interaction layer.
+ *
+ * Every control has five states: idle, hover, press, focus-visible, disabled.
+ * Component colours live in local custom properties so a state can override a
+ * value without fighting an inline style. If a control ships without these,
+ * it reads as a web page rather than an app.
+ * ------------------------------------------------------------------------- */
+
+.rc-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  white-space: nowrap;
+  font-weight: 600;
+  letter-spacing: 0.005em;
+  background-color: var(--rc-btn-bg);
+  color: var(--rc-btn-fg);
+  border: 1px solid var(--rc-btn-bd);
+  box-shadow: var(--rc-btn-shadow, none);
+  transition:
+    background-color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-base) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out);
+}
+
+.rc-button:hover:not(:disabled) {
+  background-color: var(--rc-btn-bg-hover);
+  border-color: var(--rc-btn-bd-hover, var(--rc-btn-bd));
+  color: var(--rc-btn-fg-hover, var(--rc-btn-fg));
+}
+
+.rc-button:active:not(:disabled) {
+  background-color: var(--rc-btn-bg-active, var(--rc-btn-bg-hover));
+  transform: translateY(0.5px) scale(0.995);
+}
+
+.rc-button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.rc-button:disabled {
+  opacity: 0.45;
+  cursor: default;
+  box-shadow: none;
+}
+
+/* The primary button is the only element allowed to glow. */
+.rc-button[data-variant='primary'] {
+  --rc-btn-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.16),
+    0 6px 18px -10px var(--accent-glow);
+}
+
+.rc-button[data-variant='primary']:hover:not(:disabled) {
+  --rc-btn-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.2),
+    0 10px 26px -10px var(--accent-glow);
+}
+
+.rc-icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid transparent;
+  background-color: var(--rc-icon-bg, transparent);
+  color: var(--rc-icon-fg, var(--text-secondary));
+  transition:
+    background-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out);
+}
+
+.rc-icon-button:hover:not(:disabled) {
+  background-color: var(--surface-hover);
+  color: var(--rc-icon-fg, var(--text-primary));
+}
+
+.rc-icon-button:active:not(:disabled) {
+  transform: scale(0.94);
+}
+
+.rc-icon-button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.rc-icon-button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* ---------------------------------------------------------------- select --- */
+
+.rc-select-trigger {
+  --rc-trigger-bg: var(--surface-raised);
+  background-color: var(--rc-trigger-bg);
+  cursor: default;
+  transition:
+    background-color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out);
+}
+
+.rc-select-trigger:hover:not(:disabled) {
+  --rc-trigger-bg: var(--surface-hover);
+  border-color: var(--accent);
+}
+
+.rc-select-trigger:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-subtle);
+}
+
+.rc-select-trigger[data-state='open'] {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-subtle);
+}
+
+.rc-select-trigger:disabled {
+  opacity: 0.45;
+}
+
+.rc-select-item {
+  cursor: default;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  transition: background-color var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
+}
+
+.rc-select-item[data-highlighted] {
+  background-color: var(--surface-hover);
+  color: var(--text-primary);
+}
+
+.rc-select-item[data-state='checked'] {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.rc-select-item[data-disabled] {
+  opacity: 0.4;
+}
+
+/* ------------------------------------------------------------------- tabs --- */
+
+.rc-tabstrip {
+  display: flex;
+  gap: 2px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+}
+
+.rc-tabstrip::-webkit-scrollbar {
+  display: none;
+}
+
+.rc-tab {
+  cursor: default;
+  white-space: nowrap;
+  background-color: var(--rc-tab-bg, transparent);
+  color: var(--rc-tab-fg, var(--text-muted));
+  transition:
+    background-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out);
+}
+
+.rc-tab:hover {
+  background-color: var(--surface-hover);
+  color: var(--text-secondary);
+}
+
+.rc-tab[aria-selected='true'] {
+  background-color: var(--accent-subtle);
+  color: var(--accent);
+}
+
+.rc-tab:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+/* ---------------------------------------------------------------- slider --- */
+
+.rc-slider-thumb {
+  transition:
+    transform var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out);
+}
+
+.rc-slider-thumb:hover {
+  transform: scale(1.12);
+  box-shadow: 0 0 0 4px var(--accent-subtle);
+}
+
+.rc-slider-thumb:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 4px var(--accent-subtle), 0 0 0 1px var(--accent);
+}
+
+.rc-slider-thumb[data-dragging] {
+  transform: scale(1.18);
+}
+
+/* ---------------------------------------------------------------- switch --- */
+
+.rc-switch {
+  cursor: default;
+  transition:
+    background-color var(--dur-base) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out);
+}
+
+.rc-switch:hover:not(:disabled) {
+  box-shadow: 0 0 0 4px var(--accent-subtle);
+}
+
+.rc-switch:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 4px var(--accent-subtle), 0 0 0 1px var(--accent);
+}
+
+.rc-switch:disabled {
+  opacity: 0.45;
+}
+
+/* ---------------------------------------------------------------- dialog --- */
+
+.rc-dialog-overlay[data-state='open'] {
+  animation: rc-fade-in var(--dur-base) var(--ease-out);
+}
+
+.rc-dialog-content[data-state='open'] {
+  animation: rc-dialog-in var(--dur-slow) var(--ease-out);
+}
+
+.rc-dialog-close {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-md);
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: default;
+  transition:
+    background-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out);
+}
+
+.rc-dialog-close:hover {
+  background: var(--surface-hover);
+  color: var(--text-primary);
+}
+
+.rc-dialog-close:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+@keyframes rc-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* Scale + opacity only — the centering transform must not be animated. */
+@keyframes rc-dialog-in {
+  from { opacity: 0; scale: 0.97; }
+  to { opacity: 1; scale: 1; }
+}
+
+/* --------------------------------------------------------------- surfaces --- */
+
+.rc-card {
+  transition:
+    transform var(--dur-base) var(--ease-out),
+    box-shadow var(--dur-base) var(--ease-out),
+    border-color var(--dur-base) var(--ease-out),
+    background-color var(--dur-base) var(--ease-out);
+}
+
+.rc-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--hairline-strong);
+  box-shadow: var(--shadow-2);
+}
+
+.rc-card:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-subtle);
+}
+
+/* Skeletons: no layout jump, no spinner soup. */
+.rc-skeleton {
+  position: relative;
+  overflow: hidden;
+  background: var(--surface);
+}
+
+.rc-skeleton::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    100deg,
+    transparent 20%,
+    rgba(255, 255, 255, 0.05) 45%,
+    transparent 70%
+  );
+  background-size: 220% 100%;
+  animation: recast-shimmer 1.4s linear infinite;
+}
+
+::selection {
+  background: var(--accent-subtle);
+  color: var(--text-primary);
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .preview-loading-dot { animation: none; }
+  .preview-loading-dot,
+  .rc-skeleton::after,
+  .rc-dialog-overlay[data-state='open'],
+  .rc-dialog-content[data-state='open'] {
+    animation: none;
+  }
+
+  .rc-button:active:not(:disabled),
+  .rc-icon-button:active:not(:disabled),
+  .rc-card:hover,
+  .rc-slider-thumb:hover,
+  .rc-slider-thumb[data-dragging] {
+    transform: none;
+  }
 }

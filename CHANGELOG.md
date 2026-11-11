@@ -2,6 +2,31 @@
 
 All notable changes to Recast are documented here. Format: Keep a Changelog; versioning: SemVer.
 
+## [Unreleased]
+
+### Fixed
+- **Face-cam PiP never appeared in the preview or in exports.** MediaRecorder writes the camera as a streaming WebM with no duration and no cues, so Chromium reports `duration = Infinity`, an empty `seekable` range, and silently refuses to move `currentTime`. Both the editor compositor and the export renderer seek the camera by time, so every frame showed the (transparent) first snapshot — the gold ring with nothing inside. Camera takes are now remuxed losslessly (`ffmpeg -c copy`, no re-encode, ~1 s) into an indexed WebM when the recorder writes them, and existing recordings are healed the first time they are opened. Verified by sampling the preview canvas (camera pixels now composited) and by the camera element reporting a seekable 50.3 s duration.
+- **Editor preview stayed black on open.** The decode pipeline already had the frames — `FrameSync` was capturing snapshots and firing its redraw signal, but the canvas draw effect did not depend on that signal, so the first paint (before the videos finished loading) was never replaced. The redraw tick is now part of the effect dependencies; the preview shows real content as soon as the first frame is paintable.
+- Every interactive control now has hover, press, focus-visible and disabled states. `Button`/`IconButton` pushed their colours as an inline `background` shorthand, which silently overrode any hover rule; they now expose component custom properties (`--rc-btn-*`, `--rc-icon-*`) that the shared stylesheet can override.
+- Select trigger/items, Slider thumb, Switch, Dialog, Card and panel tabs all gained the same state layer, plus reduced-motion guards.
+- Dialog has a close button and enter motion; `Tabs` no longer sets an invalid `padding-bottom: -1`.
+- Switch thumb animates `transform` instead of `left` (no layout pass per frame).
+- The **Recording** badge is reactive, and both it and the recorder view show a real clock (`mm:ss` / `h:mm:ss`) instead of raw seconds.
+- Toasts use a tone-correct icon (`warning` / `check` / `sparkle`) and `role="alert"` for errors, so failures and successes no longer look identical.
+- Library delete is two-step with a toast and an error path; opening a recording catches IPC failures instead of silently doing nothing.
+- Timeline no longer prints a truncated segment id and two trim grips on blocks under 60 px; segment blocks stay selectable and trimmable, they just stop pretending to have room for a label.
+- The "Zoom Intelligence" row no longer overflows the 320 px editor rail — the heuristic select is full width and the action sits below it.
+- `recorder:requestStop` clears recorder state in `finally`, so a failed stop cannot leave the app in a recording state.
+- Fixed a pre-existing lint error in `packages/capture/src/audio-mixer.ts` (unused catch binding).
+
+### Added
+- Library: header with count, search, sort (newest / oldest / longest / name), poster thumbnails fetched four at a time with skeleton placeholders, staggered card entrance, hover play affordance, and an empty "no matches" state.
+- View transitions between Library, Record, Editor, Export and Settings; toast and dialog motion; shared `.rc-skeleton`, `.rc-card`, `.rc-stagger` and `.rc-tabstrip` primitives.
+- `docs/premium-plan.md`: the code-level audit, the feel spec (five states, motion tokens, layout laws) and the Recordly/Capptivo feature roadmap (F1–F8) with an honesty rule for ticking anything off.
+
+### Changed
+- Editor panel tabs are a scrollable tab strip with `role="tablist"` / `aria-selected` semantics.
+
 ## [0.1.4] - 2026-11-10
 
 ### Fixed

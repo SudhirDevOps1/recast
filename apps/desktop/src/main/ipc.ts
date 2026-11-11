@@ -18,6 +18,8 @@ import { InputSampler } from './input-sampler';
 import { ffmpegState, installFfmpeg, broadcastFfmpegProgress } from './ffmpeg-service';
 import { whisperStatus, downloadWhisperModel, transcribe } from './whisper';
 import { checkForUpdates, downloadUpdate, installUpdate } from './updater';
+import { applyWindowTheme } from './windows';
+import { ensureSeekableWebm } from './media-index';
 import { appendCaptureLog, buildDiagnosticsBundle, copyDiagnosticsBundle } from './capture-log';
 import {
   beginChunkedExport,
@@ -106,6 +108,9 @@ export async function registerIpcHandlers(): Promise<void> {
     saveSettings(c.settings);
     if (patch.launchAtLogin !== undefined) {
       app.setLoginItemSettings({ openAtLogin: patch.launchAtLogin });
+    }
+    if (patch.theme !== undefined) {
+      applyWindowTheme(c.mainWindow, c.settings.theme);
     }
     return c.settings;
   });
@@ -285,9 +290,16 @@ export async function registerIpcHandlers(): Promise<void> {
 
   // ---------------- library / projects ----------------
   register('library:list', () => c.library.listProjects());
-  register('library:open', (payload) => {
+  register('library:open', async (payload) => {
     const { id } = payload as { id: string };
-    return loadProject(id);
+    const project = loadProject(id);
+    // Heal takes recorded before the camera index fix: the preview and the
+    // export compositor seek the cam file by time, which a streaming WebM
+    // (no duration, no cues) refuses. Lossless and skipped once indexed.
+    if (project?.media.camera) {
+      await ensureSeekableWebm(join(project.media.dir, project.media.camera.file)).catch(() => false);
+    }
+    return project;
   });
   register('library:delete', async (payload) => {
     const { id } = payload as { id: string };
@@ -634,9 +646,14 @@ export async function registerIpcHandlers(): Promise<void> {
       /* toolbar window creation is best-effort */
     }
   });
-  register('capture:writeSegment', (payload) => {
+  register('capture:writeSegment', async (payload) => {
     const { sessionId, file, data } = payload as { sessionId: string; file: string; data: ArrayBuffer };
     c.sessions.writeSegment(sessionId, file, new Uint8Array(data));
+    // MediaRecorder writes the face cam as a streaming WebM (no cues). Index
+    // it once here so the editor and export can seek it.
+    if (/\.webm$/i.test(file)) {
+      await ensureSeekableWebm(c.sessions.sessionFilePath(sessionId, file)).catch(() => false);
+    }
   });
   register('capture:appendInput', (payload) => {
     const { sessionId, events } = payload as { sessionId: string; events: Array<import('@recast/shared').InputEvent> };

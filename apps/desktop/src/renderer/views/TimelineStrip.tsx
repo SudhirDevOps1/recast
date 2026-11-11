@@ -271,15 +271,22 @@ export function TimelineStrip({
           ) : null}
           {map.clips.map(({ clip, tIn, tOut }) => {
             const selected = clip.id === selectedClipId;
+            // A long take is stored as ~2 s segments. At fit-to-width those
+            // blocks are under ~60 px, where a segment id just truncates to
+            // "S..." and the two trim grips cover the whole card. Keep the
+            // block (it is still selectable and trimmable) but drop the noise.
+            const span = (tOut - tIn) / dur;
+            const narrow = span < 0.06;
             return (
               <div
                 key={clip.id}
                 role="button"
                 aria-label={`Clip ${clip.segmentId}`}
-                className="absolute bottom-2 h-14 overflow-hidden rounded-md border transition-shadow"
+                className="absolute bottom-2 h-14 overflow-hidden border transition-shadow"
                 style={{
                   left: pct(tIn),
-                  width: `${((tOut - tIn) / dur) * 100}%`,
+                  width: `${span * 100}%`,
+                  borderRadius: narrow ? 4 : 'var(--radius-md)',
                   background: selected
                     ? 'linear-gradient(180deg, #2b3242 0%, #222837 100%)'
                     : 'linear-gradient(180deg, var(--surface-raised) 0%, var(--surface) 100%)',
@@ -317,32 +324,38 @@ export function TimelineStrip({
                   onPointerUp={endDrag}
                 />
                 {/* Trim grip visuals */}
-                <div className="absolute left-0.5 top-1/2 h-6 w-0.5 -translate-y-1/2 rounded-full" style={{ background: 'var(--hairline-strong)' }} />
-                <div className="absolute right-0.5 top-1/2 h-6 w-0.5 -translate-y-1/2 rounded-full" style={{ background: 'var(--hairline-strong)' }} />
+                {narrow ? null : (
+                  <>
+                    <div className="absolute left-0.5 top-1/2 h-6 w-0.5 -translate-y-1/2 rounded-full" style={{ background: 'var(--hairline-strong)' }} />
+                    <div className="absolute right-0.5 top-1/2 h-6 w-0.5 -translate-y-1/2 rounded-full" style={{ background: 'var(--hairline-strong)' }} />
+                  </>
+                )}
 
-                <div className="flex h-full flex-col justify-between px-3 py-1.5" style={{ pointerEvents: 'none' }}>
-                  <span className="truncate text-[10px] font-medium" style={{ color: 'var(--text-secondary)' }}>
-                    {clip.segmentId}
-                  </span>
-                  <span className="flex items-center gap-1">
-                    {clip.transitionIn !== 'none' ? (
-                      <span
-                        className="rounded px-1 text-[9px] font-semibold"
-                        style={{ background: 'var(--accent-subtle)', color: 'var(--accent)' }}
-                      >
-                        {TRANSITION_SHORT[clip.transitionIn] ?? clip.transitionIn}
-                      </span>
-                    ) : null}
-                    {clip.speed !== 1 ? (
-                      <span
-                        className="rounded px-1 text-[9px] font-semibold"
-                        style={{ background: 'rgba(255,255,255,0.08)', color: 'var(--text-secondary)' }}
-                      >
-                        {clip.speed.toFixed(2)}×
-                      </span>
-                    ) : null}
-                  </span>
-                </div>
+                {narrow ? null : (
+                  <div className="flex h-full flex-col justify-between px-3 py-1.5" style={{ pointerEvents: 'none' }}>
+                    <span className="truncate text-[10px] font-medium" style={{ color: 'var(--text-secondary)' }}>
+                      {clip.segmentId}
+                    </span>
+                    <span className="flex items-center gap-1">
+                      {clip.transitionIn !== 'none' ? (
+                        <span
+                          className="rounded px-1 text-[9px] font-semibold"
+                          style={{ background: 'var(--accent-subtle)', color: 'var(--accent)' }}
+                        >
+                          {TRANSITION_SHORT[clip.transitionIn] ?? clip.transitionIn}
+                        </span>
+                      ) : null}
+                      {clip.speed !== 1 ? (
+                        <span
+                          className="rounded px-1 text-[9px] font-semibold"
+                          style={{ background: 'rgba(255,255,255,0.08)', color: 'var(--text-secondary)' }}
+                        >
+                          {clip.speed.toFixed(2)}×
+                        </span>
+                      ) : null}
+                    </span>
+                  </div>
+                )}
               </div>
             );
           })}
