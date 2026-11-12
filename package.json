@@ -1,8 +1,8 @@
 {
   "name": "recast",
   "private": true,
-  "version": "0.0.1",
-  "description": "Recast \u2014 free, open-source, local-first screen recorder and cinematic editor for macOS, Windows and Linux.",
+  "version": "0.0.2",
+  "description": "Recast — free, open-source, local-first screen recorder and cinematic editor for macOS, Windows and Linux.",
   "license": "GPL-3.0-or-later",
   "author": "Recast contributors",
   "repository": {
