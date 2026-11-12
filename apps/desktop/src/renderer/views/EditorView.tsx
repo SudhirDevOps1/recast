@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useApp, useEditor } from '../state/stores';
 import { bridge } from '../lib/bridge';
 import {
@@ -183,7 +183,7 @@ export function EditorView() {
     return () => {
       cancelled = true;
     };
-  }, [project?.id, project?.captions?.file]);
+  }, [project]);
 
   // Media element URLs via the recast-media protocol. The face-cam segment
   // (when the take recorded one) joins the map under a reserved id.
@@ -199,7 +199,7 @@ export function EditorView() {
       m.set(CAMERA_ELEMENT_ID, `recast-media://local/${encodePath(camPath)}`);
     }
     return m;
-  }, [project?.media]);
+  }, [project]);
 
   const playhead = useRef<number | null>(null);
 
@@ -755,7 +755,7 @@ function PreviewCanvas({
     // load / seek / presented frame must repaint, otherwise the canvas keeps
     // the placeholder it drew before the first frame was paintable (black
     // preview until something else moved the playhead).
-  }, [project, currentTimeUs, playing, zoomTrack, captions, cursorSamples, videoRefs, mediaVersion, bgImage, frameTick]);
+  }, [project, currentTimeUs, playing, zoomTrack, captions, cursorSamples, keystrokes, videoRefs, mediaVersion, bgImage, frameTick]);
 
   // Keep the canvas sized to its container (device pixel ratio aware).
   useEffect(() => {
@@ -1073,7 +1073,7 @@ function CaptionsPanel({
   const [downloadPct, setDownloadPct] = useState<number>(0);
   const [transcribing, setTranscribing] = useState<boolean>(false);
 
-  const refreshModels = async () => {
+  const refreshModels = useCallback(async () => {
     try {
       const list = (await bridge().invoke('captions:models', undefined)) as CaptionModel[];
       setModels(list);
@@ -1086,11 +1086,11 @@ function CaptionsPanel({
     } catch {
       setModels([]);
     }
-  };
+  }, [selectedModelId]);
 
   useEffect(() => {
     void refreshModels();
-  }, []);
+  }, [refreshModels]);
 
   const handleDownloadModel = async (id: string) => {
     const m = models.find((x) => x.id === id);

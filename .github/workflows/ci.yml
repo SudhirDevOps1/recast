@@ -76,6 +76,9 @@ jobs:
       - name: Documentation links and anchors
         run: node scripts/check-docs.mjs
 
+      - name: Verify repository version synchronization
+        run: node scripts/sync-version.mjs --check
+
   verify:
     name: Lint, types, tests
     needs: [preflight, docs]

@@ -1,6 +1,6 @@
 name: recast
 base: core24
-version: '0.1.0'
+version: '0.0.1'
 summary: Cinematic screen recordings — recorded locally, edited instantly
 description: |
   Recast turns raw screen recordings into cinematic demo and tutorial videos.

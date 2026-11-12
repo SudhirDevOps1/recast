@@ -1,5 +1,6 @@
 /** Canonical Recast identity values. Do not rename — see AGENTS.md. */
 export const PRODUCT_NAME = 'Recast';
+export const PRODUCT_VERSION = '0.0.1';
 export const APP_ID = 'app.recast.desktop';
 export const URL_SCHEME = 'recast';
 export const PROJECT_EXT = '.recast';

@@ -9,7 +9,7 @@ import {
   type PlatformInfo,
   type SessionManifest,
 } from '@recast/shared';
-import { parseSrt, parseVtt, toSrt, toVtt } from '@recast/editor';
+import { parseSrt, parseVtt, toSrt, toVtt, parseStyle } from '@recast/editor';
 import { context, settingsStore } from './context';
 import { saveSettings } from './store';
 import { buildProjectFromSession, loadProject, saveProject, readCursorJsonl, suggestExportName } from './projects';
@@ -18,7 +18,9 @@ import { InputSampler } from './input-sampler';
 import { ffmpegState, installFfmpeg, broadcastFfmpegProgress } from './ffmpeg-service';
 import { whisperStatus, downloadWhisperModel, transcribe, installWhisperBinary } from './whisper';
 import { checkForUpdates, downloadUpdate, installUpdate } from './updater';
-import { applyWindowTheme } from './windows';
+import { applyWindowTheme, createAreaWindow, createToolbarWindow, createFloatingCameraWindow } from './windows';
+import { renderStoppedMenu } from './tray';
+import { checkDiskSpace } from './disk';
 import { ensureSeekableWebm } from './media-index';
 import { appendCaptureLog, buildDiagnosticsBundle, copyDiagnosticsBundle } from './capture-log';
 import {
@@ -35,7 +37,7 @@ import {
   probeFile,
   readUserFile,
 } from './export-service';
-import { exportsDir, dataDirHint, isPortable, recordingsDir, projectsDir } from './paths';
+import { exportsDir, dataDirHint, isPortable, recordingsDir, projectsDir, modelsDir } from './paths';
 import { mediaUrlFor } from './protocol';
 import { RecastMcpServer, RECAST_TOOLS } from '@recast/mcp';
 
@@ -181,7 +183,6 @@ export async function registerIpcHandlers(): Promise<void> {
   register('area:pick', async (payload) => {
     const { displayId } = payload as { displayId: number };
     const display = screen.getAllDisplays().find((d) => d.id === displayId) ?? screen.getPrimaryDisplay();
-    const { createAreaWindow } = await import('./windows');
     const win = createAreaWindow({ id: display.id, bounds: { x: display.workArea.x, y: display.workArea.y, width: display.workArea.width, height: display.workArea.height } });
     win.show();
     const rect = await new Promise<{ x: number; y: number; w: number; h: number } | null>((resolve) => {
@@ -270,7 +271,6 @@ export async function registerIpcHandlers(): Promise<void> {
       if (drained.length > 0) c.sessions.appendInput(sessionId, drained);
       c.inputSampler = null;
       const manifest = c.sessions.closeSession(sessionId, 'completed');
-      const { renderStoppedMenu } = await import('./tray');
       renderStoppedMenu();
       if (!manifest) return { projectId: null };
       const project = buildProjectFromSession({ sessionId, manifest });
@@ -509,7 +509,7 @@ export async function registerIpcHandlers(): Promise<void> {
     if (canceled || filePaths.length === 0) return { preset: null };
     try {
       const raw = await fs.readFile(filePaths[0]!, 'utf8');
-      const parsed = await import('@recast/editor').then((m) => m.parseStyle(raw));
+      const parsed = parseStyle(raw);
       return { preset: parsed.preset, error: parsed.error };
     } catch (e) {
       return { preset: null, error: (e as Error).message };
@@ -681,7 +681,7 @@ export async function registerIpcHandlers(): Promise<void> {
     }
     const modelDef = whisper.models.find((m) => m.id === modelId);
     if (!modelDef) return { ok: false, error: 'Model not downloaded yet.' };
-    const modelFile = join((await import('./paths')).modelsDir(), `${modelId}.bin`);
+    const modelFile = join(modelsDir(), `${modelId}.bin`);
     const audioPath = join(project.media.dir, project.media.audio.file);
     const result = await transcribe(
       {
@@ -875,16 +875,14 @@ export async function registerIpcHandlers(): Promise<void> {
 
     // Launch floating live toolbar if not already present
     try {
-      void import('./windows').then(({ createToolbarWindow, createFloatingCameraWindow }) => {
-        const tb = createToolbarWindow();
-        tb.showInactive();
+      const tb = createToolbarWindow();
+      tb.showInactive();
 
-        // If recording with camera, launch draggable floating webcam bubble
-        if (c.recorderRequest?.cameraDeviceId) {
-          const cam = createFloatingCameraWindow(c.recorderRequest.cameraDeviceId);
-          cam.showInactive();
-        }
-      });
+      // If recording with camera, launch draggable floating webcam bubble
+      if (c.recorderRequest?.cameraDeviceId) {
+        const cam = createFloatingCameraWindow(c.recorderRequest.cameraDeviceId);
+        cam.showInactive();
+      }
     } catch {
       /* auxiliary window creation is best-effort */
     }
@@ -907,7 +905,6 @@ export async function registerIpcHandlers(): Promise<void> {
     c.sessions.updateManifest(sessionId, manifest);
   });
   register('capture:diskFreeMb', async () => {
-    const { checkDiskSpace } = await import('./disk');
     return checkDiskSpace();
   });
   register('capture:appendSegmentFile', (payload) => {

@@ -2,6 +2,7 @@ import { Tray, Menu, nativeImage, app } from 'electron';
 import { join } from 'node:path';
 import { PRODUCT_NAME } from '@recast/shared';
 import { context } from './context';
+import { createMainWindow } from './windows';
 
 /**
  * Tray + macOS menu-bar extra. Shows live recording state, elapsed time and
@@ -44,20 +45,19 @@ function renderIdleMenu(): void {
   if (!tray) return;
   tray.setContextMenu(
     Menu.buildFromTemplate([
-      { label: 'Open Recast', click: () => void showMain() },
+      { label: 'Open Recast', click: () => showMain() },
       { type: 'separator' },
       { label: 'Quit', role: 'quit' },
     ]),
   );
 }
 
-async function showMain(): Promise<void> {
+function showMain(): void {
   const c = context();
   if (c.mainWindow) {
     c.mainWindow.show();
     return;
   }
-  const { createMainWindow } = await import('./windows');
   c.mainWindow = createMainWindow();
 }
 
@@ -80,7 +80,7 @@ export function renderRecordingMenu(startedAtMs: number, bytes: number, paused: 
       { label: 'Stop recording', click: () => void stopRecording() },
       { type: 'separator' },
       { label: `Session size: ${(bytes / 1_000_000).toFixed(1)} MB`, enabled: false },
-      { label: 'Open Recast', click: () => void showMain() },
+      { label: 'Open Recast', click: () => showMain() },
       { type: 'separator' },
       { label: 'Quit', role: 'quit' },
     ]),

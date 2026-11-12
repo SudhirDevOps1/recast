@@ -1,6 +1,7 @@
 import { useCallback, useEffect } from 'react';
 import { useApp, useEditor } from '../state/stores';
 import { bridge } from '../lib/bridge';
+import { stopRecordingFlow } from '../lib/record-flow';
 import { IconFilm, IconRecord, IconSettings, IconFolder, IconCommand, IconCheck, IconWarning, IconSparkle, Badge } from '@recast/ui';
 import { Library } from './Library';
 import { RecorderView } from './RecorderView';
@@ -83,7 +84,6 @@ export default function App() {
     // state is cleared in `finally`, never only on the happy path.
     const offStop = bridge().on('recorder:requestStop', async () => {
       try {
-        const { stopRecordingFlow } = await import('../lib/record-flow');
         const projectId = await stopRecordingFlow();
         if (projectId) await openProject(projectId);
       } catch (e) {

@@ -133,7 +133,7 @@ export function ExportView() {
     return () => {
       cancelled = true;
     };
-  }, [bg?.type, bg?.imageFile]);
+  }, [bg]);
 
   if (!project) {
     return <div className="p-8 text-secondary">No project selected — open one from the Library first.</div>;

@@ -63,7 +63,7 @@ export function SettingsView() {
     return () => {
       offDownload();
     };
-  }, []);
+  }, [showToast]);
 
   return (
     <div className="mx-auto max-w-2xl space-y-8 p-6">

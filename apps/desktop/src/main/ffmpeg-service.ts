@@ -3,6 +3,8 @@ import type { FfmpegStatus } from '@recast/shared';
 import { createWriteStream, promises as fs } from 'node:fs';
 import { pipeline } from 'node:stream/promises';
 import { Readable } from 'node:stream';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import { join } from 'node:path';
 import { app, BrowserWindow } from 'electron';
 import { binDir } from './paths';
@@ -113,8 +115,6 @@ export async function installFfmpeg(onProgress: (pct: number) => void): Promise<
         await fs.chmod(probeDest, 0o755);
       }
       // Validate: ffprobe must run and print a version line.
-      const { execFile } = await import('node:child_process');
-      const { promisify } = await import('node:util');
       await promisify(execFile)(probeDest, ['-version'], { timeout: 10_000 });
       installed.push(ffprobeFile);
     } catch {
@@ -141,8 +141,6 @@ export async function installFfmpeg(onProgress: (pct: number) => void): Promise<
 /** Extract one file from a .tgz using the system tar (bsdtar ships with
  *  Windows 10+, macOS and every Linux distro). */
 async function extractTarEntry(tgzPath: string, entry: string, dest: string): Promise<void> {
-  const { execFile } = await import('node:child_process');
-  const { promisify } = await import('node:util');
   const run = promisify(execFile);
   const tmp = `${dest}.extract`;
   await fs.mkdir(tmp, { recursive: true });
