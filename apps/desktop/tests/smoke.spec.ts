@@ -238,7 +238,7 @@ test('export end-to-end: synthetic session → editor → export → verified fi
   const destination = join(tmpdir(), `recast-smoke-export-${process.pid}.mp4`);
   await patchSaveDialog(app, destination);
 
-  await window.getByRole('button', { name: 'Export…' }).click();
+  await window.getByRole('button', { name: /^Export/ }).click();
 
   // The Export view must find the project (projectId now travels with the
   // editor navigation — before this fix it showed "No project selected").

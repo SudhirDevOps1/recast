@@ -373,7 +373,7 @@ export function EditorView() {
             className="px-3.5 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs flex items-center gap-1.5 shadow-md shadow-blue-600/30 transition-all hover:scale-[1.02] active:scale-[0.98]"
           >
             <IconDownload size={14} />
-            <span>Export</span>
+            <span>Export…</span>
           </button>
         </div>
       </header>
