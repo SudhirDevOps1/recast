@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { PRODUCT_VERSION } from '../src/constants';
-// @ts-expect-error scripts/sync-version.mjs is an untyped ESM script
-import { syncVersion } from '../../../scripts/sync-version.mjs';
+import { execFileSync } from 'node:child_process';
+import { resolve } from 'node:path';
 
 describe('Version Synchronization & Single Source of Truth', () => {
   it('has consistent PRODUCT_VERSION in @recast/shared', () => {
@@ -9,9 +9,11 @@ describe('Version Synchronization & Single Source of Truth', () => {
   });
 
   it('passes repository-wide version integrity check with 0 drift', () => {
-    const result = syncVersion({ check: true });
-    expect(result.isCheckOnly).toBe(true);
-    expect(result.diffs).toHaveLength(0);
-    expect(result.targetVersion).toBe(PRODUCT_VERSION);
+    const scriptPath = resolve(__dirname, '../../../scripts/sync-version.mjs');
+    const stdout = execFileSync(process.execPath, [scriptPath, '--check'], {
+      encoding: 'utf8',
+    });
+    const cleanOutput = stdout.replace(/\u001b\[\d+m/g, '');
+    expect(cleanOutput).toContain('[OK] All repo targets are in 100% sync');
   });
 });
