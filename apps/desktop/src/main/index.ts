@@ -33,7 +33,8 @@ app.commandLine.appendSwitch('disable-dev-shm-usage');
 // so Recast can capture clean footage without baked-in double cursors.
 app.commandLine.appendSwitch('enable-features', 'WebRtcHidePointerOnGetDisplayMedia');
 
-const gotLock = app.requestSingleInstanceLock();
+const isSmokeOrTest = process.env.RECAST_SMOKE === '1' || process.env.NODE_ENV === 'test';
+const gotLock = isSmokeOrTest ? true : app.requestSingleInstanceLock();
 if (!gotLock) {
   app.quit();
 } else {
@@ -124,10 +125,18 @@ async function bootstrap(): Promise<void> {
     const win = context().mainWindow;
     win?.webContents.send('app:about');
   });
-  setupTray();
+  try {
+    setupTray();
+  } catch (err) {
+    console.warn('recast: tray setup skipped or failed:', err);
+  }
   setupUpdater();
 
-  context().mainWindow = createMainWindow();
+  try {
+    context().mainWindow = createMainWindow();
+  } catch (err) {
+    console.error('recast: failed to create main window:', err);
+  }
 
   app.on('second-instance', (_e, argv) => {
     const win = context().mainWindow;
