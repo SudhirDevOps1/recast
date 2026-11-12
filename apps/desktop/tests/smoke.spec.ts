@@ -30,11 +30,20 @@ function launchEnv(): Record<string, string> {
   } as Record<string, string>;
 }
 
-test('record synthetic source → library → export', async () => {
-  const app = await _electron.launch({
-    args: [join(here, '..', 'out', 'main', 'index.js')],
+function launchRecast(): Promise<ElectronApplication> {
+  return _electron.launch({
+    args: [
+      '--no-sandbox',
+      '--disable-gpu',
+      '--disable-dev-shm-usage',
+      join(here, '..', 'out', 'main', 'index.js'),
+    ],
     env: launchEnv(),
   });
+}
+
+test('record synthetic source → library → export', async () => {
+  const app = await launchRecast();
 
   const window = await app.firstWindow({ timeout: 90_000 });
   await window.waitForLoadState('domcontentloaded');
@@ -54,10 +63,7 @@ test('record synthetic source → library → export', async () => {
 
 test('display-media handler resolves a real screen source', async () => {
   test.setTimeout(180_000);
-  const app = await _electron.launch({
-    args: [join(here, '..', 'out', 'main', 'index.js')],
-    env: launchEnv(),
-  });
+  const app = await launchRecast();
 
   const window = await app.firstWindow({ timeout: 90_000 });
   await window.waitForLoadState('domcontentloaded');
@@ -98,10 +104,7 @@ test('display-media handler resolves a real screen source', async () => {
 
 test('full recording: pick source → record → stop → project lands in library', async () => {
   test.setTimeout(240_000);
-  const app = await _electron.launch({
-    args: [join(here, '..', 'out', 'main', 'index.js')],
-    env: launchEnv(),
-  });
+  const app = await launchRecast();
 
   const window = await app.firstWindow({ timeout: 90_000 });
   await window.waitForLoadState('domcontentloaded');
@@ -163,10 +166,7 @@ test('full recording: pick source → record → stop → project lands in libra
 
 test('export end-to-end: synthetic session → editor → export → verified file on disk', async () => {
   test.setTimeout(240_000);
-  const app = await _electron.launch({
-    args: [join(here, '..', 'out', 'main', 'index.js')],
-    env: launchEnv(),
-  });
+  const app = await launchRecast();
 
   const window = await app.firstWindow({ timeout: 90_000 });
   await window.waitForLoadState('domcontentloaded');
@@ -238,7 +238,7 @@ test('export end-to-end: synthetic session → editor → export → verified fi
   const destination = join(tmpdir(), `recast-smoke-export-${process.pid}.mp4`);
   await patchSaveDialog(app, destination);
 
-  await window.getByRole('button', { name: 'Export…' }).click();
+  await window.getByRole('button', { name: /^Export/ }).click();
 
   // The Export view must find the project (projectId now travels with the
   // editor navigation — before this fix it showed "No project selected").

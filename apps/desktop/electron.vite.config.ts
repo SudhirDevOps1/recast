@@ -16,7 +16,7 @@ export default defineConfig({
       // dies with ERR_MODULE_NOT_FOUND before any window is created.
       // electron-updater is CommonJS whose named exports defeat Electron's
       // cjs-module-lexer — bundling it applies the CommonJS transform.
-      exclude: ['@recast/shared', '@recast/editor', '@recast/capture', 'electron-updater'],
+      exclude: ['@recast/shared', '@recast/editor', '@recast/capture', '@recast/mcp', 'electron-updater'],
     })],
     resolve: {
       alias: [
@@ -24,6 +24,7 @@ export default defineConfig({
         { find: /^@recast\/shared$/, replacement: resolve(__dirname, '../../packages/shared/src/index.ts') },
         { find: '@recast/editor', replacement: resolve(__dirname, '../../packages/editor/src/index.ts') },
         { find: '@recast/capture', replacement: resolve(__dirname, '../../packages/capture/src/index.ts') },
+        { find: '@recast/mcp', replacement: resolve(__dirname, '../../packages/mcp/src/index.ts') },
       ],
     },
     build: {

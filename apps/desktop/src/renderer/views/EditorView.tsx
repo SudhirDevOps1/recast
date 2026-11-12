@@ -10,10 +10,6 @@ import {
   Switch,
   ColorPicker,
   Slider,
-  IconPlay,
-  IconPause,
-  IconScissors,
-  IconTrash,
   IconDownload,
   IconUndo,
   IconRedo,
@@ -27,7 +23,6 @@ import {
   IconChevronLeft,
   IconChevronRight,
   IconCheck,
-  IconPlus,
 } from '@recast/ui';
 import {
   buildTimeMap,
@@ -286,7 +281,7 @@ export function EditorView() {
           <div className="flex items-center">
             <select
               value={project.style.aspect}
-              onChange={(e) => commit({ ...project, style: { ...project.style, aspect: e.target.value as any } })}
+              onChange={(e) => commit({ ...project, style: { ...project.style, aspect: e.target.value as '16:9' | '9:16' | '1:1' | '4:5' } })}
               className="bg-[#161a24] hover:bg-[#1e2330] border border-white/15 text-white/90 rounded-lg px-2.5 py-1 text-xs font-medium focus:outline-none focus:border-blue-500 cursor-pointer transition-colors shadow-sm"
               title="Aspect ratio"
             >
@@ -311,6 +306,36 @@ export function EditorView() {
           >
             <IconCrop size={13} />
             <span>Crop</span>
+          </button>
+
+          {/* Quick Cursor Overlay Toggle (Instant Double-Cursor Fix) */}
+          <button
+            type="button"
+            onClick={() =>
+              commit({
+                ...project,
+                style: {
+                  ...project.style,
+                  cursor: {
+                    ...project.style.cursor,
+                    look: project.style.cursor.look === 'none' ? 'pointer' : 'none',
+                  },
+                },
+              })
+            }
+            className={`px-2.5 py-1 text-xs font-medium rounded-lg border transition-colors flex items-center gap-1.5 ${
+              project.style.cursor.look !== 'none'
+                ? 'bg-[#161a24] hover:bg-[#1e2330] border-white/15 text-white/80'
+                : 'bg-amber-500/20 border-amber-500/40 text-amber-300'
+            }`}
+            title={
+              project.style.cursor.look === 'none'
+                ? 'Cursor overlay hidden (Clean mode — no double cursor). Click to enable synthetic overlay.'
+                : 'Cursor overlay active. If your recorded video already has an OS pointer, click here to hide the overlay and eliminate double cursor!'
+            }
+          >
+            <IconCursor size={13} />
+            <span>{project.style.cursor.look === 'none' ? 'Cursor: Hidden' : 'Cursor: Overlay'}</span>
           </button>
 
           {/* Custom Styled Presets Pill */}
@@ -348,7 +373,7 @@ export function EditorView() {
             className="px-3.5 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs flex items-center gap-1.5 shadow-md shadow-blue-600/30 transition-all hover:scale-[1.02] active:scale-[0.98]"
           >
             <IconDownload size={14} />
-            <span>Export</span>
+            <span>Export…</span>
           </button>
         </div>
       </header>
@@ -558,27 +583,6 @@ function encodePath(p: string): string {
 
 /** Reserved element id for the face-cam decode video. */
 export const CAMERA_ELEMENT_ID = '__camera__';
-
-// ---------------------------------------------------------------------------
-
-function PanelTab({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      role="tab"
-      aria-selected={active}
-      onClick={onClick}
-      className="rc-tab rounded-md px-2 py-1.5 text-xs font-semibold"
-      style={
-        active
-          ? ({ '--rc-tab-bg': 'var(--accent-subtle)', '--rc-tab-fg': 'var(--accent)' } as React.CSSProperties)
-          : undefined
-      }
-    >
-      {label}
-    </button>
-  );
-}
 
 function PreviewCanvas({
   project,
@@ -808,123 +812,6 @@ function interpZoom(track: FollowStep[], tUs: number): { scale: number; cx: numb
     cx: a.pose.cx + (b.pose.cx - a.pose.cx) * f,
     cy: a.pose.cy + (b.pose.cy - a.pose.cy) * f,
   };
-}
-
-function Transport({
-  timeMapDuration,
-  onSplit,
-  onDeleteRange,
-}: {
-  timeMapDuration: number;
-  onSplit: () => void;
-  onDeleteRange: () => void;
-}): React.ReactElement {
-  const playing = useEditor((s) => s.playing);
-  const setPlaying = useEditor((s) => s.setPlaying);
-  const currentTimeUs = useEditor((s) => s.currentTimeUs);
-  const jklState = useRef<'f' | 'r' | null>(null);
-
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent): void => {
-      if ((e.target as HTMLElement)?.tagName === 'INPUT' || (e.target as HTMLElement)?.tagName === 'TEXTAREA') return;
-      const dur = useEditor.getState().project?.timeline.durationUs ?? 0;
-      const t = useEditor.getState().currentTimeUs;
-      switch (e.code) {
-        case 'Space':
-          e.preventDefault();
-          useEditor.getState().setPlaying(!useEditor.getState().playing);
-          break;
-        case 'KeyJ':
-          jklState.current = 'r';
-          break;
-        case 'KeyK':
-          jklState.current = null;
-          useEditor.getState().setPlaying(false);
-          break;
-        case 'KeyL':
-          jklState.current = 'f';
-          break;
-        case 'ArrowLeft':
-          useEditor.getState().setTime(Math.max(0, t - (e.shiftKey ? 1_000_000 : 66_667)));
-          break;
-        case 'ArrowRight':
-          useEditor.getState().setTime(Math.min(dur, t + (e.shiftKey ? 1_000_000 : 66_667)));
-          break;
-        case 'Home':
-          useEditor.getState().setTime(0);
-          break;
-        case 'End':
-          useEditor.getState().setTime(dur);
-          break;
-        case 'KeyS':
-          onSplit();
-          break;
-        case 'Delete':
-        case 'Backspace':
-          onDeleteRange();
-          break;
-        case 'KeyZ':
-          if ((e.metaKey || e.ctrlKey) && !e.shiftKey) useEditor.getState().undo();
-          if ((e.metaKey || e.ctrlKey) && e.shiftKey) useEditor.getState().redo();
-          break;
-      }
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onSplit, onDeleteRange]);
-
-  // JKL shuttling.
-  useEffect(() => {
-    let raf: number | null = null;
-    const tick = (): void => {
-      const dir = jklState.current;
-      if (dir) {
-        const dt = (dir === 'f' ? 1 : -1) * 333_334;
-        const dur = useEditor.getState().project?.timeline.durationUs ?? 0;
-        const t = Math.min(dur, Math.max(0, useEditor.getState().currentTimeUs + dt));
-        useEditor.getState().setTime(t);
-      }
-      raf = requestAnimationFrame(tick);
-    };
-    raf = requestAnimationFrame(tick);
-    return () => {
-      if (raf) cancelAnimationFrame(raf);
-    };
-  }, []);
-
-  return (
-    <div className="flex items-center gap-3 border-t border-hairline px-4 py-2">
-      <IconButton label={playing ? 'Pause' : 'Play'} onClick={() => setPlaying(!playing)}>
-        {playing ? <IconPause /> : <IconPlay />}
-      </IconButton>
-      <IconButton label="Split at playhead (S)" onClick={onSplit}>
-        <IconScissors />
-      </IconButton>
-      <IconButton label="Delete 1s around playhead (Del)" onClick={onDeleteRange} danger>
-        <IconTrash />
-      </IconButton>
-      <span className="tabular text-sm" style={{ color: 'var(--text-secondary)' }}>
-        {formatClock(currentTimeUs)} / {formatClock(timeMapDuration)}
-      </span>
-      <span className="ml-auto text-xs" style={{ color: 'var(--text-muted)' }}>
-        <kbd>Space</kbd> play · <kbd>J</kbd>/<kbd>K</kbd>/<kbd>L</kbd> shuttle · <kbd>S</kbd> split · <kbd>⌘Z</kbd> undo
-      </span>
-    </div>
-  );
-}
-
-
-function ShortcutBar({ onUndo, onRedo }: { onUndo: () => void; onRedo: () => void }): React.ReactElement {
-  return (
-    <div className="flex gap-1 border-t border-hairline px-4 py-1.5">
-      <IconButton label="Undo (⌘Z)" onClick={onUndo}>
-        <IconUndo />
-      </IconButton>
-      <IconButton label="Redo (⇧⌘Z)" onClick={onRedo}>
-        <IconRedo />
-      </IconButton>
-    </div>
-  );
 }
 
 // ---------------------------------------------------------------------------

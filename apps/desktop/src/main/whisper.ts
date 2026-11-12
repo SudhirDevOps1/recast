@@ -105,7 +105,7 @@ const MODEL_DEFS: Array<{ id: string; label: string; file: string; sizeMb: numbe
 ];
 
 // Pinned sources (official public ggml models repo on huggingface).
-const MODEL_BASE = 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/';
+const _MODEL_BASE = 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/';
 
 export async function whisperStatus(): Promise<WhisperModels> {
   const bin = await findWhisperBinary();

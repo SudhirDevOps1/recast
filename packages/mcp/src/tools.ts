@@ -6,7 +6,7 @@ import {
   getBuiltinPreset,
   BUILTIN_PRESETS,
 } from '@recast/shared';
-import type { McpToolDefinition, McpToolHandler, McpExecutionContext } from './types.js';
+import type { McpToolDefinition, McpToolHandler } from './types.js';
 
 export function relayoutClips(project: RecastProject, clips: Clip[]): RecastProject {
   let t = 0;
@@ -218,7 +218,7 @@ export const TOOL_HANDLERS: Record<string, McpToolHandler> = {
     const startUs = Math.round(startSec * 1_000_000);
     const endUs = Math.round(endSec * 1_000_000);
 
-    const updated = await ctx.updateProject((project) => {
+    await ctx.updateProject((project) => {
       const existing = project.zoom.manualKeyframes ?? [];
       const newKeyframe = {
         id: `zoom-mcp-${Date.now()}`,

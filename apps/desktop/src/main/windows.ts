@@ -33,12 +33,13 @@ export function applyWindowTheme(win: BrowserWindow | null, theme: string): void
 export function createMainWindow(): BrowserWindow {
   const mac = process.platform === 'darwin';
   const light = context().settings.theme === 'light';
+  const isSmoke = process.env.RECAST_SMOKE === '1';
   const win = new BrowserWindow({
     width: 1180,
     height: 780,
     minWidth: 900,
     minHeight: 600,
-    show: false,
+    show: isSmoke,
     backgroundColor: light ? '#f7f8fa' : '#0e1015',
     titleBarStyle: mac ? 'hiddenInset' : 'hidden',
     titleBarOverlay: mac ? false : { ...(light ? TITLEBAR_LIGHT : TITLEBAR_DARK), height: 44 },
@@ -54,6 +55,7 @@ export function createMainWindow(): BrowserWindow {
   });
 
   win.once('ready-to-show', () => win.show());
+  if (isSmoke) win.show();
 
   // electron-vite exposes ELECTRON_RENDERER_URL in dev; RECAST_DEV_URL is our
   // manual override. Without the fallback `pnpm dev` silently loaded a stale

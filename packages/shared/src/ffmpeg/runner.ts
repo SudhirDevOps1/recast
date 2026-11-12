@@ -307,8 +307,12 @@ export class FfmpegRunner {
             !l.startsWith('Duration:') &&
             !l.startsWith('Stream #') &&
             !l.startsWith('Output #') &&
+            !l.startsWith('encoder') &&
+            !l.startsWith('creation_time') &&
             !l.includes('kb/s') &&
-            !l.includes('fps,'),
+            !l.includes('fps,') &&
+            !l.includes('tbr') &&
+            !l.includes('tbn'),
         );
       const lastLine = errLines[errLines.length - 1] || 'Process exited with error';
       throw new FfmpegError(`Audio extraction failed: ${lastLine}`, res.stderr);

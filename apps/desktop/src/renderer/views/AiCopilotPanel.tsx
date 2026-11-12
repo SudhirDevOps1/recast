@@ -7,7 +7,6 @@ import {
   IconScissors,
   IconCrop,
   IconCheck,
-  IconWarning,
   Badge,
 } from '@recast/ui';
 import type { RecastProject } from '@recast/shared';
@@ -74,7 +73,7 @@ const QUICK_ACTIONS = [
   },
 ];
 
-export function AiCopilotPanel({ project, setTime }: AiCopilotPanelProps) {
+export function AiCopilotPanel({ project: _project, setTime: _setTime }: AiCopilotPanelProps) {
   const [prompt, setPrompt] = useState('');
   const [executing, setExecuting] = useState(false);
   const [logs, setLogs] = useState<ActionLog[]>([]);

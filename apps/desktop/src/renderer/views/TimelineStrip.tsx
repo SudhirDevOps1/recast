@@ -7,8 +7,6 @@ import {
   IconPause,
   IconScissors,
   IconTrash,
-  IconUndo,
-  IconRedo,
   IconFilm,
   IconZoom,
   IconPlus,
