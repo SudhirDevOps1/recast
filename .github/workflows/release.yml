@@ -3,12 +3,18 @@ name: Release
 on:
   push:
     tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: 'Tag or version to release (e.g. v0.0.1)'
+        required: false
+        default: 'v0.0.1'
 
 permissions:
   contents: write
 
 concurrency:
-  group: release-${{ github.ref }}
+  group: release-${{ github.ref_name || github.ref }}
   cancel-in-progress: false
 
 jobs:
@@ -134,7 +140,7 @@ jobs:
 
       - name: Publish GitHub release
         run: |
-          TAG="${GITHUB_REF_NAME}"
+          TAG="${{ github.event.inputs.tag_name || github.ref_name }}"
           gh release create "$TAG" \
             --repo "$GITHUB_REPOSITORY" \
             --generate-notes \
