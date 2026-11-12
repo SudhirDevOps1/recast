@@ -1,4 +1,4 @@
-import { app, globalShortcut, powerMonitor, ipcMain, BrowserWindow, session } from 'electron';
+import { app, globalShortcut, powerMonitor, ipcMain, BrowserWindow } from 'electron';
 
 // Ensure canonical app name immediately before evaluating any paths
 app.setName('Recast');
@@ -50,18 +50,6 @@ async function bootstrap(): Promise<void> {
 
   await app.whenReady();
   handleMediaProtocol();
-
-  // Explicitly grant media (microphone & webcam) and display-capture permissions to sandboxed renderers
-  session.defaultSession.setPermissionRequestHandler((_wc, permission, callback) => {
-    if (permission === 'media' || permission === 'display-capture') {
-      callback(true);
-      return;
-    }
-    callback(false);
-  });
-  session.defaultSession.setPermissionCheckHandler((_wc, permission) => {
-    return permission === 'media' || permission === 'display-capture';
-  });
 
   // Must exist before any renderer calls getDisplayMedia() — without it the
   // request is denied and recording can never start.
