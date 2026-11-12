@@ -1,5 +1,3 @@
-import { z } from 'zod';
-
 export const MCP_PROTOCOL_VERSION = '2024-11-05';
 
 export interface McpToolDefinition {

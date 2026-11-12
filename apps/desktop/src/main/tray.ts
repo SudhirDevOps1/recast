@@ -1,4 +1,4 @@
-import { Tray, Menu, nativeImage, app, BrowserWindow } from 'electron';
+import { Tray, Menu, nativeImage, app } from 'electron';
 import { join } from 'node:path';
 import { PRODUCT_NAME } from '@recast/shared';
 import { context } from './context';

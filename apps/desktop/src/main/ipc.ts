@@ -802,7 +802,7 @@ export async function registerIpcHandlers(): Promise<void> {
           return null;
         }
       },
-      triggerExport: async (presetId, _outPath) => {
+      triggerExport: async (_presetId, _outPath) => {
         const p = createMcpContext().getProject();
         if (!p) throw new Error('No active project to export');
         const exportId = `exp-mcp-${Date.now()}`;

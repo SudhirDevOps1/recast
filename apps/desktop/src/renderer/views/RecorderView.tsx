@@ -25,7 +25,7 @@ export function RecorderView() {
   const [countingDown, setCountingDown] = useState<number | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const [mics, setMics] = useState<DeviceInfo[]>([]);
-  const previewRef = useRef<HTMLVideoElement | null>(null);
+  const _previewRef = useRef<HTMLVideoElement | null>(null);
   const acquiredRef = useRef<AcquiredSources | null>(null);
   const cancelledRef = useRef(false);
   const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
