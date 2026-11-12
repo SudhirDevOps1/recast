@@ -80,6 +80,7 @@ async function bootstrap(): Promise<void> {
     recorderHandle: null,
     inputSampler: null,
     activeSessionId: null,
+    activeProjectId: null,
     sessionStartEpochMs: 0,
     recorderRequest: null,
     activeDisplayScaleFactor: null,
@@ -88,6 +89,35 @@ async function bootstrap(): Promise<void> {
     lastDiskFreeMb: -1,
     activeExportIds: new Set(),
   });
+
+  // CLI MCP Server mode (e.g. `recast --mcp` or `recast --mcp-server`)
+  const isMcpCli = process.argv.includes('--mcp') || process.argv.includes('--mcp-server');
+  if (isMcpCli) {
+    const { RecastMcpServer } = await import('@recast/mcp');
+    const { loadProject, saveProject } = await import('./projects');
+    const mcpServer = new RecastMcpServer({
+      getProject: () => {
+        const lastId = context().activeProjectId;
+        if (lastId) return loadProject(lastId);
+        const projects = library.listProjects();
+        return projects.length > 0 ? loadProject(projects[0]!.id) : null;
+      },
+      updateProject: async (mutator) => {
+        const projects = library.listProjects();
+        const p = context().activeProjectId
+          ? loadProject(context().activeProjectId!)
+          : projects[0]
+          ? loadProject(projects[0]!.id)
+          : null;
+        if (!p) throw new Error('No project found in Recast library.');
+        const updated = mutator(p);
+        saveProject(updated);
+        return updated;
+      },
+    });
+    mcpServer.startStdioTransport();
+    return;
+  }
 
   await registerIpcHandlers();
   setupMenu(() => {

@@ -19,6 +19,7 @@ export interface AppContext {
   recorderHandle: RecorderHandle | null;
   inputSampler: InputSampler | null;
   activeSessionId: string | null;
+  activeProjectId: string | null;
   sessionStartEpochMs: number;
   recorderRequest: RecorderStartRequest | null;
   /** Scale factor (DIP → physical px) of the display granted to getDisplayMedia.

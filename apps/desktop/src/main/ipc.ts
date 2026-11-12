@@ -37,6 +37,7 @@ import {
 } from './export-service';
 import { exportsDir, dataDirHint, isPortable, recordingsDir, projectsDir } from './paths';
 import { mediaUrlFor } from './protocol';
+import { RecastMcpServer, RECAST_TOOLS } from '@recast/mcp';
 
 /**
  * IPC registry. Every channel is declared in @recast/shared/ipc.ts and is
@@ -301,6 +302,7 @@ export async function registerIpcHandlers(): Promise<void> {
   register('library:list', () => c.library.listProjects());
   register('library:open', async (payload) => {
     const { id } = payload as { id: string };
+    c.activeProjectId = id;
     const project = loadProject(id);
     // Heal takes recorded before the camera index fix: the preview and the
     // export compositor seek the cam file by time, which a streaming WebM
@@ -751,6 +753,100 @@ export async function registerIpcHandlers(): Promise<void> {
   });
   register('updater:download', () => downloadUpdate());
   register('updater:install', () => installUpdate());
+
+  // ---------------- MCP (Model Context Protocol) ----------------
+  const createMcpContext = (): import('@recast/mcp').McpExecutionContext => {
+    return {
+      getProject: () => {
+        const lastId = c.activeProjectId;
+        if (lastId) {
+          const p = loadProject(lastId);
+          if (p) return p;
+        }
+        const projects = c.library.listProjects();
+        if (projects.length > 0) {
+          return loadProject(projects[0]!.id);
+        }
+        return null;
+      },
+      updateProject: async (mutator) => {
+        let p: import('@recast/shared').RecastProject | null = null;
+        const lastId = c.activeProjectId;
+        if (lastId) {
+          p = loadProject(lastId);
+        }
+        if (!p) {
+          const projects = c.library.listProjects();
+          if (projects.length > 0) {
+            p = loadProject(projects[0]!.id);
+          }
+        }
+        if (!p) throw new Error('No active project found in Recast Studio.');
+        const updated = mutator(p);
+        saveProject(updated);
+        upsertProjectMeta(updated);
+        c.activeProjectId = updated.id;
+        // Broadcast to renderer so editor timeline, canvas and panels refresh in real-time
+        c.mainWindow?.webContents.send('mcp:projectUpdated', { projectId: updated.id });
+        return updated;
+      },
+      seekTo: (timeUs) => {
+        c.mainWindow?.webContents.send('mcp:seekTo', { timeUs });
+      },
+      getCanvasSnapshot: async () => {
+        if (!c.mainWindow) return null;
+        try {
+          const image = await c.mainWindow.capturePage();
+          return image.toPNG().toString('base64');
+        } catch {
+          return null;
+        }
+      },
+      triggerExport: async (presetId, _outPath) => {
+        const p = createMcpContext().getProject();
+        if (!p) throw new Error('No active project to export');
+        const exportId = `exp-mcp-${Date.now()}`;
+        c.mainWindow?.webContents.send('app:export-project', p.id);
+        return { exportId };
+      },
+    };
+  };
+
+  const mcpServer = new RecastMcpServer(createMcpContext());
+
+  register('mcp:listTools', () => {
+    return { tools: RECAST_TOOLS as unknown as Array<{ name: string; description: string; inputSchema: Record<string, unknown> }> };
+  });
+
+  register('mcp:callTool', async (payload) => {
+    const { name, arguments: toolArgs } = payload as { name: string; arguments: Record<string, unknown> };
+    mcpServer.setContext(createMcpContext());
+    const res = await mcpServer.handleRequest({
+      jsonrpc: '2.0',
+      id: Date.now(),
+      method: 'tools/call',
+      params: { name, arguments: toolArgs },
+    });
+    if (res?.error) {
+      return { content: [{ type: 'text', text: res.error.message }], isError: true };
+    }
+    return (res?.result as { content: Array<Record<string, unknown>>; isError?: boolean }) ?? { content: [] };
+  });
+
+  register('mcp:readResource', async (payload) => {
+    const { uri } = payload as { uri: string };
+    mcpServer.setContext(createMcpContext());
+    const res = await mcpServer.handleRequest({
+      jsonrpc: '2.0',
+      id: Date.now(),
+      method: 'resources/read',
+      params: { uri },
+    });
+    if (res?.error) {
+      return { contents: [{ uri, mimeType: 'text/plain', text: res.error.message }] };
+    }
+    return (res?.result as { contents: Array<Record<string, unknown>> }) ?? { contents: [] };
+  });
 
   // ---------------- internal (capture host → disk) ----------------
   register('capture:createSession', (payload) => {

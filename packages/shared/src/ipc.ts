@@ -348,6 +348,37 @@ export const IPC = {
   'updater:check': def(z.void(), z.object({ available: z.boolean(), version: z.string().nullable() })),
   'updater:download': def(z.void(), z.void()),
   'updater:install': def(z.void(), z.object({ started: z.boolean(), blockedReason: z.string().nullable() })),
+
+  'mcp:listTools': def(
+    z.void(),
+    z.object({
+      tools: z.array(
+        z.object({
+          name: z.string(),
+          description: z.string(),
+          inputSchema: z.record(z.unknown()),
+        }),
+      ),
+    }),
+  ),
+  'mcp:callTool': def(
+    z.object({
+      name: z.string(),
+      arguments: z.record(z.unknown()),
+    }),
+    z.object({
+      content: z.array(z.record(z.unknown())),
+      isError: z.boolean().optional(),
+    }),
+  ),
+  'mcp:readResource': def(
+    z.object({
+      uri: z.string(),
+    }),
+    z.object({
+      contents: z.array(z.record(z.unknown())),
+    }),
+  ),
 } satisfies Record<string, IpcContractBase>;
 
 export type IpcContract = typeof IPC;
@@ -386,6 +417,8 @@ export const EVENTS = {
   'app:open-project': z.object({ 0: z.string() }).or(z.string()),
   'app:export-project': z.object({ 0: z.string() }).or(z.string()),
   'app:about': z.void(),
+  'mcp:projectUpdated': z.object({ projectId: z.string() }),
+  'mcp:seekTo': z.object({ timeUs: z.number() }),
 } satisfies Record<string, z.ZodTypeAny>;
 
 export type EventContract = typeof EVENTS;

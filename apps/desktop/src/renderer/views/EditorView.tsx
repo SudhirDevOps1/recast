@@ -53,6 +53,7 @@ import { MotionPanel } from './MotionPanel';
 import { AudioPanel } from './AudioPanel';
 import { CropPanel } from './CropPanel';
 import { StylePanel } from './StylePanel';
+import { AiCopilotPanel } from './AiCopilotPanel';
 
 /**
  * The editor: compositor-driven preview (identical render path to export),
@@ -75,8 +76,25 @@ export function EditorView() {
   const [cursorClicks, setCursorClicks] = useState<Array<{ tUs: number; x: number; y: number }>>([]);
   const [keystrokes, setKeystrokes] = useState<Array<{ tUs: number; key: string }>>([]);
   const [captions, setCaptions] = useState<CaptionLine[]>([]);
-  const [panel, setPanel] = useState<'motion' | 'style' | 'facecam' | 'crop' | 'audio' | 'captions'>('motion');
+  const [panel, setPanel] = useState<'ai' | 'motion' | 'style' | 'facecam' | 'crop' | 'audio' | 'captions'>('ai');
   const [drawerOpen, setDrawerOpen] = useState(true);
+
+  // Synchronize live changes from MCP / AI Copilot
+  useEffect(() => {
+    const offUpdate = bridge().on('mcp:projectUpdated', async ({ projectId }) => {
+      const updated = await bridge().invoke('library:open', { id: projectId });
+      if (updated) {
+        useEditor.getState().setProject(updated);
+      }
+    });
+    const offSeek = bridge().on('mcp:seekTo', ({ timeUs }) => {
+      useEditor.getState().setTime(timeUs);
+    });
+    return () => {
+      offUpdate();
+      offSeek();
+    };
+  }, []);
 
   const handleTabClick = (t: typeof panel) => {
     if (panel === t) {
@@ -340,6 +358,12 @@ export function EditorView() {
         {/* Left Slim Vertical Icon Rail Dock (Single primary rail in editor) */}
         <aside className="w-14 shrink-0 bg-[#0c0e14] border-r border-white/10 flex flex-col items-center py-3 gap-2.5 z-10 select-none">
           <RailTab
+            label="AI Copilot"
+            icon={<IconSparkle size={17} />}
+            active={panel === 'ai' && drawerOpen}
+            onClick={() => handleTabClick('ai')}
+          />
+          <RailTab
             label="Style"
             icon={<IconSparkle size={17} />}
             active={panel === 'style' && drawerOpen}
@@ -403,6 +427,7 @@ export function EditorView() {
           <aside className="w-80 shrink-0 bg-[#10131c] border-r border-white/10 overflow-y-auto p-4 flex flex-col animate-in slide-in-from-left-2 duration-150">
             <div className="flex items-center justify-between pb-3 mb-3 border-b border-white/10">
               <span className="text-xs font-bold uppercase tracking-wider text-white/80">
+                {panel === 'ai' && 'AI Copilot & MCP Engine'}
                 {panel === 'style' && 'Canvas & Background'}
                 {panel === 'motion' && 'Zoom & Cursor FX'}
                 {panel === 'facecam' && 'Face Camera PiP'}
@@ -422,6 +447,7 @@ export function EditorView() {
             </div>
 
             <div key={panel} className="panel-in flex-1">
+              {panel === 'ai' && <AiCopilotPanel project={project} commit={commit} setTime={setTime} />}
               {panel === 'motion' && (
                 <MotionPanel
                   project={project}

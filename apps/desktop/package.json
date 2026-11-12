@@ -29,6 +29,7 @@
     "@recast/capture": "workspace:*",
     "@recast/editor": "workspace:*",
     "@recast/export": "workspace:*",
+    "@recast/mcp": "workspace:*",
     "@recast/shared": "workspace:*",
     "@recast/ui": "workspace:*",
     "better-sqlite3": "^13.0.3",
