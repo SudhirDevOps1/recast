@@ -78,6 +78,46 @@ export function* audioChunks(buffer: AudioBuffer, chunkFrames = 48_000): Generat
   }
 }
 
+/** Studio voice EQ: 80 Hz highpass rumble filter + 3 kHz peaking presence boost. */
+export async function applyVoiceEq(
+  buffer: AudioBuffer,
+  options: {
+    rumbleCutHz?: number;
+    presenceBoostDb?: number;
+    presenceFrequencyHz?: number;
+  } = {},
+): Promise<AudioBuffer> {
+  const rumbleHz = options.rumbleCutHz ?? 80;
+  const presenceDb = options.presenceBoostDb ?? 3.5;
+  const presenceHz = options.presenceFrequencyHz ?? 3000;
+
+  if (typeof OfflineAudioContext === 'undefined') return buffer;
+
+  const offline = new OfflineAudioContext(buffer.numberOfChannels, buffer.length, buffer.sampleRate);
+  const source = offline.createBufferSource();
+  source.buffer = buffer;
+
+  // Highpass filter to eliminate desk thump / AC rumble
+  const highpass = offline.createBiquadFilter();
+  highpass.type = 'highpass';
+  highpass.frequency.value = rumbleHz;
+  highpass.Q.value = 0.707;
+
+  // Peaking EQ for vocal clarity and broadcast crispness
+  const presence = offline.createBiquadFilter();
+  presence.type = 'peaking';
+  presence.frequency.value = presenceHz;
+  presence.gain.value = presenceDb;
+  presence.Q.value = 1.0;
+
+  source.connect(highpass);
+  highpass.connect(presence);
+  presence.connect(offline.destination);
+
+  source.start(0);
+  return await offline.startRendering();
+}
+
 export function decodeAudioData(ctx: BaseAudioContext, bytes: ArrayBuffer): Promise<AudioBuffer> {
   return ctx.decodeAudioData(bytes);
 }

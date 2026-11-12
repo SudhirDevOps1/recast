@@ -47,7 +47,18 @@ export function StylePanel({
             value={BUILTIN_PRESETS.some((p) => p.id === style.id) ? style.id : 'custom'}
             onValueChange={(v) => {
               const preset = BUILTIN_PRESETS.find((p) => p.id === v);
-              if (preset) commit({ ...project, style: { ...preset } });
+              if (preset) {
+                commit({
+                  ...project,
+                  style: {
+                    ...preset,
+                    facecam: {
+                      ...preset.facecam,
+                      enabled: project.media.camera ? (project.style.facecam.enabled ?? true) : false,
+                    },
+                  },
+                });
+              }
             }}
             options={[
               ...BUILTIN_PRESETS.map((p) => ({ value: p.id, label: p.name })),
@@ -124,6 +135,80 @@ export function StylePanel({
             ariaLabel="Shadow"
           />
         </Field>
+
+        <Field label="Window titlebar">
+          <Switch
+            checked={style.frame.windowChrome?.enabled ?? false}
+            onCheckedChange={(enabled) =>
+              setFrame({
+                windowChrome: {
+                  ...(style.frame.windowChrome ?? {
+                    style: 'macos-dark',
+                    title: '',
+                    heightPx: 34,
+                    showButtons: true,
+                  }),
+                  enabled,
+                },
+              })
+            }
+            ariaLabel="Window chrome"
+          />
+        </Field>
+        {style.frame.windowChrome?.enabled ? (
+          <>
+            <Field label="Chrome style">
+              <Select
+                value={style.frame.windowChrome.style ?? 'macos-dark'}
+                onValueChange={(s) =>
+                  setFrame({
+                    windowChrome: {
+                      ...style.frame.windowChrome!,
+                      style: s as import('@recast/shared').WindowChromeStyle,
+                    },
+                  })
+                }
+                options={[
+                  { value: 'macos-dark', label: 'macOS Dark' },
+                  { value: 'macos-light', label: 'macOS Light' },
+                  { value: 'glass', label: 'Glass Blur' },
+                  { value: 'windows', label: 'Windows 11' },
+                ]}
+                ariaLabel="Chrome style"
+              />
+            </Field>
+            <Field label="Window title">
+              <input
+                type="text"
+                value={style.frame.windowChrome.title ?? ''}
+                placeholder="e.g. My App, Terminal, Safari"
+                onChange={(e) =>
+                  setFrame({
+                    windowChrome: {
+                      ...style.frame.windowChrome!,
+                      title: e.target.value,
+                    },
+                  })
+                }
+                className="w-full rounded-md border border-hairline bg-surface px-2.5 py-1.5 text-xs text-primary outline-none focus:border-accent"
+              />
+            </Field>
+            <Field label="Window buttons">
+              <Switch
+                checked={style.frame.windowChrome.showButtons ?? true}
+                onCheckedChange={(showButtons) =>
+                  setFrame({
+                    windowChrome: {
+                      ...style.frame.windowChrome!,
+                      showButtons,
+                    },
+                  })
+                }
+                ariaLabel="Window buttons"
+              />
+            </Field>
+          </>
+        ) : null}
       </section>
 
       <section>
@@ -135,12 +220,14 @@ export function StylePanel({
               const t = v as StylePreset['frame']['background']['type'];
               if (t === 'gradient') setBackground({ type: t, gradient: bg.gradient ?? { from: '#1B2030', to: '#0E1015', angleDeg: 160 } });
               else if (t === 'solid') setBackground({ type: t, color: bg.color ?? '#101418' });
+              else if (t === 'procedural') setBackground({ type: t, procedural: bg.procedural ?? { preset: 'aurora', animationSpeed: 0 } });
               else if (t === 'echo') setBackground({ type: t, echo: bg.echo ?? { blurPx: 48, dim: 0.35, scale: 1.1 } });
               else setBackground({ type: t });
             }}
             options={[
               { value: 'transparent', label: 'Transparent' },
               { value: 'solid', label: 'Solid color' },
+              { value: 'procedural', label: 'Studio Wallpapers' },
               { value: 'gradient', label: 'Gradient' },
               { value: 'mesh', label: 'Mesh gradient' },
               { value: 'echo', label: 'Blurred echo' },
@@ -149,6 +236,89 @@ export function StylePanel({
             ariaLabel="Background type"
           />
         </Field>
+        {bg.type === 'procedural' ? (
+          <Field label="Wallpaper theme">
+            <Select
+              value={bg.procedural?.preset ?? 'aurora'}
+              onValueChange={(p) =>
+                setBackground({
+                  procedural: {
+                    preset: p as 'aurora' | 'sunset' | 'midnight' | 'cyber' | 'obsidian',
+                    animationSpeed: 0,
+                  },
+                })
+              }
+              options={[
+                { value: 'aurora', label: 'Aurora Borealis' },
+                { value: 'sunset', label: 'Sunset Mirage' },
+                { value: 'midnight', label: 'Midnight Cyan' },
+                { value: 'cyber', label: 'Cyber Synthwave' },
+                { value: 'obsidian', label: 'Obsidian Studio' },
+              ]}
+              ariaLabel="Wallpaper theme"
+            />
+          </Field>
+        ) : null}
+
+        <Field label="Dot pattern overlay">
+          <Switch
+            checked={bg.dotGrid?.enabled ?? false}
+            onCheckedChange={(enabled) =>
+              setBackground({
+                dotGrid: {
+                  ...(bg.dotGrid ?? {
+                    color: 'rgba(255, 255, 255, 0.08)',
+                    sizePx: 2,
+                    spacingPx: 24,
+                    style: 'dots',
+                  }),
+                  enabled,
+                },
+              })
+            }
+            ariaLabel="Dot pattern overlay"
+          />
+        </Field>
+        {bg.dotGrid?.enabled ? (
+          <>
+            <Field label="Pattern style">
+              <Select
+                value={bg.dotGrid.style ?? 'dots'}
+                onValueChange={(st) =>
+                  setBackground({
+                    dotGrid: {
+                      ...bg.dotGrid!,
+                      style: st as 'dots' | 'grid' | 'crosses',
+                    },
+                  })
+                }
+                options={[
+                  { value: 'dots', label: 'Dots' },
+                  { value: 'grid', label: 'Grid lines' },
+                  { value: 'crosses', label: 'Crosses' },
+                ]}
+                ariaLabel="Pattern style"
+              />
+            </Field>
+            <Field label={`Spacing — ${bg.dotGrid.spacingPx} px`}>
+              <Slider
+                value={bg.dotGrid.spacingPx}
+                min={12}
+                max={64}
+                step={2}
+                ariaLabel="Dot spacing"
+                onValueChange={(spacingPx) =>
+                  setBackground({
+                    dotGrid: {
+                      ...bg.dotGrid!,
+                      spacingPx,
+                    },
+                  })
+                }
+              />
+            </Field>
+          </>
+        ) : null}
         {bg.type === 'image' ? (
           <div className="space-y-2">
             {bg.imageFile ? (
@@ -254,10 +424,11 @@ export function StylePanel({
             value={style.cursor.look}
             onValueChange={(v) => setCursor({ look: v as StylePreset['cursor']['look'] })}
             options={[
-              { value: 'native', label: 'Native (as captured)' },
               { value: 'pointer', label: 'Rendered pointer' },
               { value: 'dot', label: 'Dot' },
               { value: 'circle', label: 'Circle' },
+              { value: 'native', label: 'Native arrow' },
+              { value: 'none', label: 'Hidden (no cursor)' },
             ]}
             ariaLabel="Cursor look"
           />
@@ -301,6 +472,32 @@ export function StylePanel({
         <Field label="Click bounce">
           <Switch checked={style.cursor.clickBounce ?? false} onCheckedChange={(v) => setCursor({ clickBounce: v })} ariaLabel="Click bounce" />
         </Field>
+        <Field label="Radar wave rings">
+          <Switch checked={style.cursor.radarRings ?? false} onCheckedChange={(radarRings) => setCursor({ radarRings })} ariaLabel="Radar wave rings" />
+        </Field>
+        {style.cursor.radarRings ? (
+          <>
+            <Field label="Radar wave color">
+              <ColorPicker value={style.cursor.radarColor ?? '#7C8CF8'} onChange={(radarColor) => setCursor({ radarColor })} ariaLabel="Radar wave color" />
+            </Field>
+            <Field label={`Radar ring count — ${style.cursor.radarRingCount ?? 3}`}>
+              <Slider value={style.cursor.radarRingCount ?? 3} min={1} max={4} step={1} ariaLabel="Radar ring count" onValueChange={(radarRingCount) => setCursor({ radarRingCount })} />
+            </Field>
+          </>
+        ) : null}
+        <Field label="Cursor spotlight">
+          <Switch checked={style.cursor.spotlight ?? false} onCheckedChange={(spotlight) => setCursor({ spotlight })} ariaLabel="Cursor spotlight" />
+        </Field>
+        {style.cursor.spotlight ? (
+          <>
+            <Field label={`Spotlight radius — ${style.cursor.spotlightRadiusPx ?? 120} px`}>
+              <Slider value={style.cursor.spotlightRadiusPx ?? 120} min={40} max={260} step={5} ariaLabel="Spotlight radius" onValueChange={(spotlightRadiusPx) => setCursor({ spotlightRadiusPx })} />
+            </Field>
+            <Field label={`Spotlight dim — ${Math.round((style.cursor.spotlightOpacity ?? 0.45) * 100)}%`}>
+              <Slider value={style.cursor.spotlightOpacity ?? 0.45} min={0.15} max={0.85} step={0.05} ariaLabel="Spotlight opacity" onValueChange={(spotlightOpacity) => setCursor({ spotlightOpacity })} />
+            </Field>
+          </>
+        ) : null}
       </section>
 
       <div className="flex gap-2 pt-1">

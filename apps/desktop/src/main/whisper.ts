@@ -1,9 +1,79 @@
 import { promises as fs, createWriteStream } from 'node:fs';
-import { join } from 'node:path';
+import { join, dirname } from 'node:path';
 import { spawn } from 'node:child_process';
-import { modelsDir } from './paths';
+import { modelsDir, whisperDir } from './paths';
 import type { CaptionModel } from '@recast/shared';
 import type { FfmpegRunner } from '@recast/shared/node';
+
+const WHISPER_BINARY_RELEASES = {
+  'win32-x64': 'https://github.com/ggml-org/whisper.cpp/releases/download/b5454/whisper-bin-x64.zip',
+  'win32-arm64': 'https://github.com/ggml-org/whisper.cpp/releases/download/b5454/whisper-bin-win-cpu-arm64.zip',
+  'linux-x64': 'https://github.com/ggml-org/whisper.cpp/releases/download/b5454/whisper-bin-ubuntu-x64.tar.gz',
+  'linux-arm64': 'https://github.com/ggml-org/whisper.cpp/releases/download/b5454/whisper-bin-ubuntu-arm64.tar.gz',
+} as const;
+
+export function canInstallWhisperBinary(): boolean {
+  const plat = process.platform === 'win32' ? 'win32' : process.platform === 'linux' ? 'linux' : 'darwin';
+  const arch = process.arch === 'arm64' ? 'arm64' : 'x64';
+  return `${plat}-${arch}` in WHISPER_BINARY_RELEASES;
+}
+
+export async function installWhisperBinary(onProgress: (pct: number) => void): Promise<{ ok: boolean; path?: string; error?: string }> {
+  const plat = process.platform === 'win32' ? 'win32' : process.platform === 'linux' ? 'linux' : 'darwin';
+  const arch = process.arch === 'arm64' ? 'arm64' : 'x64';
+  const key = `${plat}-${arch}` as keyof typeof WHISPER_BINARY_RELEASES;
+  const url = WHISPER_BINARY_RELEASES[key];
+  if (!url) {
+    return { ok: false, error: `Automated download is not available for ${process.platform}-${process.arch}. Please install via package manager.` };
+  }
+
+  const destDir = whisperDir();
+  const archivePath = join(destDir, url.endsWith('.tar.gz') ? 'whisper-download.tar.gz' : 'whisper-download.zip');
+  try {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`HTTP ${res.status} fetching whisper binary package`);
+    const total = Number(res.headers.get('content-length') ?? 9_000_000);
+    const writer = createWriteStream(archivePath);
+    const { Readable } = await import('node:stream');
+    const { pipeline } = await import('node:stream/promises');
+    let received = 0;
+    let lastPct = -1;
+    const reader = Readable.fromWeb(res.body as import('node:stream/web').ReadableStream);
+    reader.on('data', (chunk: Buffer) => {
+      received += chunk.length;
+      const pct = Math.min(90, Math.floor((received / total) * 90));
+      if (pct !== lastPct) {
+        lastPct = pct;
+        onProgress(pct);
+      }
+    });
+    await pipeline(reader, writer);
+    onProgress(92);
+
+    // Extract archive into destDir via platform bsdtar / tar
+    await new Promise<void>((resolve, reject) => {
+      const proc = spawn('tar', ['-xf', archivePath, '-C', destDir], { shell: false });
+      proc.on('close', (code) => {
+        if (code === 0) resolve();
+        else reject(new Error(`Extraction exited with code ${code}`));
+      });
+      proc.on('error', reject);
+    });
+    onProgress(98);
+
+    await fs.rm(archivePath, { force: true }).catch(() => undefined);
+    const bin = await findWhisperBinary();
+    if (!bin) throw new Error('Binary not found in archive after extraction');
+    if (process.platform !== 'win32') {
+      await fs.chmod(bin, 0o755).catch(() => undefined);
+    }
+    onProgress(100);
+    return { ok: true, path: bin };
+  } catch (e) {
+    await fs.rm(archivePath, { force: true }).catch(() => undefined);
+    return { ok: false, error: (e as Error).message };
+  }
+}
 
 /**
  * Local Whisper (whisper.cpp sidecar) — fully offline.
@@ -16,6 +86,7 @@ import type { FfmpegRunner } from '@recast/shared/node';
 
 export interface WhisperModels {
   whisperBin: string | null;
+  canInstall: boolean;
   models: CaptionModel[];
 }
 
@@ -28,8 +99,8 @@ const MODEL_DEFS: Array<{ id: string; label: string; file: string; sizeMb: numbe
   { id: 'ggml-small', label: 'Small (multilingual)', file: 'ggml-small.bin', sizeMb: 492, language: 'multi' },
 ];
 
-// Pinned sources (commit 0f1e9bc of ggml-org/whisper.cpp models directory).
-const MODEL_BASE = 'https://huggingface.co/ggml-org/whisper.cpp/resolve/0f1e9bc/';
+// Pinned sources (official public ggml models repo on huggingface).
+const MODEL_BASE = 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/';
 
 export async function whisperStatus(): Promise<WhisperModels> {
   const bin = await findWhisperBinary();
@@ -45,7 +116,7 @@ export async function whisperStatus(): Promise<WhisperModels> {
     }
     models.push({ id: def.id, label: def.label, sizeMb: def.sizeMb, downloaded, language: def.language });
   }
-  return { whisperBin: bin, models };
+  return { whisperBin: bin, canInstall: canInstallWhisperBinary(), models };
 }
 
 async function findWhisperBinary(): Promise<string | null> {
@@ -53,13 +124,63 @@ async function findWhisperBinary(): Promise<string | null> {
     process.platform === 'win32'
       ? ['whisper-cli.exe', 'whisper.exe', 'main.exe']
       : ['whisper-cli', 'whisper', 'whisper-cpp'];
-  try {
-    const bundled = join(process.resourcesPath ?? '', 'whisper', candidates[0]!);
-    await fs.access(bundled);
-    return bundled;
-  } catch {
-    /* not bundled */
+
+  const plat = process.platform === 'win32' ? 'win32' : process.platform === 'linux' ? 'linux' : 'darwin';
+  const arch = process.arch === 'arm64' ? 'arm64' : 'x64';
+  const platArch = `${plat}-${arch}`;
+
+  // 1) Packaged app resources (resources/whisper/<platform>-<arch>/...)
+  if (process.resourcesPath) {
+    for (const c of candidates) {
+      for (const sub of [
+        join('whisper', platArch, c),
+        join('whisper', platArch, 'Release', c),
+        join('whisper', c),
+      ]) {
+        try {
+          const p = join(process.resourcesPath, sub);
+          await fs.access(p);
+          return p;
+        } catch {
+          /* keep looking */
+        }
+      }
+    }
   }
+
+  // 2) Dev workspace resources (resources/whisper/<platform>-<arch>/...)
+  for (const c of candidates) {
+    for (const root of [
+      join(process.cwd(), 'resources', 'whisper', platArch),
+      join(process.cwd(), 'resources', 'whisper', platArch, 'Release'),
+      join(process.cwd(), 'resources', 'whisper'),
+    ]) {
+      try {
+        const p = join(root, c);
+        await fs.access(p);
+        return p;
+      } catch {
+        /* keep looking */
+      }
+    }
+  }
+
+  // 3) User data downloaded binary
+  const dir = whisperDir();
+  const searchRoots = [dir, join(dir, 'Release'), join(dir, 'bin')];
+  for (const root of searchRoots) {
+    for (const c of candidates) {
+      try {
+        const p = join(root, c);
+        await fs.access(p);
+        return p;
+      } catch {
+        /* keep looking */
+      }
+    }
+  }
+
+  // 4) PATH
   const pathDirs = (process.env.PATH ?? '').split(process.platform === 'win32' ? ';' : ':');
   for (const d of pathDirs) {
     for (const c of candidates) {
@@ -122,10 +243,85 @@ export interface TranscribeResult {
 
 /** Run whisper.cpp → SRT string. Never shells out with interpolated strings. */
 export async function transcribe(req: TranscribeRequest, whisperBin: string, ffmpeg: FfmpegRunner): Promise<TranscribeResult> {
+  const wavFile = `${req.audioFile}.16k.wav`;
   try {
-    const wavFile = `${req.audioFile}.16k.wav`;
+    let sourceFile = req.audioFile;
+
+    // 1. Verify primary audio file validity
+    let validAudio = false;
+    try {
+      const st = await fs.stat(sourceFile);
+      if (st.size > 10_000) {
+        validAudio = true;
+      }
+    } catch {
+      validAudio = false;
+    }
+
+    // Fallback: If primary audio (e.g. mic.webm) is empty/corrupt, look for fallback candidates
+    if (!validAudio) {
+      const parentDir = dirname(sourceFile);
+      try {
+        const files = await fs.readdir(parentDir);
+        // Look for system audio or video segments with audio
+        const sysAudio = files.find((f) => f.startsWith('system') && f.endsWith('.webm'));
+        if (sysAudio) {
+          const sysPath = join(parentDir, sysAudio);
+          const st = await fs.stat(sysPath);
+          if (st.size > 10_000) {
+            sourceFile = sysPath;
+            validAudio = true;
+          }
+        }
+        if (!validAudio) {
+          const firstSeg = files.find((f) => f.startsWith('seg-') && f.endsWith('.mp4'));
+          if (firstSeg) {
+            sourceFile = join(parentDir, firstSeg);
+            validAudio = true;
+          }
+        }
+      } catch {
+        /* ignore directory probe error */
+      }
+    }
+
+    if (!validAudio) {
+      return {
+        ok: false,
+        srt: null,
+        error: 'No valid audio was captured in this recording. Microphone track is empty or missing.',
+      };
+    }
+
     req.onProgress('extracting', 5);
-    await ffmpeg.extractWav(req.audioFile, wavFile, 16_000);
+    try {
+      await ffmpeg.extractWav(sourceFile, wavFile, 16_000);
+    } catch (extractErr) {
+      const msg = (extractErr as Error).message || '';
+      if (msg.includes('invalid as first byte of an EBML number') || msg.includes('End of file') || msg.includes('Duplicate element')) {
+        return {
+          ok: false,
+          srt: null,
+          error: 'Microphone audio recording is empty or corrupt. Please ensure microphone access is granted in Settings.',
+        };
+      }
+      return { ok: false, srt: null, error: `Audio extraction failed: ${msg.slice(0, 160)}` };
+    }
+
+    // Verify extracted WAV has content
+    try {
+      const wavStat = await fs.stat(wavFile);
+      if (wavStat.size < 1_000) {
+        await fs.rm(wavFile, { force: true }).catch(() => undefined);
+        return {
+          ok: false,
+          srt: null,
+          error: 'Extracted audio track is silent or contains no audible speech.',
+        };
+      }
+    } catch {
+      /* ignore stat check */
+    }
 
     const outBase = `${req.audioFile}.transcript`;
     req.onProgress('transcribing', 10);
@@ -145,8 +341,6 @@ export async function transcribe(req: TranscribeRequest, whisperBin: string, ffm
       });
       child.on('error', reject);
       child.on('close', (code) => (code === 0 ? resolve() : reject(new Error(`whisper.cpp exited ${code}: ${stderr.slice(-400)}`))));
-      // Whisper on long files can take a while; no artificial timeout here,
-      // cancel is handled by killing the process from the IPC layer.
       void child;
     });
 
@@ -155,6 +349,7 @@ export async function transcribe(req: TranscribeRequest, whisperBin: string, ffm
     await fs.rm(wavFile, { force: true }).catch(() => undefined);
     return { ok: true, srt };
   } catch (e) {
+    await fs.rm(wavFile, { force: true }).catch(() => undefined);
     return { ok: false, srt: null, error: (e as Error).message };
   }
 }

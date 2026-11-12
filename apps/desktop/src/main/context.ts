@@ -14,6 +14,7 @@ export interface AppContext {
   settings: Settings;
   mainWindow: Electron.BrowserWindow | null;
   toolbarWindow: Electron.BrowserWindow | null;
+  cameraWindow: Electron.BrowserWindow | null;
   areaWindow: Electron.BrowserWindow | null;
   recorderHandle: RecorderHandle | null;
   inputSampler: InputSampler | null;

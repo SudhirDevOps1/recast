@@ -13,16 +13,56 @@ export function SettingsView() {
   const refreshFfmpeg = useApp((s) => s.refreshFfmpeg);
   const showToast = useApp((s) => s.showToast);
   const [permissions, setPermissions] = useState<{ screen: string; microphone: string; camera: string } | null>(null);
-  const [models, setModels] = useState<Array<{ id: string; label: string; downloaded: boolean }>>([]);
-  const [whisperBin] = useState<string | null>(null);
+  const [models, setModels] = useState<Array<{ id: string; label: string; sizeMb?: number; downloaded: boolean }>>([]);
+  const [whisperBin, setWhisperBin] = useState<string | null>(null);
+  const [canInstallWhisper, setCanInstallWhisper] = useState(false);
+  const [installingWhisper, setInstallingWhisper] = useState(false);
+  const [downloadingModel, setDownloadingModel] = useState<Record<string, number>>({});
+
+  const refreshWhisper = (): void => {
+    void bridge()
+      .invoke('captions:status', undefined)
+      .then((res) => {
+        setWhisperBin(res.whisperBin);
+        setCanInstallWhisper(res.canInstall);
+        setModels(res.models);
+      })
+      .catch(() => {
+        setWhisperBin(null);
+        setCanInstallWhisper(false);
+      });
+  };
 
   useEffect(() => {
     void bridge().invoke('permissions:get', undefined).then(setPermissions).catch(() => setPermissions(null));
-    void bridge()
-      .invoke('captions:models', undefined)
-      .then((m: Array<{ id: string; label: string; downloaded: boolean }>) => setModels(m))
-      .catch(() => setModels([]));
-    void import('@recast/shared').then((s) => void s);
+    refreshWhisper();
+
+    const offDownload = bridge().on('whisper:download', (data) => {
+      if (data.modelId === '__binary__') {
+        if (data.done) {
+          setInstallingWhisper(false);
+          refreshWhisper();
+          if (data.error) showToast(`Whisper install failed: ${data.error}`, 'error');
+          else showToast('whisper.cpp installed successfully!', 'success');
+        }
+      } else {
+        setDownloadingModel((prev) => ({ ...prev, [data.modelId]: data.pct }));
+        if (data.done) {
+          refreshWhisper();
+          setDownloadingModel((prev) => {
+            const next = { ...prev };
+            delete next[data.modelId];
+            return next;
+          });
+          if (data.error) showToast(`Model download failed: ${data.error}`, 'error');
+          else showToast('Model downloaded successfully!', 'success');
+        }
+      }
+    });
+
+    return () => {
+      offDownload();
+    };
   }, []);
 
   return (
@@ -138,19 +178,83 @@ export function SettingsView() {
           </div>
         ) : null}
 
-        <div className="space-y-2 rounded-lg border border-hairline p-4 text-sm">
+        <div className="space-y-3 rounded-lg border border-hairline p-4 text-sm">
           <div className="flex items-center justify-between">
-            <span>whisper.cpp binary</span>
-            <Badge tone={whisperBin ? 'success' : 'neutral'}>{whisperBin ? 'found' : 'not found'}</Badge>
-          </div>
-          <div className="text-xs" style={{ color: 'var(--text-muted)' }}>
-            {whisperBin ?? 'Install via `brew install whisper-cpp` (macOS) or `scoop install whisper-cpp` (Windows) to enable local captions.'}
-          </div>
-          {models.length > 0 ? (
-            <div className="text-xs" style={{ color: 'var(--text-muted)' }}>
-              Models: {models.map((m) => `${m.label}${m.downloaded ? ' ✓' : ''}`).join(' · ')}
+            <div className="flex items-center gap-2">
+              <span className="font-medium">whisper.cpp binary</span>
+              {whisperBin ? (
+                <Badge tone="success">installed</Badge>
+              ) : (
+                <Badge tone="neutral">not found</Badge>
+              )}
             </div>
-          ) : null}
+            {!whisperBin && canInstallWhisper ? (
+              <Button
+                size="sm"
+                disabled={installingWhisper}
+                onClick={() => {
+                  setInstallingWhisper(true);
+                  showToast('Downloading prebuilt whisper.cpp binary…', 'info');
+                  void bridge()
+                    .invoke('captions:installBinary', undefined)
+                    .then((res) => {
+                      if (!res.ok) {
+                        setInstallingWhisper(false);
+                        showToast(`Install failed: ${res.error}`, 'error');
+                      }
+                    })
+                    .catch((e) => {
+                      setInstallingWhisper(false);
+                      showToast(`Install error: ${(e as Error).message}`, 'error');
+                    });
+                }}
+              >
+                {installingWhisper ? 'Downloading…' : 'Install (1-Click)'}
+              </Button>
+            ) : null}
+          </div>
+          <div className="truncate text-xs" style={{ color: 'var(--text-muted)' }}>
+            {whisperBin ? (
+              <code>{whisperBin}</code>
+            ) : (
+              'whisper.cpp enables fully local, private AI subtitles with zero cloud telemetry. Click Install to auto-download.'
+            )}
+          </div>
+
+          {/* Model Management */}
+          <div className="mt-2 space-y-2 pt-2 border-t border-hairline">
+            <div className="text-xs font-semibold text-secondary">Speech Recognition Models (Local GGML):</div>
+            <div className="grid grid-cols-1 gap-2">
+              {models.map((m) => {
+                const isDownloading = typeof downloadingModel[m.id] === 'number';
+                const pct = downloadingModel[m.id] ?? 0;
+                return (
+                  <div key={m.id} className="flex items-center justify-between rounded bg-white/5 p-2 text-xs">
+                    <div>
+                      <span className="font-medium">{m.label}</span>
+                      {m.sizeMb ? <span className="ml-2 text-muted">({m.sizeMb} MB)</span> : null}
+                    </div>
+                    {m.downloaded ? (
+                      <span className="text-emerald-400 flex items-center gap-1 font-medium">✓ Ready</span>
+                    ) : isDownloading ? (
+                      <span className="text-accent tabular font-medium">{pct}%</span>
+                    ) : (
+                      <Button
+                        size="sm"
+                        onClick={() => {
+                          setDownloadingModel((prev) => ({ ...prev, [m.id]: 0 }));
+                          showToast(`Downloading ${m.label}…`, 'info');
+                          void bridge().invoke('captions:downloadModel', { id: m.id });
+                        }}
+                      >
+                        Download
+                      </Button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
         </div>
       </section>
 

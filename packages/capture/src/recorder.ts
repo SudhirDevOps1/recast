@@ -37,10 +37,12 @@ export interface RecorderHandle {
 }
 
 function bitrateForQuality(width: number, height: number, fps: number): number {
-  // 0.12 bits per pixel at reference, adjusted by frame rate.
+  // Screen recording has sharp text, syntax code, and UI chrome.
+  // 0.20 bits/pixel at 30 fps is crystal-clear while avoiding GPU encoder backpressure and frame drops.
+  // ~2.5 Mbps at 720p/1366x768, ~5 Mbps at 1080p, up to 16 Mbps at 4K.
   const pixels = width * height;
-  const base = pixels * 0.12 * (fps / 30);
-  return Math.round(Math.min(48_000_000, Math.max(2_500_000, base)));
+  const base = pixels * 0.20 * (fps / 30);
+  return Math.round(Math.min(16_000_000, Math.max(2_500_000, base)));
 }
 
 export async function startRecording(
@@ -327,18 +329,37 @@ export async function startRecording(
       stopping = true;
       phase = 'stopping';
       try {
+        // Immediately halt screen acquisition to release GPU/D3D capture buffers
+        videoTrack.stop();
         await reader?.cancel().catch(() => undefined);
         // Let the pump unwind, then flush what's still in flight.
-        const deadline = Date.now() + 1_000;
+        const deadline = Date.now() + 800;
         while (pumpActive && Date.now() < deadline) {
           await new Promise((r) => setTimeout(r, 20));
         }
-        await encoder?.flush();
-        encoder?.close();
-        // Drain the ordered chunk queue, then close the final segment.
-        await writer.flush();
-        const audioFiles = await audio.stop();
-        videoTrack.stop();
+
+        // Flush encoder with safety timeout so hardware stalls never freeze the stop button
+        if (encoder) {
+          await Promise.race([
+            encoder.flush(),
+            new Promise((resolve) => setTimeout(resolve, 2_500)),
+          ]).catch(() => undefined);
+          try {
+            encoder.close();
+          } catch {
+            /* ignore if already closed */
+          }
+        }
+
+        // Drain the ordered chunk queue and write final segment with timeout
+        await Promise.race([
+          writer.flush(),
+          new Promise((resolve) => setTimeout(resolve, 3_000)),
+        ]).catch((e) => {
+          log('muxer', 'writer flush warning', (e as Error).message);
+        });
+
+        const audioFiles = await audio.stop().catch(() => []);
         clearInterval(statsTimer);
         log('muxer', 'recording finalized', `${writer.writtenSegments.length} segment(s) · ${((writer.totalBytes || 0) / 1_000_000).toFixed(1)} MB · ${encoderPath}`);
 
@@ -353,6 +374,7 @@ export async function startRecording(
         return { manifest: finalManifest, audioFiles };
       } catch (e) {
         clearInterval(statsTimer);
+        videoTrack.stop();
         const err = e as Error;
         log('muxer', 'stop flow failed', `${err.name}: ${err.message}`);
         callbacks.onError(`Stop failed: ${err.message}`);

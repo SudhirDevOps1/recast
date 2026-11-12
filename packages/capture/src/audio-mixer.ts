@@ -19,6 +19,7 @@ interface ActiveSource {
   encoder: AudioEncoder;
   muxer: WebMMuxer<WebMTarget>;
   node: AudioWorkletNode;
+  silenceNode?: GainNode;
   chunks: number;
   bytes: number;
 }
@@ -55,20 +56,42 @@ export class AudioCapture {
 
   private async startOne(src: AudioSource): Promise<void> {
     const ctx = new AudioContext({ sampleRate: RECORDING.SAMPLE_RATE, latencyHint: 'interactive' });
+    if (ctx.state === 'suspended') {
+      await ctx.resume().catch(() => undefined);
+    }
     await ensureWorkletModule(ctx);
     const node = new AudioWorkletNode(ctx, 'recast-tap', {
       numberOfInputs: 1,
-      numberOfOutputs: 0,
+      numberOfOutputs: 1,
       processorOptions: { bufferMs: 50, channels: 2 },
     });
+
+    // Route through silence to destination to keep Chromium's audio graph alive
+    const silence = ctx.createGain();
+    silence.gain.value = 0;
+    node.connect(silence);
+    silence.connect(ctx.destination);
 
     const muxer = new WebMMuxer({
       target: new WebMTarget(),
       audio: { codec: 'A_OPUS', sampleRate: RECORDING.SAMPLE_RATE, numberOfChannels: 2 },
     });
 
+    const active: ActiveSource = {
+      label: src.label,
+      ctx,
+      encoder: null as unknown as AudioEncoder,
+      muxer,
+      node,
+      silenceNode: silence,
+      chunks: 0,
+      bytes: 0,
+    };
+
     const encoder = new AudioEncoder({
       output: (chunk, meta) => {
+        active.chunks++;
+        active.bytes += chunk.byteLength;
         muxer.addAudioChunk(chunk, meta);
       },
       error: (e) => {
@@ -82,6 +105,7 @@ export class AudioCapture {
       bitrate: 128_000,
       opus: { frameDuration: 20_000 },
     });
+    active.encoder = encoder;
 
     const sourceNode = ctx.createMediaStreamSource(src.stream);
     sourceNode.connect(node);
@@ -94,7 +118,7 @@ export class AudioCapture {
           sampleRate: RECORDING.SAMPLE_RATE,
           numberOfFrames: msg.frames,
           numberOfChannels: 2,
-          timestamp: ctx.currentTime * 1e6,
+          timestamp: Math.round(ctx.currentTime * 1e6),
           data: msg.data.buffer as ArrayBuffer,
         });
         if (encoder.encodeQueueSize < 8) {
@@ -104,13 +128,16 @@ export class AudioCapture {
       }
     };
 
-    this.sources.push({ label: src.label, ctx, encoder, muxer, node, chunks: 0, bytes: 0 });
+    this.sources.push(active);
   }
 
   /** Live input meter (0..1) for the given source, or null when absent. */
   async meter(label: 'mic' | 'system'): Promise<number | null> {
     const s = this.sources.find((a) => a.label === label);
     if (!s) return null;
+    if (s.ctx.state === 'suspended') {
+      void s.ctx.resume().catch(() => undefined);
+    }
     return new Promise<number | null>((resolve) => {
       const handler = (e: MessageEvent) => {
         const msg = e.data as { type: string; peak?: number };
@@ -138,14 +165,25 @@ export class AudioCapture {
     const out: Array<{ label: string; file: string; bytes: ArrayBuffer }> = [];
     for (const s of this.sources) {
       try {
-        await s.encoder.flush();
-        s.encoder.close();
+        await Promise.race([
+          s.encoder.flush(),
+          new Promise((r) => setTimeout(r, 2_000)),
+        ]).catch(() => undefined);
+        try {
+          s.encoder.close();
+        } catch {
+          /* ignore already closed */
+        }
         s.muxer.finalize();
         const { buffer } = s.muxer.target as WebMTarget;
-        if (buffer && buffer.byteLength > 0) {
+        // Only return if chunks were actually received and file is well-formed (> 10KB)
+        if (s.chunks > 0 && buffer && buffer.byteLength > 10_000) {
           out.push({ label: s.label, file: `${s.label}.webm`, bytes: buffer });
+        } else {
+          console.warn(`audio source ${s.label}: 0 chunks or empty WebM (${buffer?.byteLength ?? 0} bytes) — skipping corrupt output`);
         }
         s.node.disconnect();
+        s.silenceNode?.disconnect();
         void s.ctx.close();
       } catch (e) {
         console.error(`audio source ${s.label} finalize failed`, e);

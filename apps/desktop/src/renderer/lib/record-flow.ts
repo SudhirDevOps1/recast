@@ -92,19 +92,37 @@ async function friendlyDisplayMediaError(e: unknown): Promise<Error> {
 }
 
 async function requestDisplayMedia(frameRate: number, withAudio: boolean): Promise<MediaStream> {
+  const videoConstraints = {
+    frameRate,
+    // Instruct Chromium not to embed the OS hardware cursor into video pixels.
+    // Recast's compositor renders the smooth styled cursor exclusively, avoiding double cursors.
+    cursor: 'never',
+  } as MediaTrackConstraints;
+
   try {
     return await navigator.mediaDevices.getDisplayMedia({
-      video: { frameRate },
+      video: videoConstraints,
       audio: withAudio,
     });
   } catch (e) {
-    if (!withAudio) throw await friendlyDisplayMediaError(e);
+    if (!withAudio) {
+      // Fallback without cursor constraint if platform strictly rejects it
+      try {
+        return await navigator.mediaDevices.getDisplayMedia({ video: { frameRate } });
+      } catch {
+        throw await friendlyDisplayMediaError(e);
+      }
+    }
     // Some platforms reject audio-constrained display requests outright —
     // recording must still work, so retry video-only.
     try {
-      return await navigator.mediaDevices.getDisplayMedia({ video: { frameRate } });
+      return await navigator.mediaDevices.getDisplayMedia({ video: videoConstraints });
     } catch {
-      throw await friendlyDisplayMediaError(e);
+      try {
+        return await navigator.mediaDevices.getDisplayMedia({ video: { frameRate } });
+      } catch {
+        throw await friendlyDisplayMediaError(e);
+      }
     }
   }
 }
@@ -186,8 +204,8 @@ export async function acquireCaptureSources(
     const attempt = async (exact: boolean): Promise<MediaStreamTrack | null> => {
       const cam = await navigator.mediaDevices.getUserMedia({
         video: exact
-          ? { deviceId: { exact: opts.cameraDeviceId! } }
-          : { width: { ideal: 960 }, height: { ideal: 720 } },
+          ? { deviceId: { exact: opts.cameraDeviceId! }, width: { ideal: 640 }, height: { ideal: 480 } }
+          : { width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { ideal: 30 } },
       });
       return cam.getVideoTracks()[0] ?? null;
     };
@@ -340,7 +358,14 @@ interface CameraRecording {
 }
 
 function pickCameraMime(): string {
-  const candidates = ['video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm'];
+  // Prioritize hardware-accelerated codecs (VP8/H.264) over VP9 software encoding on Windows
+  const candidates = [
+    'video/webm;codecs=vp8',
+    'video/webm;codecs=h264',
+    'video/mp4;codecs=avc1',
+    'video/webm',
+    'video/webm;codecs=vp9',
+  ];
   for (const c of candidates) {
     try {
       if (typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported(c)) return c;
@@ -356,7 +381,7 @@ function startCameraRecorder(track: MediaStreamTrack): CameraRecording | null {
     const mime = pickCameraMime();
     const recorder = new MediaRecorder(new MediaStream([track]), {
       ...(mime ? { mimeType: mime } : {}),
-      videoBitsPerSecond: 1_500_000,
+      videoBitsPerSecond: 800_000,
     });
     const chunks: Blob[] = [];
     recorder.ondataavailable = (e) => {
@@ -411,24 +436,36 @@ function wrapHandleWithCamera(
       return handle.compatibilityMode;
     },
     async stop() {
-      const result = await handle.stop();
-      try {
-        if (!camera.stopped) {
-          camera.stopped = true;
-          await new Promise<void>((resolve) => {
-            const r = camera.recorder;
-            const done = (): void => resolve();
-            r.addEventListener('stop', done, { once: true });
-            try {
-              if (r.state !== 'inactive') r.stop();
-              else done();
-            } catch {
-              done();
-            }
-            // Never hang the take on a stuck camera stream.
-            setTimeout(done, 3_000);
-          });
+      // 1. Kick off camera stop in parallel
+      const cameraStopPromise = (async () => {
+        try {
+          if (!camera.stopped) {
+            camera.stopped = true;
+            await new Promise<void>((resolve) => {
+              const r = camera.recorder;
+              const done = (): void => resolve();
+              r.addEventListener('stop', done, { once: true });
+              try {
+                if (r.state !== 'inactive') r.stop();
+                else done();
+              } catch {
+                done();
+              }
+              // Never hang the take on a stuck camera stream.
+              setTimeout(done, 2_000);
+            });
+          }
+        } catch {
+          /* camera stop is best effort */
         }
+      })();
+
+      // 2. Stop screen capture
+      const result = await handle.stop();
+
+      // 3. Finalize camera recording
+      try {
+        await cameraStopPromise;
         const blob = new Blob(camera.chunks, { type: camera.recorder.mimeType || 'video/webm' });
         if (blob.size > 0) {
           const bytes = await blob.arrayBuffer();
@@ -473,8 +510,9 @@ function wrapHandleWithCamera(
         }
       } catch (e) {
         logCapture('camera', 'warn', 'face-cam finalize failed — screen take is unaffected', (e as Error).message);
+      } finally {
+        camera.track.stop();
       }
-      camera.track.stop();
       return result;
     },
   };

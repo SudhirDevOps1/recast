@@ -12,6 +12,7 @@ import {
   drawComposition,
   buildZoomTrack,
   buildProjectZoomTrack,
+  computeAutoZoom,
   cuesAt,
   parseSrt,
   FrameSync,
@@ -19,7 +20,7 @@ import {
   type CaptionLine,
   type FollowStep,
 } from '@recast/editor';
-import { segmentLocalTimeUs, type RecastProject } from '@recast/shared';
+import { segmentLocalTimeUs, type RecastProject, type CaptionModel } from '@recast/shared';
 import { TimelineStrip, relayoutProject } from './TimelineStrip';
 import { MotionPanel } from './MotionPanel';
 import { AudioPanel } from './AudioPanel';
@@ -52,14 +53,31 @@ export function EditorView() {
   const timeMap = useMemo(() => (project ? buildTimeMap(project.timeline.clips) : { clips: [], durationUs: 0 }), [project]);
 
   // Zoom track (deterministic; shared with export).
+  // In auto mode: strictly zoom into clicks, hold ~1.8s, then smoothly return to Full Screen (1.0x).
   const zoomTrack = useMemo<FollowStep[]>(() => {
     if (!project) return [];
     if (!project.zoom.enabled) return [];
     if (project.zoom.mode === 'follow' && cursorSamples.length > 0) {
       return buildProjectZoomTrack(project, cursorSamples, cursorClicks).track;
     }
-    const kfs = project.zoom.mode === 'manual' ? project.zoom.manualKeyframes : project.zoom.autoKeyframes;
-    return buildZoomTrack(kfs, project.media.width || 1920, project.media.height || 1080, project.zoom.intensity, timeMap.durationUs);
+    const w = project.media.width || 1920;
+    const h = project.media.height || 1080;
+    let kfs: import('@recast/shared').ZoomKeyframe[];
+    if (project.zoom.mode === 'manual') {
+      kfs = project.zoom.manualKeyframes;
+    } else {
+      if (cursorClicks.length > 0) {
+        kfs = computeAutoZoom(cursorSamples, cursorClicks, w, h, project.zoom.intensity, {
+          ignoreSpeed: true,
+          includeDwell: false,
+          returnToFullScreen: true,
+          holdUs: 1_800_000,
+        });
+      } else {
+        kfs = [];
+      }
+    }
+    return buildZoomTrack(kfs, w, h, project.zoom.intensity, timeMap.durationUs);
   }, [project, cursorSamples, cursorClicks, timeMap.durationUs]);
 
   // Hidden video elements per segment — the decode source for preview + export.
@@ -710,9 +728,33 @@ function FacecamPanel({
               onValueChange={(v) => setFacecam({ widthFraction: v })}
             />
           </Field>
-          <Field label="Round face cam">
-            <Switch checked={fc.round} onCheckedChange={(v) => setFacecam({ round: v })} ariaLabel="Round face cam" />
+          <Field label="Camera shape">
+            <Select
+              value={fc.shape ?? (fc.round ? 'circle' : 'rectangle')}
+              onValueChange={(s) => {
+                const shape = s as 'circle' | 'squircle' | 'rectangle';
+                setFacecam({ shape, round: shape === 'circle' });
+              }}
+              options={[
+                { value: 'circle', label: 'Circle' },
+                { value: 'squircle', label: 'Squircle (Smooth Apple style)' },
+                { value: 'rectangle', label: 'Rectangle' },
+              ]}
+              ariaLabel="Camera shape"
+            />
           </Field>
+          {fc.shape === 'squircle' ? (
+            <Field label={`Squircle curvature — ${Math.round((fc.squircleCurvature ?? 0.6) * 100)}%`}>
+              <Slider
+                value={fc.squircleCurvature ?? 0.6}
+                min={0.2}
+                max={1.0}
+                step={0.05}
+                ariaLabel="Squircle curvature"
+                onValueChange={(squircleCurvature) => setFacecam({ squircleCurvature })}
+              />
+            </Field>
+          ) : null}
           <Field label="Mirror">
             <Switch checked={fc.mirror} onCheckedChange={(v) => setFacecam({ mirror: v })} ariaLabel="Mirror webcam" />
           </Field>
@@ -778,99 +820,234 @@ function CaptionsPanel({
 }): React.ReactElement {
   const showToast = useApp((s) => s.showToast);
   const ffmpeg = useApp((s) => s.ffmpeg);
-  const [models, setModels] = useState<Array<{ id: string; label: string; downloaded: boolean; language: string }>>([]);
-  const [busy, setBusy] = useState(false);
+  const [models, setModels] = useState<Array<{ id: string; label: string; sizeMb: number; downloaded: boolean; language: string }>>([]);
+  const [selectedModelId, setSelectedModelId] = useState<string>('ggml-tiny.en');
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
+  const [downloadPct, setDownloadPct] = useState<number>(0);
+  const [transcribing, setTranscribing] = useState<boolean>(false);
+
+  const refreshModels = async () => {
+    try {
+      const list = (await bridge().invoke('captions:models', undefined)) as CaptionModel[];
+      setModels(list);
+      // Pick first downloaded model if current not downloaded
+      const hasCurrent = list.some((m: CaptionModel) => m.id === selectedModelId && m.downloaded);
+      if (!hasCurrent) {
+        const firstDownloaded = list.find((m: CaptionModel) => m.downloaded);
+        if (firstDownloaded) setSelectedModelId(firstDownloaded.id);
+      }
+    } catch {
+      setModels([]);
+    }
+  };
 
   useEffect(() => {
-    void bridge().invoke('captions:models', undefined).then(setModels).catch(() => setModels([]));
+    void refreshModels();
   }, []);
+
+  const handleDownloadModel = async (id: string) => {
+    const m = models.find((x) => x.id === id);
+    setDownloadingId(id);
+    setDownloadPct(0);
+    showToast(`Downloading ${m?.label ?? id}…`, 'info');
+
+    const off = bridge().on('whisper:download', ({ pct, done, error }) => {
+      if (error) {
+        showToast(`Model download failed: ${error}`, 'error');
+        setDownloadingId(null);
+        off();
+      } else if (done) {
+        showToast(`${m?.label ?? 'Model'} ready!`, 'success');
+        setDownloadingId(null);
+        off();
+        void refreshModels();
+      } else {
+        setDownloadPct(pct);
+      }
+    });
+
+    try {
+      const res = await bridge().invoke('captions:downloadModel', { id });
+      if (!res.ok && res.error) {
+        showToast(`Model download failed: ${res.error}`, 'error');
+        setDownloadingId(null);
+        off();
+      }
+    } catch (e) {
+      showToast(`Download failed: ${(e as Error).message}`, 'error');
+      setDownloadingId(null);
+      off();
+    }
+  };
+
+  const handleTranscribe = async () => {
+    if (!selectedModelId) return;
+    setTranscribing(true);
+    showToast('Extracting audio & generating AI subtitles…', 'info');
+    try {
+      const r = await bridge().invoke('captions:transcribe', {
+        projectId: project.id,
+        modelId: selectedModelId,
+        language: 'auto',
+      });
+      if (r.ok) {
+        showToast('Subtitles generated successfully!', 'success');
+        const updated = await bridge().invoke('library:open', { id: project.id });
+        if (updated) {
+          commit(updated);
+          if (updated.captions) {
+            const raw = await bridge().invoke('capture:readCaptions', { path: updated.captions.file } as never);
+            onLoaded(parseSrt(raw as string).map((c) => ({ text: c.text.replace(/\n/g, ' '), startUs: c.startUs, endUs: c.endUs })));
+          }
+        }
+      } else {
+        showToast(r.error ?? 'Transcription failed.', 'error');
+      }
+    } catch (e) {
+      showToast(`Transcription error: ${(e as Error).message}`, 'error');
+    } finally {
+      setTranscribing(false);
+    }
+  };
+
+  const activeModel = models.find((m) => m.id === selectedModelId) ?? models[0];
 
   return (
     <div className="space-y-4">
       {!ffmpeg?.available ? (
         <div className="rounded-lg border p-3 text-xs" style={{ borderColor: 'var(--warning)', color: 'var(--warning)' }}>
-          Captions need FFmpeg (audio extraction) and a whisper.cpp binary. Install FFmpeg below in Settings → Media engine.
+          Captions require FFmpeg for audio extraction. Please verify Media Engine in Settings.
         </div>
       ) : null}
-      <Field label="Whisper model">
+
+      <Field label="Whisper AI Model">
         <Select
-          value=""
-          onValueChange={async (id) => {
-            if (!id) return;
-            const m = models.find((x) => x.id === id);
-            if (m && !m.downloaded) {
-              setBusy(true);
-              showToast('Downloading model…', 'info');
-              const off = bridge().on('whisper:download', ({ pct, done, error }) => {
-                if (error) showToast(`Model download failed: ${error}`, 'error');
-                if (done) {
-                  showToast('Model ready.', 'success');
-                  off();
-                  void bridge().invoke('captions:models', undefined).then(setModels);
-                } else {
-                  showToast(`Downloading model… ${pct}%`, 'info');
-                }
-              });
-              await bridge().invoke('captions:downloadModel', { id });
-              setBusy(false);
-              return;
-            }
-            setBusy(true);
-            const r = await bridge().invoke('captions:transcribe', { projectId: project.id, modelId: id, language: 'auto' });
-            setBusy(false);
-            if (r.ok) {
-              showToast('Captions generated.', 'success');
-              const updated = await bridge().invoke('library:open', { id: project.id });
-              if (updated) {
-                commit(updated);
-                if (updated.captions) {
-                  const raw = await bridge().invoke('capture:readCaptions', { path: updated.captions.file } as never);
-                  onLoaded(parseSrt(raw as string).map((c) => ({ text: c.text.replace(/\n/g, ' '), startUs: c.startUs, endUs: c.endUs })));
-                }
-              }
-            } else {
-              showToast(r.error ?? 'Transcription failed.', 'error');
-            }
-          }}
-          options={[
-            { value: '', label: models.length ? 'Choose model…' : 'No models available', disabled: true },
-            ...models.map((m) => ({ value: m.id, label: `${m.label}${m.downloaded ? '' : ' (download)'}` })),
-          ]}
+          value={activeModel?.id ?? ''}
+          onValueChange={(id) => setSelectedModelId(id)}
+          options={models.map((m) => ({
+            value: m.id,
+            label: `${m.label} (${m.sizeMb} MB)${m.downloaded ? ' — Ready' : ' — Need Download'}`,
+          }))}
           ariaLabel="Whisper model"
+          fullWidth
         />
       </Field>
-      <Button
-        disabled={!project.captions}
-        onClick={async () => {
-          const r = await bridge().invoke('captions:import', { projectId: project.id });
-          showToast(r.ok ? 'Subtitles imported.' : (r.error ?? 'Import cancelled.'), r.ok ? 'success' : 'info');
-        }}
-      >
-        Import .srt / .vtt
-      </Button>
-      <Button
-        disabled={!project.captions}
-        onClick={async () => {
-          const r = await bridge().invoke('captions:exportFile', { projectId: project.id, kind: 'srt' });
-          if (r.path) showToast(`Saved ${r.path}`, 'success');
-        }}
-      >
-        Export .srt
-      </Button>
+
+      {/* Model Status Card */}
+      {activeModel ? (
+        <div className="rounded-lg border border-hairline p-3 space-y-2.5 bg-black/20">
+          <div className="flex items-center justify-between text-xs">
+            <span className="font-semibold text-white/90">{activeModel.label}</span>
+            {activeModel.downloaded ? (
+              <span className="text-[11px] font-medium text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded">
+                ✓ Ready (Downloaded)
+              </span>
+            ) : (
+              <span className="text-[11px] font-medium text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded">
+                ⬇ Needs Download ({activeModel.sizeMb} MB)
+              </span>
+            )}
+          </div>
+
+          {activeModel.downloaded ? (
+            <Button
+              variant="primary"
+              disabled={transcribing || !ffmpeg?.available}
+              onClick={handleTranscribe}
+            >
+              <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
+                {transcribing ? 'Generating Subtitles…' : '✨ Generate AI Subtitles'}
+              </span>
+            </Button>
+          ) : (
+            <div className="space-y-2">
+              <Button
+                variant="primary"
+                disabled={downloadingId === activeModel.id}
+                onClick={() => handleDownloadModel(activeModel.id)}
+              >
+                <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
+                  {downloadingId === activeModel.id
+                    ? `Downloading… ${downloadPct}%`
+                    : `⬇ Download Model (${activeModel.sizeMb} MB)`}
+                </span>
+              </Button>
+              {downloadingId === activeModel.id ? (
+                <div className="w-full bg-white/10 rounded-full h-1.5 overflow-hidden">
+                  <div
+                    className="bg-indigo-500 h-1.5 rounded-full transition-all duration-200"
+                    style={{ width: `${downloadPct}%` }}
+                  />
+                </div>
+              ) : null}
+            </div>
+          )}
+        </div>
+      ) : null}
+
+      {/* Models Quick List */}
+      <div className="rounded-lg border border-hairline p-3 space-y-2">
+        <div className="text-xs font-semibold" style={{ color: 'var(--text-secondary)' }}>
+          Available Speech Models (Offline GGML)
+        </div>
+        <div className="space-y-1.5 max-h-36 overflow-auto pr-1">
+          {models.map((m) => (
+            <div key={m.id} className="flex items-center justify-between text-xs py-1 border-b border-white/5 last:border-0">
+              <div>
+                <span className="font-medium text-white/80">{m.label}</span>
+                <span className="text-white/40 ml-1.5">({m.sizeMb} MB)</span>
+              </div>
+              {m.downloaded ? (
+                <span className="text-emerald-400 text-[11px]">✓ Installed</span>
+              ) : (
+                <button
+                  type="button"
+                  disabled={downloadingId === m.id}
+                  onClick={() => handleDownloadModel(m.id)}
+                  className="px-2 py-0.5 rounded bg-white/10 hover:bg-white/20 text-[11px] font-medium text-white/90 transition-colors"
+                >
+                  {downloadingId === m.id ? `${downloadPct}%` : 'Download'}
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="flex gap-2">
+        <Button
+          onClick={async () => {
+            const r = await bridge().invoke('captions:import', { projectId: project.id });
+            showToast(r.ok ? 'Subtitles imported.' : (r.error ?? 'Import cancelled.'), r.ok ? 'success' : 'info');
+          }}
+        >
+          Import .srt
+        </Button>
+        <Button
+          disabled={!project.captions}
+          onClick={async () => {
+            const r = await bridge().invoke('captions:exportFile', { projectId: project.id, kind: 'srt' });
+            if (r.path) showToast(`Saved ${r.path}`, 'success');
+          }}
+        >
+          Export .srt
+        </Button>
+      </div>
+
       <div>
         <div className="mb-2 text-xs font-semibold" style={{ color: 'var(--text-secondary)' }}>
           {captions.length} cue{captions.length === 1 ? '' : 's'} loaded
         </div>
         <div className="max-h-40 space-y-1 overflow-auto rounded-lg border border-hairline p-2 text-xs">
-          {captions.slice(0, 12).map((c, i) => (
+          {captions.slice(0, 15).map((c, i) => (
             <div key={i} className="tabular" style={{ color: 'var(--text-muted)' }}>
-              {formatClock(c.startUs)} — {c.text.slice(0, 48)}
+              {formatClock(c.startUs)} — {c.text.slice(0, 52)}
             </div>
           ))}
-          {captions.length === 0 ? <span style={{ color: 'var(--text-muted)' }}>No captions yet.</span> : null}
+          {captions.length === 0 ? <span style={{ color: 'var(--text-muted)' }}>No captions yet. Click Generate AI Subtitles above.</span> : null}
         </div>
       </div>
-      {busy ? <div className="text-xs" style={{ color: 'var(--text-muted)' }}>Working…</div> : null}
+      {transcribing ? <div className="text-xs text-indigo-400 animate-pulse">Running Whisper inference locally…</div> : null}
     </div>
   );
 }

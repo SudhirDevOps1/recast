@@ -58,7 +58,7 @@ describe('.recaststyle', () => {
     expect(error).toContain('Invalid JSON');
   });
 
-  it('all seven builtins are valid', () => {
-    expect(BUILTIN_PRESETS.length).toBe(7);
+  it('all nine builtins are valid', () => {
+    expect(BUILTIN_PRESETS.length).toBe(9);
   });
 });

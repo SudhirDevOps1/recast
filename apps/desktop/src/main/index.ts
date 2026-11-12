@@ -60,6 +60,7 @@ async function bootstrap(): Promise<void> {
     settings,
     mainWindow: null,
     toolbarWindow: null,
+    cameraWindow: null,
     areaWindow: null,
     recorderHandle: null,
     inputSampler: null,

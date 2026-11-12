@@ -236,7 +236,9 @@ export class FrameSync {
     if (!b.seeking && Math.abs(v.currentTime - target) > this.opts.seekToleranceUs / 1e6) {
       this.seekTo(segmentId, sourceUs);
     }
-    return b.snapshot;
+    // Return the cached snapshot if available; if ready but no snapshot yet,
+    // return the live video rather than collapsing to null.
+    return b.snapshot ?? (ready ? v : null);
   }
 
   /** true when at least one segment has ever presented a decodable frame. */

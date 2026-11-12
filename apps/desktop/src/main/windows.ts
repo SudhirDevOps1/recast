@@ -1,4 +1,4 @@
-import { BrowserWindow, app } from 'electron';
+import { BrowserWindow, app, screen } from 'electron';
 import { join } from 'node:path';
 import { context } from './context';
 
@@ -96,9 +96,17 @@ async function stopRecorderAndClose(win: BrowserWindow): Promise<void> {
 export function createToolbarWindow(): BrowserWindow {
   const c = context();
   if (c.toolbarWindow) return c.toolbarWindow;
+  const primary = screen.getPrimaryDisplay();
+  const width = 410;
+  const height = 50;
+  const x = Math.round(primary.workArea.x + (primary.workArea.width - width) / 2);
+  const y = Math.round(primary.workArea.y + primary.workArea.height - height - 28);
+
   const win = new BrowserWindow({
-    width: 380,
-    height: 48,
+    x,
+    y,
+    width,
+    height,
     frame: false,
     resizable: false,
     fullscreenable: false,
@@ -118,6 +126,14 @@ export function createToolbarWindow(): BrowserWindow {
   win.setAlwaysOnTop(true, 'floating');
   // Exclude floating toolbar from screen recording so it is never baked into footage
   win.setContentProtection(true);
+  win.on('show', () => {
+    try {
+      win.setContentProtection(true);
+    } catch {
+      /* ignore */
+    }
+  });
+
   const devUrl = process.env.RECAST_DEV_URL ?? process.env.ELECTRON_RENDERER_URL;
   if (devUrl) void win.loadURL(`${devUrl.replace(/\/$/, '')}/toolbar.html`);
   else void win.loadFile(join(__dirname, '../renderer/toolbar.html'));
@@ -126,6 +142,58 @@ export function createToolbarWindow(): BrowserWindow {
     if (ctx.toolbarWindow === win) ctx.toolbarWindow = null;
   });
   c.toolbarWindow = win;
+  return win;
+}
+
+export function createFloatingCameraWindow(): BrowserWindow {
+  const c = context();
+  if (c.cameraWindow) return c.cameraWindow;
+  const primary = screen.getPrimaryDisplay();
+  const size = 220;
+  const x = Math.round(primary.workArea.x + primary.workArea.width - size - 32);
+  const y = Math.round(primary.workArea.y + primary.workArea.height - size - 96);
+
+  const win = new BrowserWindow({
+    x,
+    y,
+    width: size,
+    height: size,
+    frame: false,
+    resizable: false,
+    fullscreenable: false,
+    skipTaskbar: true,
+    alwaysOnTop: true,
+    transparent: true,
+    hasShadow: false,
+    show: false,
+    webPreferences: {
+      preload: PRELOAD,
+      contextIsolation: true,
+      sandbox: true,
+      nodeIntegration: false,
+      backgroundThrottling: false,
+    },
+  });
+  win.setAlwaysOnTop(true, 'floating');
+  // Exclude floating webcam window from screen capture so footage is clean!
+  win.setContentProtection(true);
+  win.on('show', () => {
+    try {
+      win.setContentProtection(true);
+    } catch {
+      /* ignore */
+    }
+  });
+
+  const devUrl = process.env.RECAST_DEV_URL ?? process.env.ELECTRON_RENDERER_URL;
+  if (devUrl) void win.loadURL(`${devUrl.replace(/\/$/, '')}/camera.html`);
+  else void win.loadFile(join(__dirname, '../renderer/camera.html'));
+
+  win.on('closed', () => {
+    const ctx = context();
+    if (ctx.cameraWindow === win) ctx.cameraWindow = null;
+  });
+  c.cameraWindow = win;
   return win;
 }
 

@@ -16,7 +16,7 @@ import { buildProjectFromSession, loadProject, saveProject, readCursorJsonl, sug
 import { permissionStatus, openPermissionSettings, requestAccess } from './permissions';
 import { InputSampler } from './input-sampler';
 import { ffmpegState, installFfmpeg, broadcastFfmpegProgress } from './ffmpeg-service';
-import { whisperStatus, downloadWhisperModel, transcribe } from './whisper';
+import { whisperStatus, downloadWhisperModel, transcribe, installWhisperBinary } from './whisper';
 import { checkForUpdates, downloadUpdate, installUpdate } from './updater';
 import { applyWindowTheme } from './windows';
 import { ensureSeekableWebm } from './media-index';
@@ -226,16 +226,27 @@ export async function registerIpcHandlers(): Promise<void> {
       c.mainWindow.show();
       c.mainWindow.focus();
       c.mainWindow.webContents.send('recorder:requestStop');
+      // Secondary dispatch ensures throttled/sleeping renderer processes receive the message
+      setTimeout(() => {
+        if (c.mainWindow && !c.mainWindow.isDestroyed()) {
+          c.mainWindow.webContents.send('recorder:requestStop');
+        }
+      }, 150);
     }
-    if (c.toolbarWindow && !c.toolbarWindow.isDestroyed()) {
-      c.toolbarWindow.close();
-    }
-    c.toolbarWindow = null;
   });
   register('recorder:minimizeMainWindow', () => {
     if (c.mainWindow && !c.mainWindow.isDestroyed()) {
       c.mainWindow.minimize();
     }
+  });
+  register('camera:setSize', (payload) => {
+    const { size } = payload as { size: number };
+    if (c.cameraWindow && !c.cameraWindow.isDestroyed()) {
+      const s = Math.max(120, Math.min(480, size));
+      c.cameraWindow.setSize(s, s);
+      return true;
+    }
+    return false;
   });
   register('recorder:stop', async () => {
     // The renderer stopped its capture handle first; this finalizes on disk:
@@ -247,6 +258,10 @@ export async function registerIpcHandlers(): Promise<void> {
       c.toolbarWindow.close();
     }
     c.toolbarWindow = null;
+    if (c.cameraWindow && !c.cameraWindow.isDestroyed()) {
+      c.cameraWindow.close();
+    }
+    c.cameraWindow = null;
     if (c.areaWindow && !c.areaWindow.isDestroyed()) {
       c.areaWindow.close();
     }
@@ -517,6 +532,14 @@ export async function registerIpcHandlers(): Promise<void> {
   });
 
   // ---------------- captions ----------------
+  register('captions:status', async () => {
+    return await whisperStatus();
+  });
+  register('captions:installBinary', async () => {
+    return await installWhisperBinary((pct) => {
+      broadcastEvent('whisper:download', { modelId: '__binary__', pct, done: pct >= 100 });
+    });
+  });
   register('captions:models', async () => {
     const status = await whisperStatus();
     return status.models;
@@ -638,12 +661,18 @@ export async function registerIpcHandlers(): Promise<void> {
 
     // Launch floating live toolbar if not already present
     try {
-      void import('./windows').then(({ createToolbarWindow }) => {
+      void import('./windows').then(({ createToolbarWindow, createFloatingCameraWindow }) => {
         const tb = createToolbarWindow();
         tb.showInactive();
+
+        // If recording with camera, launch draggable floating webcam bubble
+        if (c.recorderRequest?.cameraDeviceId) {
+          const cam = createFloatingCameraWindow();
+          cam.showInactive();
+        }
       });
     } catch {
-      /* toolbar window creation is best-effort */
+      /* auxiliary window creation is best-effort */
     }
   });
   register('capture:writeSegment', async (payload) => {

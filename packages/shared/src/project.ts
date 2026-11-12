@@ -96,6 +96,14 @@ export const AnimationSchema = z.object({
 });
 export type Animation = z.infer<typeof AnimationSchema>;
 
+export const VoiceEqSchema = z.object({
+  enabled: z.boolean().default(false),
+  rumbleCutHz: z.number().min(40).max(160).default(80),
+  presenceBoostDb: z.number().min(0).max(12).default(3.5),
+  presenceFrequencyHz: z.number().min(1000).max(6000).default(3000),
+});
+export type VoiceEq = z.infer<typeof VoiceEqSchema>;
+
 export const AudioEditsSchema = z.object({
   gainDb: z.number().min(-24).max(12).default(0),
   fadeInMs: z.number().min(0).max(2000).default(0),
@@ -103,6 +111,7 @@ export const AudioEditsSchema = z.object({
   noiseGateDb: z.number().optional(),
   normalizeLufs: z.boolean().default(false),
   duckMusic: z.boolean().default(false),
+  voiceEq: VoiceEqSchema.default({ enabled: false, rumbleCutHz: 80, presenceBoostDb: 3.5, presenceFrequencyHz: 3000 }),
 });
 export type AudioEdits = z.infer<typeof AudioEditsSchema>;
 
@@ -228,7 +237,14 @@ export function makeEmptyProject(
     style,
     annotations: [],
     redactions: [],
-    audioEdits: { gainDb: 0, fadeInMs: 0, fadeOutMs: 0, normalizeLufs: false, duckMusic: false },
+    audioEdits: {
+      gainDb: 0,
+      fadeInMs: 0,
+      fadeOutMs: 0,
+      normalizeLufs: false,
+      duckMusic: false,
+      voiceEq: { enabled: false, rumbleCutHz: 80, presenceBoostDb: 3.5, presenceFrequencyHz: 3000 },
+    },
     animation: { fadeInMs: 0, fadeOutMs: 0 },
     captions: null,
     crop: null,

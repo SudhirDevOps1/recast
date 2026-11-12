@@ -62,6 +62,12 @@ export function binDir(): string {
   return d;
 }
 
+export function whisperDir(): string {
+  const d = join(dataRoot(), 'bin', 'whisper');
+  mkdirSync(d, { recursive: true });
+  return d;
+}
+
 export function settingsFile(): string {
   return join(dataRoot(), 'settings.json');
 }

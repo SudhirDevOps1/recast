@@ -4,18 +4,27 @@ import { bridge } from '../lib/bridge';
 import { Button, Field, Select, Progress, Badge, IconDownload } from '@recast/ui';
 import { formatClock } from '@recast/shared';
 import { runExport, type ExportProgress } from '@recast/export';
-import { buildTimeMap, buildZoomTrack, cuesAt, parseSrt, type CaptionLine, type FollowStep } from '@recast/editor';
+import { buildTimeMap, buildZoomTrack, computeAutoZoom, cuesAt, parseSrt, type CaptionLine, type FollowStep } from '@recast/editor';
 import { captureMediaHost, beginChunkedExport } from '../lib/export-host';
 import type { RecastProject } from '@recast/shared';
 
 /** Quick-apply export bundles — every field stays editable below. */
-const EXPORT_PRESETS: Array<{ label: string; format: 'mp4' | 'webm' | 'hevc' | 'prores' | 'gif'; resolution: '720p' | '1080p' | '1440p' | '2160p' | 'source'; fps: 24 | 30 | 60 }> = [
+const EXPORT_PRESETS: Array<{
+  label: string;
+  format: 'mp4' | 'webm' | 'hevc' | 'prores' | 'gif';
+  resolution: '720p' | '1080p' | '1440p' | '2160p' | 'source';
+  fps: 24 | 30 | 60;
+  aspect?: string;
+}> = [
   { label: 'YouTube 1080p', format: 'mp4', resolution: '1080p', fps: 30 },
+  { label: 'Reels / Shorts (9:16)', format: 'mp4', resolution: '1080p', fps: 30, aspect: '9:16' },
+  { label: 'Social Square (1:1)', format: 'mp4', resolution: '1080p', fps: 30, aspect: '1:1' },
+  { label: 'Social Portrait (4:5)', format: 'mp4', resolution: '1080p', fps: 30, aspect: '4:5' },
   { label: 'Smooth 60 fps', format: 'mp4', resolution: '1080p', fps: 60 },
-  { label: '4K master', format: 'mp4', resolution: '2160p', fps: 30 },
+  { label: '4K Master', format: 'mp4', resolution: '2160p', fps: 30 },
   { label: 'Light 720p', format: 'mp4', resolution: '720p', fps: 24 },
   { label: 'Animated GIF', format: 'gif', resolution: '720p', fps: 24 },
-  { label: 'WebM lossless-ish', format: 'webm', resolution: 'source', fps: 30 },
+  { label: 'WebM lossless', format: 'webm', resolution: 'source', fps: 30 },
 ];
 
 /** Export: format, resolution, honest estimates, used-path display, verify. */
@@ -57,8 +66,27 @@ export function ExportView() {
         setKeystrokes(cursor.keys as Array<{ tUs: number; key: string }>);
       }
       const map = buildTimeMap(p.timeline.clips);
-      const kfs = p.zoom.mode === 'manual' ? p.zoom.manualKeyframes : p.zoom.autoKeyframes;
-      setZoomTrack(p.zoom.enabled ? buildZoomTrack(kfs, p.media.width || 1920, p.media.height || 1080, p.zoom.intensity, map.durationUs) : []);
+      const w = p.media.width || 1920;
+      const h = p.media.height || 1080;
+      let kfs: import('@recast/shared').ZoomKeyframe[];
+      if (p.zoom.mode === 'manual') {
+        kfs = p.zoom.manualKeyframes;
+      } else if (p.zoom.mode === 'auto') {
+        const clicks = (cursor.clicks ?? []) as Array<{ tUs: number; x: number; y: number }>;
+        if (clicks.length > 0) {
+          kfs = computeAutoZoom(samples, clicks, w, h, p.zoom.intensity, {
+            ignoreSpeed: true,
+            includeDwell: false,
+            returnToFullScreen: true,
+            holdUs: 1_800_000,
+          });
+        } else {
+          kfs = [];
+        }
+      } else {
+        kfs = p.zoom.autoKeyframes;
+      }
+      setZoomTrack(p.zoom.enabled ? buildZoomTrack(kfs, w, h, p.zoom.intensity, map.durationUs) : []);
       if (p.captions) {
         const raw = await bridge().invoke('capture:readCaptions', { path: p.captions.file });
         if (typeof raw === 'string') {
@@ -220,6 +248,9 @@ export function ExportView() {
                   setFormat(p.format);
                   setResolution(p.resolution);
                   setFps(p.fps);
+                  if (p.aspect && project) {
+                    setProject({ ...project, style: { ...project.style, aspect: p.aspect } });
+                  }
                 }}
                 className="rounded-full border px-3 py-1.5 text-xs font-semibold transition-all"
                 style={{

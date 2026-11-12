@@ -72,6 +72,7 @@ export default defineConfig({
           index: resolve(__dirname, 'src/renderer/index.html'),
           toolbar: resolve(__dirname, 'src/renderer/toolbar.html'),
           area: resolve(__dirname, 'src/renderer/area.html'),
+          camera: resolve(__dirname, 'src/renderer/camera.html'),
         },
       },
     },

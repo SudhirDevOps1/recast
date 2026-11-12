@@ -53,9 +53,14 @@ export default function ToolbarApp() {
   const handleStop = async (): Promise<void> => {
     if (stopping) return;
     setStopping(true);
+    // Safety fallback: never leave the toolbar button permanently disabled
+    const timer = setTimeout(() => {
+      setStopping(false);
+    }, 6_000);
     try {
       await bridge().invoke('recorder:triggerStop', undefined);
     } catch {
+      clearTimeout(timer);
       setStopping(false);
     }
   };
@@ -79,11 +84,31 @@ export default function ToolbarApp() {
         backdropFilter: 'blur(24px)',
         height: '100%',
         boxShadow: '0 12px 36px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255, 255, 255, 0.08)',
-        WebkitAppRegion: 'drag',
+        WebkitAppRegion: 'no-drag',
       } as React.CSSProperties}
     >
+      {/* 0. Dedicated Drag Handle */}
+      <div
+        className="flex items-center justify-center px-1.5 py-1 cursor-grab active:cursor-grabbing text-white/50 hover:text-white transition-colors shrink-0 rounded hover:bg-white/10"
+        title="Click & drag recording toolbar anywhere on your screen"
+        style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
+      >
+        <svg width="10" height="18" viewBox="0 0 10 18" fill="currentColor">
+          <circle cx="3" cy="3" r="1.5" />
+          <circle cx="7" cy="3" r="1.5" />
+          <circle cx="3" cy="9" r="1.5" />
+          <circle cx="7" cy="9" r="1.5" />
+          <circle cx="3" cy="15" r="1.5" />
+          <circle cx="7" cy="15" r="1.5" />
+        </svg>
+      </div>
+
       {/* 1. Rec indicator + Live Elapsed Timer */}
-      <div className="flex items-center gap-2 shrink-0">
+      <div
+        className="flex items-center gap-2 shrink-0 cursor-grab active:cursor-grabbing"
+        style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
+        title="Drag toolbar"
+      >
         <Badge tone={paused ? 'warning' : 'recording'}>
           <span
             className={`inline-block h-2 w-2 rounded-full ${paused ? '' : 'animate-pulse'}`}

@@ -71,10 +71,13 @@ export interface FacecamRect {
   radiusPx: number;
   /** Circular mode crops the source to a centered square. */
   round: boolean;
+  shape?: 'circle' | 'squircle' | 'rectangle';
+  squircleCurvature?: number;
   mirror: boolean;
   shadow: boolean;
   borderWidthPx: number;
   borderColor: string;
+  borderGradient?: { from: string; to: string; angleDeg: number };
   opacity: number;
 }
 
@@ -87,6 +90,16 @@ export interface Composition {
   outW: number;
   outH: number;
   background: RecastProject['style']['frame']['background'];
+  /** Outer window rectangle containing window chrome + inner screen. */
+  windowRect?: Rect;
+  /** Window chrome configuration resolved for drawing. */
+  windowChrome?: {
+    enabled: boolean;
+    style: 'macos-dark' | 'macos-light' | 'windows' | 'glass' | 'none';
+    title: string;
+    heightPx: number;
+    showButtons: boolean;
+  };
   /** Where the full source frame maps at zoom = 1. */
   screenRect: Rect;
   radiusPx: number;
@@ -192,16 +205,35 @@ export function computeComposition(project: RecastProject, tUs: number, outW: nu
   const effectiveW = project.crop && project.crop.w > 0 ? project.crop.w : (project.media.width || 1920);
   const effectiveH = project.crop && project.crop.h > 0 ? project.crop.h : (project.media.height || 1080);
   const srcAr = effectiveW / effectiveH;
-  let sw = contentRect.w - 2 * pad;
+
+  const chromeCfg = style.frame.windowChrome;
+  const chromeEnabled = Boolean(chromeCfg?.enabled);
+  const chromeH = chromeEnabled ? Math.max(18, Math.min(54, (chromeCfg.heightPx || 34) * (outH / 1080))) : 0;
+
+  // Fit the combined card (window chrome + video) into contentRect with padding.
+  // Video maintains true srcAr: sw = sh * srcAr.
+  // Total window height = sh + chromeH.
+  const availW = Math.max(1, contentRect.w - 2 * pad);
+  const availH = Math.max(1, contentRect.h - 2 * pad);
+
+  let sw = availW;
   let sh = sw / srcAr;
-  if (sh > contentRect.h - 2 * pad) {
-    sh = contentRect.h - 2 * pad;
+  if (sh + chromeH > availH) {
+    sh = Math.max(1, availH - chromeH);
     sw = sh * srcAr;
   }
-  let screenRect: Rect = {
+
+  const windowRect: Rect = {
     x: contentRect.x + (contentRect.w - sw) / 2,
-    y: contentRect.y + (contentRect.h - sh) / 2,
+    y: contentRect.y + (contentRect.h - (sh + chromeH)) / 2,
     w: Math.max(1, sw),
+    h: Math.max(1, sh + chromeH),
+  };
+
+  let screenRect: Rect = {
+    x: windowRect.x,
+    y: windowRect.y + chromeH,
+    w: windowRect.w,
     h: Math.max(1, sh),
   };
 
@@ -269,19 +301,28 @@ export function computeComposition(project: RecastProject, tUs: number, outW: nu
   if (fcStyle.enabled && cam && cam.width > 0 && cam.height > 0) {
     const w = clamp(fcStyle.widthFraction * outW, 16, outW);
     const camAspect = cam.width / cam.height;
-    // Round cams crop the source to a centered square first.
-    const h = fcStyle.round ? w : w / camAspect;
+    const effectiveShape =
+      fcStyle.shape === 'squircle'
+        ? 'squircle'
+        : fcStyle.round === false
+        ? 'rectangle'
+        : (fcStyle.shape ?? 'circle');
+    const isSquare = effectiveShape === 'circle' || effectiveShape === 'squircle';
+    const h = isSquare ? w : w / camAspect;
     const margin = fcStyle.marginFraction * outH;
     const x = fcStyle.position === 'tl' || fcStyle.position === 'bl' ? margin : outW - w - margin;
     const y = fcStyle.position === 'tl' || fcStyle.position === 'tr' ? margin : outH - h - margin;
     facecam = {
       rect: { x, y, w, h },
-      radiusPx: fcStyle.round ? w / 2 : Math.min(14, w / 8),
-      round: fcStyle.round,
+      radiusPx: effectiveShape === 'circle' ? w / 2 : Math.min(14, w / 8),
+      round: effectiveShape === 'circle',
+      shape: effectiveShape,
+      squircleCurvature: fcStyle.squircleCurvature ?? 0.6,
       mirror: fcStyle.mirror,
       shadow: fcStyle.shadow,
       borderWidthPx: (fcStyle.borderWidthPx / 1000) * outH,
       borderColor: fcStyle.borderColor,
+      borderGradient: fcStyle.borderGradient,
       opacity: fcStyle.opacity,
     };
   }
@@ -314,6 +355,8 @@ export function computeComposition(project: RecastProject, tUs: number, outW: nu
     outW,
     outH,
     background: style.frame.background,
+    windowRect: chromeEnabled ? windowRect : undefined,
+    windowChrome: chromeEnabled ? { ...chromeCfg, heightPx: chromeH } : undefined,
     screenRect,
     radiusPx,
     borderWidthPx: (style.frame.borderWidthPx / 1000) * outH,
@@ -528,17 +571,279 @@ function roundRectPath(ctx: CanvasRenderingContext2D, r: Rect, radius: number): 
   ctx.closePath();
 }
 
+function roundBottomRectPath(ctx: CanvasRenderingContext2D, r: Rect, radius: number): void {
+  const rad = Math.min(radius, r.w / 2, r.h / 2);
+  ctx.beginPath();
+  ctx.moveTo(r.x, r.y);
+  ctx.lineTo(r.x + r.w, r.y);
+  ctx.lineTo(r.x + r.w, r.y + r.h - rad);
+  ctx.arcTo(r.x + r.w, r.y + r.h, r.x + r.w - rad, r.y + r.h, rad);
+  ctx.lineTo(r.x + rad, r.y + r.h);
+  ctx.arcTo(r.x, r.y + r.h, r.x, r.y + r.h - rad, rad);
+  ctx.closePath();
+}
+
+function drawSquirclePath(ctx: CanvasRenderingContext2D, r: Rect, curvature = 0.6): void {
+  const x = r.x;
+  const y = r.y;
+  const w = r.w;
+  const h = r.h;
+  const rRad = Math.min(w, h) * 0.28 * (curvature / 0.6);
+  ctx.beginPath();
+  ctx.moveTo(x + rRad, y);
+  ctx.lineTo(x + w - rRad, y);
+  ctx.bezierCurveTo(x + w, y, x + w, y + rRad, x + w, y + rRad);
+  ctx.lineTo(x + w, y + h - rRad);
+  ctx.bezierCurveTo(x + w, y + h, x + w - rRad, y + h, x + w - rRad, y + h);
+  ctx.lineTo(x + rRad, y + h);
+  ctx.bezierCurveTo(x, y + h, x, y + h - rRad, x, y + h - rRad);
+  ctx.lineTo(x, y + rRad);
+  ctx.bezierCurveTo(x, y, x + rRad, y, x + rRad, y);
+  ctx.closePath();
+}
+
+let cachedDotGridTile: { pattern: CanvasPattern | null; key: string } | null = null;
+
+function drawDotGrid(ctx: CanvasRenderingContext2D, outW: number, outH: number, dotGrid: import('@recast/shared').DotGrid): void {
+  const spacing = Math.max(8, dotGrid.spacingPx);
+  const size = Math.max(1, dotGrid.sizePx);
+  const key = `${dotGrid.style}-${spacing}-${size}-${dotGrid.color}`;
+
+  if (!cachedDotGridTile || cachedDotGridTile.key !== key) {
+    if (typeof document !== 'undefined') {
+      const tile = document.createElement('canvas');
+      tile.width = spacing;
+      tile.height = spacing;
+      const tctx = tile.getContext('2d');
+      if (tctx) {
+        tctx.fillStyle = dotGrid.color;
+        tctx.strokeStyle = dotGrid.color;
+        tctx.lineWidth = size;
+        if (dotGrid.style === 'grid') {
+          tctx.strokeRect(0, 0, spacing, spacing);
+        } else if (dotGrid.style === 'crosses') {
+          const half = spacing / 2;
+          const arm = size * 2;
+          tctx.beginPath();
+          tctx.moveTo(half - arm, half);
+          tctx.lineTo(half + arm, half);
+          tctx.moveTo(half, half - arm);
+          tctx.lineTo(half, half + arm);
+          tctx.stroke();
+        } else {
+          // 'dots'
+          tctx.beginPath();
+          tctx.arc(spacing / 2, spacing / 2, size / 2, 0, Math.PI * 2);
+          tctx.fill();
+        }
+        const pattern = ctx.createPattern(tile, 'repeat');
+        cachedDotGridTile = { pattern, key };
+      }
+    }
+  }
+
+  if (cachedDotGridTile?.pattern) {
+    ctx.save();
+    ctx.fillStyle = cachedDotGridTile.pattern;
+    ctx.fillRect(0, 0, outW, outH);
+    ctx.restore();
+  }
+}
+
+function drawProceduralBackground(ctx: CanvasRenderingContext2D, outW: number, outH: number, preset: string): void {
+  const cx = outW / 2;
+  const cy = outH / 2;
+
+  switch (preset) {
+    case 'sunset': {
+      const g = ctx.createLinearGradient(0, 0, outW, outH);
+      g.addColorStop(0, '#3B0764');
+      g.addColorStop(0.5, '#BE185D');
+      g.addColorStop(1, '#FB923C');
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, outW, outH);
+      const rg = ctx.createRadialGradient(outW * 0.7, outH * 0.3, 0, outW * 0.7, outH * 0.3, outW * 0.6);
+      rg.addColorStop(0, 'rgba(251, 146, 60, 0.35)');
+      rg.addColorStop(1, 'transparent');
+      ctx.fillStyle = rg;
+      ctx.fillRect(0, 0, outW, outH);
+      break;
+    }
+    case 'midnight': {
+      const g = ctx.createLinearGradient(0, 0, 0, outH);
+      g.addColorStop(0, '#030712');
+      g.addColorStop(0.6, '#0B132B');
+      g.addColorStop(1, '#0C1B33');
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, outW, outH);
+      const rg = ctx.createRadialGradient(cx, cy * 0.8, 0, cx, cy * 0.8, Math.max(outW, outH) * 0.65);
+      rg.addColorStop(0, 'rgba(6, 182, 212, 0.25)');
+      rg.addColorStop(0.7, 'rgba(59, 130, 246, 0.08)');
+      rg.addColorStop(1, 'transparent');
+      ctx.fillStyle = rg;
+      ctx.fillRect(0, 0, outW, outH);
+      break;
+    }
+    case 'cyber': {
+      const g = ctx.createLinearGradient(0, 0, outW, outH);
+      g.addColorStop(0, '#130026');
+      g.addColorStop(0.5, '#2D006B');
+      g.addColorStop(1, '#001A33');
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, outW, outH);
+      const rg1 = ctx.createRadialGradient(outW * 0.2, outH * 0.8, 0, outW * 0.2, outH * 0.8, outW * 0.5);
+      rg1.addColorStop(0, 'rgba(236, 72, 153, 0.3)');
+      rg1.addColorStop(1, 'transparent');
+      ctx.fillStyle = rg1;
+      ctx.fillRect(0, 0, outW, outH);
+      const rg2 = ctx.createRadialGradient(outW * 0.8, outH * 0.2, 0, outW * 0.8, outH * 0.2, outW * 0.5);
+      rg2.addColorStop(0, 'rgba(6, 182, 212, 0.3)');
+      rg2.addColorStop(1, 'transparent');
+      ctx.fillStyle = rg2;
+      ctx.fillRect(0, 0, outW, outH);
+      break;
+    }
+    case 'obsidian': {
+      const g = ctx.createLinearGradient(0, 0, outW, outH);
+      g.addColorStop(0, '#090A0F');
+      g.addColorStop(0.5, '#12131A');
+      g.addColorStop(1, '#0D0E14');
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, outW, outH);
+      break;
+    }
+    case 'aurora':
+    default: {
+      const g = ctx.createLinearGradient(0, 0, outW, outH);
+      g.addColorStop(0, '#0F172A');
+      g.addColorStop(0.45, '#1E1B4B');
+      g.addColorStop(1, '#064E3B');
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, outW, outH);
+      const rg1 = ctx.createRadialGradient(outW * 0.3, outH * 0.4, 0, outW * 0.3, outH * 0.4, outW * 0.5);
+      rg1.addColorStop(0, 'rgba(45, 212, 191, 0.22)');
+      rg1.addColorStop(1, 'transparent');
+      ctx.fillStyle = rg1;
+      ctx.fillRect(0, 0, outW, outH);
+      const rg2 = ctx.createRadialGradient(outW * 0.7, outH * 0.6, 0, outW * 0.7, outH * 0.6, outW * 0.5);
+      rg2.addColorStop(0, 'rgba(168, 85, 247, 0.2)');
+      rg2.addColorStop(1, 'transparent');
+      ctx.fillStyle = rg2;
+      ctx.fillRect(0, 0, outW, outH);
+      break;
+    }
+  }
+}
+
+function drawWindowChrome(ctx: CanvasRenderingContext2D, comp: Composition, alpha: number): void {
+  const chrome = comp.windowChrome;
+  const win = comp.windowRect;
+  if (!chrome || !chrome.enabled || !win) return;
+
+  const h = chrome.heightPx;
+  const r = comp.radiusPx;
+
+  ctx.save();
+  ctx.globalAlpha = alpha;
+
+  // Clip to top rounded corners of window
+  ctx.beginPath();
+  ctx.moveTo(win.x, win.y + h);
+  ctx.lineTo(win.x, win.y + r);
+  ctx.arcTo(win.x, win.y, win.x + r, win.y, r);
+  ctx.lineTo(win.x + win.w - r, win.y);
+  ctx.arcTo(win.x + win.w, win.y, win.x + win.w, win.y + r, r);
+  ctx.lineTo(win.x + win.w, win.y + h);
+  ctx.closePath();
+  ctx.clip();
+
+  // Background header style
+  if (chrome.style === 'macos-light') {
+    ctx.fillStyle = '#E5E7EB';
+  } else if (chrome.style === 'glass') {
+    const grad = ctx.createLinearGradient(win.x, win.y, win.x, win.y + h);
+    grad.addColorStop(0, 'rgba(255, 255, 255, 0.22)');
+    grad.addColorStop(1, 'rgba(255, 255, 255, 0.08)');
+    ctx.fillStyle = grad;
+  } else if (chrome.style === 'windows') {
+    ctx.fillStyle = '#202020';
+  } else {
+    // macos-dark
+    ctx.fillStyle = '#181A20';
+  }
+  ctx.fillRect(win.x, win.y, win.w, h);
+
+  // Subtle bottom hairline separator under title bar
+  ctx.fillStyle = chrome.style === 'macos-light' ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.08)';
+  ctx.fillRect(win.x, win.y + h - 1, win.w, 1);
+
+  // Buttons / Controls
+  if (chrome.showButtons) {
+    if (chrome.style === 'windows') {
+      const bx = win.x + win.w - 70;
+      const by = win.y + h / 2;
+      ctx.strokeStyle = '#FFFFFF99';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(bx, by);
+      ctx.lineTo(bx + 10, by);
+      ctx.stroke();
+      ctx.strokeRect(bx + 20, by - 5, 10, 10);
+      ctx.beginPath();
+      ctx.moveTo(bx + 40, by - 5);
+      ctx.lineTo(bx + 50, by + 5);
+      ctx.moveTo(bx + 50, by - 5);
+      ctx.lineTo(bx + 40, by + 5);
+      ctx.stroke();
+    } else {
+      // macOS traffic lights: red, yellow, green
+      const btnRadius = Math.max(4, Math.min(6, h * 0.16));
+      const btnY = win.y + h / 2;
+      const startX = win.x + 16;
+      const gap = btnRadius * 2 + 8;
+
+      const lights = [
+        { fill: '#FF5F56', stroke: '#E0443E' },
+        { fill: '#FFBD2E', stroke: '#DEA123' },
+        { fill: '#27C93F', stroke: '#1AAB29' },
+      ];
+
+      for (let i = 0; i < 3; i++) {
+        const lx = startX + i * gap;
+        ctx.beginPath();
+        ctx.arc(lx, btnY, btnRadius, 0, Math.PI * 2);
+        ctx.fillStyle = lights[i].fill;
+        ctx.fill();
+        ctx.lineWidth = 0.5;
+        ctx.strokeStyle = lights[i].stroke;
+        ctx.stroke();
+      }
+    }
+  }
+
+  // Window title
+  if (chrome.title) {
+    ctx.font = `600 ${Math.max(10, Math.min(13, h * 0.36))}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = chrome.style === 'macos-light' ? '#374151' : 'rgba(255, 255, 255, 0.75)';
+    ctx.fillText(chrome.title, win.x + win.w / 2, win.y + h / 2);
+  }
+
+  ctx.restore();
+}
+
 function drawBackground(ctx: CanvasRenderingContext2D, comp: Composition, deps: DrawDeps): void {
   const bg = comp.background;
   const { outW, outH } = comp;
   ctx.clearRect(0, 0, outW, outH);
   switch (bg.type) {
     case 'transparent':
-      return;
+      break;
     case 'solid':
       ctx.fillStyle = bg.color ?? '#101418';
       ctx.fillRect(0, 0, outW, outH);
-      return;
+      break;
     case 'gradient': {
       const g = bg.gradient ?? { from: '#1B2030', to: '#0E1015', angleDeg: 160 };
       const rad = (g.angleDeg * Math.PI) / 180;
@@ -549,7 +854,11 @@ function drawBackground(ctx: CanvasRenderingContext2D, comp: Composition, deps: 
       grad.addColorStop(1, g.to);
       ctx.fillStyle = grad;
       ctx.fillRect(0, 0, outW, outH);
-      return;
+      break;
+    }
+    case 'procedural': {
+      drawProceduralBackground(ctx, outW, outH, bg.procedural?.preset ?? 'aurora');
+      break;
     }
     case 'mesh': {
       ctx.fillStyle = '#0E1015';
@@ -566,7 +875,7 @@ function drawBackground(ctx: CanvasRenderingContext2D, comp: Composition, deps: 
         ctx.fillStyle = grad;
         ctx.fillRect(0, 0, outW, outH);
       }
-      return;
+      break;
     }
     case 'echo': {
       // Blurred, dimmed, over-scaled copy of the current frame.
@@ -584,7 +893,7 @@ function drawBackground(ctx: CanvasRenderingContext2D, comp: Composition, deps: 
         ctx.fillStyle = '#0E1015';
         ctx.fillRect(0, 0, outW, outH);
       }
-      return;
+      break;
     }
     case 'image': {
       const img = deps.getBackgroundImage?.();
@@ -603,8 +912,13 @@ function drawBackground(ctx: CanvasRenderingContext2D, comp: Composition, deps: 
         ctx.fillStyle = '#101418';
         ctx.fillRect(0, 0, outW, outH);
       }
-      return;
+      break;
     }
+  }
+
+  // Draw overlay dot grid if enabled
+  if (bg.dotGrid?.enabled) {
+    drawDotGrid(ctx, outW, outH, bg.dotGrid);
   }
 }
 
@@ -619,23 +933,33 @@ function drawFacecam(ctx: CanvasRenderingContext2D, comp: Composition, deps: Dra
   ctx.save();
   ctx.globalAlpha = fc.opacity * (comp.intro ? comp.intro.alpha : 1);
 
+  const applyShape = (): void => {
+    if (fc.shape === 'squircle') {
+      drawSquirclePath(ctx, rect, fc.squircleCurvature ?? 0.6);
+    } else if (fc.round || fc.shape === 'circle') {
+      roundRectPath(ctx, rect, rect.w / 2);
+    } else {
+      roundRectPath(ctx, rect, fc.radiusPx);
+    }
+  };
+
   if (fc.shadow) {
     ctx.save();
     ctx.shadowColor = 'rgba(0,0,0,0.45)';
     ctx.shadowBlur = rect.h * 0.12;
     ctx.shadowOffsetY = rect.h * 0.04;
     ctx.fillStyle = '#000000';
-    roundRectPath(ctx, rect, fc.radiusPx);
+    applyShape();
     ctx.fill();
     ctx.restore();
   }
 
   ctx.save();
-  roundRectPath(ctx, rect, fc.radiusPx);
+  applyShape();
   ctx.clip();
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = 'high';
-  if (fc.round) {
+  if (fc.round || fc.shape === 'circle' || fc.shape === 'squircle') {
     // Centered square crop of the camera source, drawn into the square rect.
     const vw = (frame as { videoWidth?: number; width?: number }).videoWidth ?? (frame as { width?: number }).width ?? rect.w;
     const vh = (frame as { videoHeight?: number; height?: number }).videoHeight ?? (frame as { height?: number }).height ?? rect.w;
@@ -664,8 +988,18 @@ function drawFacecam(ctx: CanvasRenderingContext2D, comp: Composition, deps: Dra
   if (fc.borderWidthPx > 0) {
     ctx.save();
     ctx.lineWidth = fc.borderWidthPx;
-    ctx.strokeStyle = fc.borderColor;
-    roundRectPath(ctx, rect, fc.radiusPx);
+    if (fc.borderGradient) {
+      const rad = (fc.borderGradient.angleDeg * Math.PI) / 180;
+      const x0 = rect.x + rect.w / 2 - (Math.cos(rad) * rect.w) / 2;
+      const y0 = rect.y + rect.h / 2 - (Math.sin(rad) * rect.h) / 2;
+      const grad = ctx.createLinearGradient(x0, y0, rect.x + rect.w - (x0 - rect.x), rect.y + rect.h - (y0 - rect.y));
+      grad.addColorStop(0, fc.borderGradient.from);
+      grad.addColorStop(1, fc.borderGradient.to);
+      ctx.strokeStyle = grad;
+    } else {
+      ctx.strokeStyle = fc.borderColor;
+    }
+    applyShape();
     ctx.stroke();
     ctx.restore();
   }
@@ -711,6 +1045,40 @@ function drawCursor(ctx: CanvasRenderingContext2D, comp: Composition): void {
   ctx.globalAlpha = c.alpha;
   const size = (style.sizePx / 1000) * comp.outH * c.scale;
 
+  // Spotlight effect: darkens inner screen except circular aperture around cursor
+  if (style.spotlight && c.visible) {
+    ctx.save();
+    ctx.fillStyle = `rgba(0, 0, 0, ${style.spotlightOpacity ?? 0.45})`;
+    ctx.beginPath();
+    ctx.rect(comp.screenRect.x, comp.screenRect.y, comp.screenRect.w, comp.screenRect.h);
+    ctx.arc(c.x, c.y, style.spotlightRadiusPx ?? 120, 0, Math.PI * 2, true);
+    ctx.fill('evenodd');
+    ctx.restore();
+  }
+
+  // Multi-ring radar wave animation on click
+  if (style.radarRings && c.rippleMs != null) {
+    const ringCount = Math.max(1, Math.min(4, style.radarRingCount ?? 3));
+    const totalDuration = 550;
+    const progress = clamp(c.rippleMs / totalDuration, 0, 1);
+    for (let r = 0; r < ringCount; r++) {
+      const ringOffset = r * 0.2;
+      const ringProgress = progress - ringOffset;
+      if (ringProgress > 0 && ringProgress < 1) {
+        const ringAlpha = (1 - ringProgress) * 0.75;
+        const ringRadius = size * (0.5 + ringProgress * 2.5);
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(c.x, c.y, ringRadius, 0, Math.PI * 2);
+        ctx.strokeStyle = style.radarColor ?? '#7C8CF8';
+        ctx.lineWidth = Math.max(1.5, size * 0.08 * (1 - ringProgress));
+        ctx.globalAlpha = c.alpha * ringAlpha;
+        ctx.stroke();
+        ctx.restore();
+      }
+    }
+  }
+
   if (style.trail) {
     for (const p of c.trail) {
       ctx.save();
@@ -745,6 +1113,11 @@ function drawCursor(ctx: CanvasRenderingContext2D, comp: Composition): void {
     ctx.fillStyle = style.color;
     ctx.fill();
   };
+
+  if (style.look === 'none') {
+    ctx.restore();
+    return;
+  }
 
   if (style.look === 'dot' || style.look === 'circle') {
     ctx.beginPath();
@@ -946,6 +1319,7 @@ export function drawComposition(ctx: CanvasRenderingContext2D, comp: Composition
   // Clip intro transition: the whole screen card (shadow + video + border)
   // fades/slides in with the eased layer alpha.
   const layerAlpha = comp.intro ? comp.intro.alpha : 1;
+  const outerCard = comp.windowRect ?? comp.screenRect;
 
   const sh = SHADOWS[comp.shadow];
   if (sh.blur > 0) {
@@ -955,15 +1329,24 @@ export function drawComposition(ctx: CanvasRenderingContext2D, comp: Composition
     ctx.shadowBlur = sh.blur * comp.outH;
     ctx.shadowOffsetY = sh.y * comp.outH;
     ctx.fillStyle = '#000000';
-    roundRectPath(ctx, comp.screenRect, comp.radiusPx);
+    roundRectPath(ctx, outerCard, comp.radiusPx);
     ctx.fill();
     ctx.restore();
+  }
+
+  // Draw Window Chrome header bar if enabled
+  if (comp.windowChrome?.enabled && comp.windowRect) {
+    drawWindowChrome(ctx, comp, layerAlpha);
   }
 
   // Screen video with zoom mapping.
   ctx.save();
   ctx.globalAlpha = layerAlpha;
-  roundRectPath(ctx, comp.screenRect, comp.radiusPx);
+  if (comp.windowChrome?.enabled) {
+    roundBottomRectPath(ctx, comp.screenRect, comp.radiusPx);
+  } else {
+    roundRectPath(ctx, comp.screenRect, comp.radiusPx);
+  }
   ctx.clip();
   const frame = deps.getFrame('__active__', 0);
   if (frame) {
@@ -992,7 +1375,7 @@ export function drawComposition(ctx: CanvasRenderingContext2D, comp: Composition
     ctx.globalAlpha = layerAlpha;
     ctx.lineWidth = comp.borderWidthPx;
     ctx.strokeStyle = comp.borderColor;
-    roundRectPath(ctx, comp.screenRect, comp.radiusPx);
+    roundRectPath(ctx, outerCard, comp.radiusPx);
     ctx.stroke();
     ctx.restore();
   }

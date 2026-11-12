@@ -24,7 +24,32 @@ export function loadProject(id: string): RecastProject | null {
   const raw = readProjectFile(id);
   if (!raw) return null;
   try {
-    return RecastProjectSchema.parse(JSON.parse(raw));
+    const project = RecastProjectSchema.parse(JSON.parse(raw));
+    // Auto-migrate legacy projects where autoKeyframes lack return-to-fullscreen reset keyframes
+    if (
+      project.zoom.mode === 'auto' &&
+      project.zoom.autoKeyframes.length > 0 &&
+      !project.zoom.autoKeyframes.some((k) => k.zoom <= 1.05) &&
+      project.media.cursor?.available
+    ) {
+      const { samples, clicks } = readCursorJsonl(project.media.dir, 'cursor.jsonl', 1);
+      if (clicks.length > 0 || samples.length > 20) {
+        project.zoom.autoKeyframes = computeAutoZoom(
+          samples,
+          clicks,
+          project.media.width || 1920,
+          project.media.height || 1080,
+          project.zoom.intensity,
+          {
+            ignoreSpeed: true,
+            includeDwell: false,
+            returnToFullScreen: true,
+            holdUs: 1_800_000,
+          },
+        );
+      }
+    }
+    return project;
   } catch {
     return null;
   }
@@ -130,15 +155,23 @@ export function buildProjectFromSession(input: BuildProjectInput): RecastProject
 
   // Cursor → auto-zoom keyframes. Samples are scaled from DIP to the video's
   // physical pixel space with the display factor stamped at record time.
+  // Click-only zoom: screen stays 1.0x Full Screen, zooming in smoothly ONLY on clicks,
+  // holding for ~1.8 s, then smoothly returning to Full Screen.
   if (project.media.cursor?.available) {
     const { samples, clicks } = readCursorJsonl(project.media.dir, 'cursor.jsonl', manifest.displayScaleFactor ?? 1);
-    if (samples.length > 20) {
+    if (clicks.length > 0 || samples.length > 20) {
       project.zoom.autoKeyframes = computeAutoZoom(
         samples,
         clicks,
         manifest.video.width,
         manifest.video.height,
         project.zoom.intensity,
+        {
+          ignoreSpeed: true, // Only deliberate clicks/dwell, never random cursor motion
+          includeDwell: false, // Strict click-based zoom requested by user
+          returnToFullScreen: true,
+          holdUs: 1_800_000,
+        },
       );
     }
   }

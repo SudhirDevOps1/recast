@@ -81,6 +81,25 @@ export function AudioPanel({
             />
           </Field>
         ) : null}
+        <Field label="Broadcast Voice EQ" hint="80 Hz rumble cut + 3 kHz presence boost">
+          <Switch
+            checked={edits.voiceEq?.enabled ?? false}
+            onCheckedChange={(enabled) =>
+              setEdits({
+                voiceEq: {
+                  ...(edits.voiceEq ?? { rumbleCutHz: 80, presenceBoostDb: 3.5, presenceFrequencyHz: 3000 }),
+                  enabled,
+                },
+              })
+            }
+            ariaLabel="Broadcast Voice EQ"
+          />
+        </Field>
+        {edits.voiceEq?.enabled ? (
+          <p className="mt-1 text-[11px] leading-4" style={{ color: 'var(--text-muted)' }}>
+            Studio-grade vocal clarity enhancement applied during export.
+          </p>
+        ) : null}
         <Field label="Normalize to −14 LUFS">
           <Switch
             checked={edits.normalizeLufs}

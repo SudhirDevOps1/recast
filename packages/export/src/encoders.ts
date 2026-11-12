@@ -164,8 +164,8 @@ export async function resolveAudioEncoder(sampleRate: number): Promise<{ codec: 
 
 /** Bitrate from resolution + fps, matching ESTIMATE_BITRATE_MBPS targets. */
 export function exportBitrate(height: number, fps: number, format: string): number {
-  const table: Record<number, number> = { 720: 6, 1080: 12, 1440: 20, 2160: 40 };
-  const mbps = table[height] ?? 12;
-  const formatFactor = format === 'gif' ? 0.4 : format === 'webm' ? 0.75 : 1;
+  const table: Record<number, number> = { 720: 10, 1080: 18, 1440: 28, 2160: 48 };
+  const mbps = table[height] ?? 18;
+  const formatFactor = format === 'gif' ? 0.4 : format === 'webm' ? 0.8 : 1;
   return Math.round(mbps * 1_000_000 * (fps / 30) * formatFactor);
 }

@@ -208,16 +208,21 @@ function clampCenter(cx: number, cy: number, zoom: number, w: number, h: number)
   };
 }
 
-/** Cluster → zoom keyframes with pre-roll. */
+/** Cluster → zoom keyframes with pre-roll and Recordly-style return-to-fullscreen. */
 export function autoKeyframes(
   clusters: Cluster[],
   sourceW: number,
   sourceH: number,
   intensity: ZoomIntensity,
+  options?: { returnToFullScreen?: boolean; holdUs?: number },
 ): ZoomKeyframe[] {
   const cfg = intensityFor(intensity);
   const kfs: ZoomKeyframe[] = [];
-  for (const c of clusters) {
+  const returnToFullScreen = options?.returnToFullScreen ?? false;
+  const holdUs = options?.holdUs ?? 1_800_000;
+
+  for (let idx = 0; idx < clusters.length; idx++) {
+    const c = clusters[idx]!;
     const zoom = fitZoom(c.cx, c.cy, c.radiusPx, sourceW, sourceH, cfg.zoom);
     const { cx, cy } = clampCenter(c.cx, c.cy, zoom, sourceW, sourceH);
     kfs.push({
@@ -228,6 +233,21 @@ export function autoKeyframes(
       cy,
       ease: 'out',
     });
+
+    if (returnToFullScreen) {
+      const next = clusters[idx + 1];
+      const resetTimeUs = c.tOutUs + holdUs;
+      if (!next || next.tInUs > resetTimeUs + 500_000) {
+        kfs.push({
+          id: `kf-reset-${Math.round(resetTimeUs)}`,
+          tUs: resetTimeUs,
+          zoom: 1.0,
+          cx: sourceW / 2,
+          cy: sourceH / 2,
+          ease: 'out',
+        });
+      }
+    }
   }
   // Drop keyframes that duplicate the previous position within 400 ms.
   return kfs.filter((kf, i) => {
@@ -436,11 +456,21 @@ export function computeAutoZoom(
   sourceW: number,
   sourceH: number,
   intensity: ZoomIntensity,
-  options?: { includeDwell?: boolean; dwellRadiusPx?: number; minDwellUs?: number; ignoreSpeed?: boolean },
+  options?: {
+    includeDwell?: boolean;
+    dwellRadiusPx?: number;
+    minDwellUs?: number;
+    ignoreSpeed?: boolean;
+    returnToFullScreen?: boolean;
+    holdUs?: number;
+  },
 ): ZoomKeyframe[] {
   const interests = detectInterestPoints(samples, clicks, sourceW, sourceH, options);
   const clusters = clusterInterests(interests, sourceW, sourceH);
-  return autoKeyframes(clusters, sourceW, sourceH, intensity);
+  return autoKeyframes(clusters, sourceW, sourceH, intensity, {
+    returnToFullScreen: options?.returnToFullScreen ?? true,
+    holdUs: options?.holdUs ?? 1_800_000,
+  });
 }
 
 export interface SuggestionOptions {
@@ -448,6 +478,7 @@ export interface SuggestionOptions {
   intensity: ZoomIntensity;
   dwellRadiusPx?: number;
   minDwellUs?: number;
+  returnToFullScreen?: boolean;
 }
 
 /**
@@ -472,9 +503,11 @@ export function suggestZooms(
     options.intensity,
     {
       includeDwell,
-      ignoreSpeed: options.heuristic === 'dwell',
+      ignoreSpeed: true, // Click & dwell driven only — never erratic mouse velocity spikes
       dwellRadiusPx: options.dwellRadiusPx ?? 8,
       minDwellUs: options.minDwellUs ?? 500_000,
+      returnToFullScreen: options.returnToFullScreen ?? true,
+      holdUs: 1_800_000,
     },
   );
 }

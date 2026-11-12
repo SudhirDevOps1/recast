@@ -46,6 +46,10 @@ win:
         - "**/*"
     - from: ../../resources/ffmpeg/LICENSE.txt
       to: ffmpeg/LICENSE.txt
+    - from: ../../resources/whisper/win32-${arch}
+      to: whisper/win32-${arch}
+      filter:
+        - "**/*"
   target:
     - target: nsis
     - target: msi

@@ -231,6 +231,7 @@ export const IPC = {
   'recorder:stop': def(z.void(), z.object({ projectId: z.string().nullable() })),
   'recorder:triggerStop': def(z.void(), z.void()),
   'recorder:minimizeMainWindow': def(z.void(), z.void()),
+  'camera:setSize': def(z.object({ size: z.number() }), z.boolean()),
   'recorder:getState': def(z.void(), RecorderStateSchema),
 
   /** Internal capture-host channels (renderer → main disk writes). */
@@ -310,6 +311,22 @@ export const IPC = {
     z.object({ path: z.string().nullable() }),
   ),
 
+  'captions:status': def(
+    z.void(),
+    z.object({
+      whisperBin: z.string().nullable(),
+      canInstall: z.boolean(),
+      models: z.array(CaptionModelSchema),
+    }),
+  ),
+  'captions:installBinary': def(
+    z.void(),
+    z.object({
+      ok: z.boolean(),
+      path: z.string().optional(),
+      error: z.string().optional(),
+    }),
+  ),
   'captions:models': def(z.void(), z.array(CaptionModelSchema)),
   'captions:downloadModel': def(z.object({ id: z.string() }), z.void()),
   'captions:transcribe': def(

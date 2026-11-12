@@ -75,8 +75,18 @@ export class SegmentWriter {
     width: number,
     height: number,
   ): Promise<void> {
-    // Open a new segment when none is open or the current one is full length.
-    if (!this.muxer || !this.meta || timestampUs - this.meta.startUs >= RECORDING.SEGMENT_MS * 1_000) {
+    // Open a new segment when none is open, or when the current segment has reached
+    // its target length AND this chunk is a clean keyframe (so every MP4 fragment starts with an I-frame!).
+    // Cap at 3.5s so we never grow indefinitely if keyframes are delayed.
+    const durationUs = this.meta ? timestampUs - this.meta.startUs : 0;
+    const isTargetDuration = durationUs >= RECORDING.SEGMENT_MS * 1_000;
+    const shouldRotate =
+      !this.muxer ||
+      !this.meta ||
+      (isTargetDuration && chunk.type === 'key') ||
+      durationUs >= RECORDING.SEGMENT_MS * 1_750;
+
+    if (shouldRotate) {
       await this.closeSegment();
       this.meta = {
         id: `seg-${String(this.segmentIndex).padStart(4, '0')}`,
@@ -99,7 +109,7 @@ export class SegmentWriter {
         firstTimestampBehavior: 'offset',
       });
     }
-    this.muxer.addVideoChunk(chunk, meta, timestampUs);
+    this.muxer?.addVideoChunk(chunk, meta, timestampUs);
     this.chunksInSegment += 1;
   }
 

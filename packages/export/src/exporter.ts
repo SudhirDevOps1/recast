@@ -11,7 +11,7 @@ import {
   type FollowStep,
 } from '@recast/editor';
 import { exportBitrate, resolveAudioEncoder, resolveExportEncoder, type ExportEncoderChoice } from './encoders';
-import { applyFades, applyGain, applyNoiseGate, audioChunks, decodeAudioData } from './audio';
+import { applyFades, applyGain, applyNoiseGate, applyVoiceEq, audioChunks, decodeAudioData } from './audio';
 
 /**
  * Frame-clock export. The clock is a deterministic loop over frame times —
@@ -132,15 +132,17 @@ export async function runExport(
   let outW: number;
   let outH = req.shortEdge;
   if (aspect === '9:16') {
-    outW = req.shortEdge * 0.5625;
-    outH = req.shortEdge;
+    outW = req.shortEdge;
+    outH = Math.round(req.shortEdge * (16 / 9));
   } else if (aspect === '1:1') {
     outW = req.shortEdge;
-  } else if (aspect === '4:5') {
-    outW = req.shortEdge * 0.8;
     outH = req.shortEdge;
+  } else if (aspect === '4:5') {
+    outW = req.shortEdge;
+    outH = Math.round(req.shortEdge * 1.25);
   } else if (aspect === '21:9') {
-    outW = Math.round(req.shortEdge * 2.3333);
+    outW = Math.round(req.shortEdge * (21 / 9));
+    outH = req.shortEdge;
   } else {
     const srcAr = project.media.width && project.media.height ? project.media.width / project.media.height : 16 / 9;
     if (srcAr < 1) {
@@ -151,6 +153,8 @@ export async function runExport(
       outH = req.shortEdge;
     }
   }
+  outW = Math.round(outW);
+  outH = Math.round(outH);
   outW -= outW % 2;
   outH -= outH % 2;
 
@@ -183,6 +187,9 @@ export async function runExport(
       let buffer = await decodeAudioData(audioCtx, bytes);
       const edits = project.audioEdits;
       if (edits.noiseGateDb != null) buffer = applyNoiseGate(buffer, edits.noiseGateDb, buffer.sampleRate);
+      if (edits.voiceEq?.enabled) {
+        buffer = await applyVoiceEq(buffer, edits.voiceEq);
+      }
       buffer = applyGain(buffer, edits.gainDb);
       buffer = applyFades(buffer, { fadeInMs: edits.fadeInMs, fadeOutMs: edits.fadeOutMs, sampleRate: buffer.sampleRate });
       const { codec } = await resolveAudioEncoder(buffer.sampleRate);

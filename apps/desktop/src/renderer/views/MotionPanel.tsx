@@ -12,6 +12,7 @@ import {
 import type { RecastProject, TransitionKind } from '@recast/shared';
 import { useState } from 'react';
 import { useApp, useEditor } from '../state/stores';
+import { bridge } from '../lib/bridge';
 import { relayoutProject } from './TimelineStrip';
 
 /**
@@ -50,16 +51,30 @@ export function MotionPanel({
   const setSelectedClip = useEditor((s) => s.setSelectedClip);
   const sel = project.timeline.clips.find((c) => c.id === selectedClipId) ?? null;
 
-  const [suggestHeuristic, setSuggestHeuristic] = useState<'combined' | 'dwell' | 'clicks'>('combined');
+  const [suggestHeuristic, setSuggestHeuristic] = useState<'combined' | 'dwell' | 'clicks'>('clicks');
 
-  const runSuggestZooms = (): void => {
-    if (cursorSamples.length < 10 && cursorClicks.length === 0) {
+  const runSuggestZooms = async (): Promise<void> => {
+    let samples = cursorSamples;
+    let clicks = cursorClicks;
+    if (samples.length < 10 && clicks.length === 0) {
+      try {
+        const data = (await bridge().invoke('capture:readCursor', { sessionId: project.id } as never)) as {
+          samples?: CursorSample[];
+          clicks?: Array<{ tUs: number; x: number; y: number }>;
+        } | null;
+        if (data?.samples && data.samples.length > 0) samples = data.samples;
+        if (data?.clicks && data.clicks.length > 0) clicks = data.clicks;
+      } catch {
+        // fallback
+      }
+    }
+    if (samples.length < 10 && clicks.length === 0) {
       showToast('No cursor data found in this recording to analyze.', 'error');
       return;
     }
     const suggested = suggestZooms(
-      cursorSamples,
-      cursorClicks,
+      samples,
+      clicks,
       project.media.width || 1920,
       project.media.height || 1080,
       {
@@ -234,8 +249,8 @@ export function MotionPanel({
                 value={suggestHeuristic}
                 onValueChange={(v) => setSuggestHeuristic(v as 'combined' | 'dwell' | 'clicks')}
                 options={[
-                  { value: 'combined', label: 'Clicks + Dwell' },
-                  { value: 'clicks', label: 'Clicks only' },
+                  { value: 'clicks', label: 'Clicks only (Smart Auto-Zoom)' },
+                  { value: 'combined', label: 'Clicks + Dwell pauses' },
                   { value: 'dwell', label: 'Dwell pause only' },
                 ]}
                 ariaLabel="Suggestion heuristic"
