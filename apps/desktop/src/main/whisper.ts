@@ -35,7 +35,7 @@ export async function installWhisperBinary(onProgress: (pct: number) => void): P
   try {
     const res = await fetch(url, {
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Recast/0.0.1',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Recast/0.0.2',
       },
     });
     if (!res.ok) throw new Error(`HTTP ${res.status} fetching whisper binary package`);
@@ -222,7 +222,7 @@ export async function downloadWhisperModel(modelId: string, onProgress: (pct: nu
     try {
       const res = await fetch(url, {
         headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Recast/0.0.1',
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Recast/0.0.2',
         },
       });
       if (!res.ok) {

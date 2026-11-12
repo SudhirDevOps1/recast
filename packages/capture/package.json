@@ -1,6 +1,6 @@
 {
   "name": "@recast/capture",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "private": true,
   "type": "module",
   "description": "Recast capture engine: segmented WebCodecs recorder, audio mixer, recovery planning",

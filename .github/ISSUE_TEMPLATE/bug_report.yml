@@ -13,7 +13,7 @@ body:
     attributes:
       label: Recast version
       description: Settings → About, or the installer filename
-      placeholder: 0.0.1 (build abc1234)
+      placeholder: 0.0.2 (build abc1234)
     validations:
       required: true
 
