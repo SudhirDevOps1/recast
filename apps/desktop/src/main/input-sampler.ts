@@ -48,7 +48,8 @@ async function loadUiohook(): Promise<UiohookModule | null> {
       },
       keyMap,
     };
-  } catch {
+  } catch (e) {
+    console.warn('[recast:input] uiohook-napi failed to load — click tracking degraded:', (e as Error).message);
     return null;
   }
 }

@@ -97,17 +97,19 @@ export function renderStoppedMenu(): void {
 
 async function togglePause(): Promise<void> {
   const c = context();
-  c.recorderHandle?.pause();
+  if (c.mainWindow && !c.mainWindow.isDestroyed()) {
+    c.mainWindow.webContents.send('recorder:hotkey', { action: 'toggle-pause' });
+  }
 }
 
 async function stopRecording(): Promise<void> {
   const c = context();
-  if (!c.recorderHandle) return;
-  await c.recorderHandle.stop();
-  c.recorderHandle = null;
-  BrowserWindow.getAllWindows().forEach((w) => w.webContents.send('recorder:state', {
-    phase: 'idle', sessionId: null, elapsedUs: 0, bytes: 0, droppedFrames: 0, totalFrames: 0, micMeterDb: null, diskFreeMb: 0,
-  }));
+  if (c.mainWindow && !c.mainWindow.isDestroyed()) {
+    if (c.mainWindow.isMinimized()) c.mainWindow.restore();
+    c.mainWindow.show();
+    c.mainWindow.focus();
+    c.mainWindow.webContents.send('recorder:requestStop');
+  }
 }
 
 export function disposeTray(): void {

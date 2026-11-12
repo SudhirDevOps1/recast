@@ -1,7 +1,34 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useApp, useEditor } from '../state/stores';
 import { bridge } from '../lib/bridge';
-import { Button, IconButton, Field, Select, Badge, Switch, ColorPicker, Slider, IconPlay, IconPause, IconScissors, IconTrash, IconDownload, IconUndo, IconRedo } from '@recast/ui';
+import {
+  Button,
+  IconButton,
+  Field,
+  Select,
+  Badge,
+  Switch,
+  ColorPicker,
+  Slider,
+  IconPlay,
+  IconPause,
+  IconScissors,
+  IconTrash,
+  IconDownload,
+  IconUndo,
+  IconRedo,
+  IconSettings,
+  IconSparkle,
+  IconCursor,
+  IconCamera,
+  IconCrop,
+  IconSpeaker,
+  IconCaptions,
+  IconChevronLeft,
+  IconChevronRight,
+  IconCheck,
+  IconPlus,
+} from '@recast/ui';
 import {
   buildTimeMap,
   timelineToSource,
@@ -20,7 +47,7 @@ import {
   type CaptionLine,
   type FollowStep,
 } from '@recast/editor';
-import { segmentLocalTimeUs, type RecastProject, type CaptionModel } from '@recast/shared';
+import { segmentLocalTimeUs, BUILTIN_PRESETS, type RecastProject, type CaptionModel } from '@recast/shared';
 import { TimelineStrip, relayoutProject } from './TimelineStrip';
 import { MotionPanel } from './MotionPanel';
 import { AudioPanel } from './AudioPanel';
@@ -49,6 +76,16 @@ export function EditorView() {
   const [keystrokes, setKeystrokes] = useState<Array<{ tUs: number; key: string }>>([]);
   const [captions, setCaptions] = useState<CaptionLine[]>([]);
   const [panel, setPanel] = useState<'motion' | 'style' | 'facecam' | 'crop' | 'audio' | 'captions'>('motion');
+  const [drawerOpen, setDrawerOpen] = useState(true);
+
+  const handleTabClick = (t: typeof panel) => {
+    if (panel === t) {
+      setDrawerOpen((prev) => !prev);
+    } else {
+      setPanel(t);
+      setDrawerOpen(true);
+    }
+  };
 
   const timeMap = useMemo(() => (project ? buildTimeMap(project.timeline.clips) : { clips: [], durationUs: 0 }), [project]);
 
@@ -74,7 +111,14 @@ export function EditorView() {
           holdUs: 1_800_000,
         });
       } else {
-        kfs = [];
+        kfs = computeAutoZoom(cursorSamples, [], w, h, project.zoom.intensity, {
+          ignoreSpeed: true,
+          includeDwell: true,
+          dwellRadiusPx: 12,
+          minDwellUs: 600_000,
+          returnToFullScreen: true,
+          holdUs: 1_800_000,
+        });
       }
     }
     return buildZoomTrack(kfs, w, h, project.zoom.intensity, timeMap.durationUs);
@@ -189,89 +233,296 @@ export function EditorView() {
   }
 
   return (
-    <div className="flex h-full min-h-0">
-      <div className="flex min-w-0 flex-1 flex-col">
-        <PreviewCanvas
-          project={project}
-          currentTimeUs={currentTimeUs}
-          playing={playing}
-          zoomTrack={zoomTrack}
-          captions={captions}
-          cursorSamples={cursorSamples}
-          keystrokes={keystrokes}
-          videoRefs={videoRefs}
-          mediaUrls={mediaUrls}
-          mediaVersion={mediaVersion}
-        />
-        <Transport
-          timeMapDuration={timeMap.durationUs}
-          onSplit={() => {
-            const next = splitClipsAt(project.timeline.clips, currentTimeUs, (i) => `clip-split-${Date.now()}-${i}`);
-            if (!next) {
-              showToast('Move the playhead inside a clip to split.', 'error');
-              return;
-            }
-            commit({ ...project, timeline: { ...project.timeline, clips: next } });
-          }}
-          onDeleteRange={() => {
-            const selId = useEditor.getState().selectedClipId;
-            if (selId) {
-              // Delete the selected clip and ripple the rest left.
-              commit(relayoutProject(project, project.timeline.clips.filter((c) => c.id !== selId)));
-              useEditor.getState().setSelectedClip(null);
-            } else {
-              const next = rippleDeleteRange(project.timeline.clips, currentTimeUs - 1_000_000, currentTimeUs);
-              commit(relayoutProject(project, next));
-            }
-          }}
-        />
-        <TimelineStrip
-          project={project}
-          durationUs={timeMap.durationUs}
-          currentTimeUs={currentTimeUs}
-          onSeek={setTime}
-        />
-        <ShortcutBar onUndo={undo} onRedo={redo} />
+    <div className="flex h-full min-h-0 flex-col bg-[#08090d]">
+      {/* RECORDLY-STYLE STUDIO TOP NAVIGATION BAR */}
+      <header className="h-12 shrink-0 border-b border-white/10 bg-[#0e1118] px-3 flex items-center justify-between z-20">
+        {/* Left: Library button, Undo, Redo */}
+        <div className="flex items-center gap-1.5">
+          <button
+            type="button"
+            onClick={() => navigate('library')}
+            className="px-2.5 py-1 text-xs font-medium rounded-lg hover:bg-white/10 text-white/80 flex items-center gap-1.5 transition-colors border border-transparent hover:border-white/10"
+          >
+            <IconChevronLeft size={13} />
+            <span>Library</span>
+          </button>
+          <div className="h-4 w-px bg-white/10 mx-1" />
+          <IconButton label="Undo (⌘Z)" onClick={undo}>
+            <IconUndo size={14} />
+          </IconButton>
+          <IconButton label="Redo (⇧⌘Z)" onClick={redo}>
+            <IconRedo size={14} />
+          </IconButton>
+        </div>
+
+        {/* Center: Project Pill */}
+        <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 border border-white/10 text-xs text-white/90 font-medium">
+          <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
+          <span>{project.name}</span>
+          <span className="text-[10px] text-white/40 font-mono">.recast</span>
+        </div>
+
+        {/* Right: Aspect ratio, Crop button, Presets dropdown, Blue Export button */}
+        <div className="flex items-center gap-2">
+          {/* Custom Styled Aspect Ratio Pill */}
+          <div className="flex items-center">
+            <select
+              value={project.style.aspect}
+              onChange={(e) => commit({ ...project, style: { ...project.style, aspect: e.target.value as any } })}
+              className="bg-[#161a24] hover:bg-[#1e2330] border border-white/15 text-white/90 rounded-lg px-2.5 py-1 text-xs font-medium focus:outline-none focus:border-blue-500 cursor-pointer transition-colors shadow-sm"
+              title="Aspect ratio"
+            >
+              <option value="16:9" className="bg-[#12151d]">16:9 Landscape</option>
+              <option value="9:16" className="bg-[#12151d]">9:16 Portrait / Reels</option>
+              <option value="1:1" className="bg-[#12151d]">1:1 Square</option>
+              <option value="4:5" className="bg-[#12151d]">4:5 Social</option>
+              <option value="21:9" className="bg-[#12151d]">21:9 Ultrawide</option>
+              <option value="source" className="bg-[#12151d]">Source</option>
+            </select>
+          </div>
+
+          {/* Quick Crop Toggle */}
+          <button
+            type="button"
+            onClick={() => handleTabClick('crop')}
+            className={`px-2.5 py-1 text-xs font-medium rounded-lg border transition-colors flex items-center gap-1.5 ${
+              panel === 'crop' && drawerOpen
+                ? 'bg-blue-600/30 border-blue-500 text-blue-300'
+                : 'bg-[#161a24] hover:bg-[#1e2330] border-white/15 text-white/80'
+            }`}
+          >
+            <IconCrop size={13} />
+            <span>Crop</span>
+          </button>
+
+          {/* Custom Styled Presets Pill */}
+          <div className="flex items-center">
+            <select
+              value={BUILTIN_PRESETS.some((p) => p.id === project.style.id) ? project.style.id : 'custom'}
+              onChange={(e) => {
+                const p = BUILTIN_PRESETS.find((x) => x.id === e.target.value);
+                if (p) {
+                  commit({
+                    ...project,
+                    style: {
+                      ...p,
+                      aspect: project.style.aspect,
+                      aspectCustom: project.style.aspectCustom,
+                    },
+                  });
+                }
+              }}
+              className="bg-[#161a24] hover:bg-[#1e2330] border border-white/15 text-white/90 rounded-lg px-2.5 py-1 text-xs font-medium focus:outline-none focus:border-blue-500 cursor-pointer transition-colors shadow-sm"
+              title="Style presets"
+            >
+              {BUILTIN_PRESETS.map((p) => (
+                <option key={p.id} value={p.id} className="bg-[#12151d]">
+                  Preset: {p.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Solid Blue Recordly Export Button */}
+          <button
+            type="button"
+            onClick={() => navigate('export')}
+            className="px-3.5 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs flex items-center gap-1.5 shadow-md shadow-blue-600/30 transition-all hover:scale-[1.02] active:scale-[0.98]"
+          >
+            <IconDownload size={14} />
+            <span>Export</span>
+          </button>
+        </div>
+      </header>
+
+      {/* STUDIO BODY: Left Rail Dock + Collapsible Inspector Drawer + Center Canvas & Timeline */}
+      <div className="flex flex-1 min-h-0">
+        {/* Left Slim Vertical Icon Rail Dock (Single primary rail in editor) */}
+        <aside className="w-14 shrink-0 bg-[#0c0e14] border-r border-white/10 flex flex-col items-center py-3 gap-2.5 z-10 select-none">
+          <RailTab
+            label="Style"
+            icon={<IconSparkle size={17} />}
+            active={panel === 'style' && drawerOpen}
+            onClick={() => handleTabClick('style')}
+          />
+          <RailTab
+            label="Motion"
+            icon={<IconCursor size={17} />}
+            active={panel === 'motion' && drawerOpen}
+            onClick={() => handleTabClick('motion')}
+          />
+          <RailTab
+            label="Webcam"
+            icon={<IconCamera size={17} />}
+            active={panel === 'facecam' && drawerOpen}
+            onClick={() => handleTabClick('facecam')}
+          />
+          <RailTab
+            label="Crop"
+            icon={<IconCrop size={17} />}
+            active={panel === 'crop' && drawerOpen}
+            onClick={() => handleTabClick('crop')}
+          />
+          <RailTab
+            label="Audio"
+            icon={<IconSpeaker size={17} />}
+            active={panel === 'audio' && drawerOpen}
+            onClick={() => handleTabClick('audio')}
+          />
+          <RailTab
+            label="Captions"
+            icon={<IconCaptions size={17} />}
+            active={panel === 'captions' && drawerOpen}
+            onClick={() => handleTabClick('captions')}
+          />
+
+          {/* Bottom rail actions: Collapse Toggle & Settings */}
+          <div className="mt-auto flex flex-col items-center gap-2 pt-2 border-t border-white/10 w-full">
+            <button
+              type="button"
+              onClick={() => setDrawerOpen((o) => !o)}
+              className="w-10 h-7 rounded-lg flex items-center justify-center text-white/40 hover:text-white hover:bg-white/10 transition-colors"
+              title={drawerOpen ? 'Collapse sidebar (Maximize canvas)' : 'Expand sidebar'}
+            >
+              {drawerOpen ? <IconChevronLeft size={13} /> : <IconChevronRight size={13} />}
+            </button>
+            <button
+              type="button"
+              onClick={() => navigate('settings')}
+              className="w-10 h-10 rounded-xl flex flex-col items-center justify-center text-white/50 hover:text-white/90 hover:bg-white/5 transition-colors"
+              title="Settings"
+            >
+              <IconSettings size={15} />
+              <span className="text-[9px] font-medium leading-none mt-0.5">Settings</span>
+            </button>
+          </div>
+        </aside>
+
+        {/* Collapsible Left Inspector Drawer */}
+        {drawerOpen ? (
+          <aside className="w-80 shrink-0 bg-[#10131c] border-r border-white/10 overflow-y-auto p-4 flex flex-col animate-in slide-in-from-left-2 duration-150">
+            <div className="flex items-center justify-between pb-3 mb-3 border-b border-white/10">
+              <span className="text-xs font-bold uppercase tracking-wider text-white/80">
+                {panel === 'style' && 'Canvas & Background'}
+                {panel === 'motion' && 'Zoom & Cursor FX'}
+                {panel === 'facecam' && 'Face Camera PiP'}
+                {panel === 'crop' && 'Crop & Frame'}
+                {panel === 'audio' && 'Audio & Voice EQ'}
+                {panel === 'captions' && 'AI Speech Subtitles'}
+              </span>
+              <button
+                type="button"
+                onClick={() => setDrawerOpen(false)}
+                className="px-2 py-0.5 rounded text-[10px] text-white/40 hover:text-white/80 hover:bg-white/10 border border-white/5 flex items-center gap-1 transition-colors"
+                title="Collapse sidebar (Expand canvas to full width)"
+              >
+                <IconChevronLeft size={11} />
+                <span>Collapse</span>
+              </button>
+            </div>
+
+            <div key={panel} className="panel-in flex-1">
+              {panel === 'motion' && (
+                <MotionPanel
+                  project={project}
+                  zoomTrack={zoomTrack}
+                  currentTimeUs={currentTimeUs}
+                  cursorSamples={cursorSamples}
+                  cursorClicks={cursorClicks}
+                  commit={commit}
+                />
+              )}
+              {panel === 'style' && <StylePanel project={project} commit={commit} />}
+              {panel === 'facecam' && <FacecamPanel project={project} commit={commit} />}
+              {panel === 'crop' && <CropPanel project={project} commit={commit} />}
+              {panel === 'audio' && <AudioPanel project={project} commit={commit} />}
+              {panel === 'captions' && <CaptionsPanel project={project} captions={captions} commit={commit} onLoaded={setCaptions} />}
+            </div>
+          </aside>
+        ) : null}
+
+        {/* Center Workspace: Canvas + Unified Studio Timeline */}
+        <div className="flex min-w-0 flex-1 flex-col bg-[#07080c]">
+          {project.media.cursor?.available === false ? (
+            <div className="flex items-center justify-between px-4 py-1.5 bg-blue-950/40 border-b border-blue-500/20 text-xs text-blue-200">
+              <span className="inline-flex items-center gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse" />
+                <span><strong>Imported Video Mode:</strong> Clean native cursor preserved. You can add custom zoom blocks on the timeline, re-frame to 9:16 Shorts, and customize styling.</span>
+              </span>
+            </div>
+          ) : null}
+          <PreviewCanvas
+            project={project}
+            currentTimeUs={currentTimeUs}
+            playing={playing}
+            zoomTrack={zoomTrack}
+            captions={captions}
+            cursorSamples={cursorSamples}
+            keystrokes={keystrokes}
+            videoRefs={videoRefs}
+            mediaUrls={mediaUrls}
+            mediaVersion={mediaVersion}
+          />
+          <TimelineStrip
+            project={project}
+            durationUs={timeMap.durationUs}
+            currentTimeUs={currentTimeUs}
+            onSeek={setTime}
+            onSplit={() => {
+              const next = splitClipsAt(project.timeline.clips, currentTimeUs, (i) => `clip-split-${Date.now()}-${i}`);
+              if (!next) {
+                showToast('Move the playhead inside a clip to split.', 'error');
+                return;
+              }
+              commit({ ...project, timeline: { ...project.timeline, clips: next } });
+            }}
+            onDeleteRange={() => {
+              const selId = useEditor.getState().selectedClipId;
+              if (selId) {
+                commit(relayoutProject(project, project.timeline.clips.filter((c) => c.id !== selId)));
+                useEditor.getState().setSelectedClip(null);
+              } else {
+                const next = rippleDeleteRange(project.timeline.clips, currentTimeUs - 1_000_000, currentTimeUs);
+                commit(relayoutProject(project, next));
+              }
+            }}
+          />
+        </div>
       </div>
-
-      {/* Right panel */}
-      <aside className="w-80 shrink-0 overflow-auto border-l border-hairline p-4">
-        <div className="rc-tabstrip mb-3" role="tablist" aria-label="Editor panels">
-          <PanelTab label="Motion" active={panel === 'motion'} onClick={() => setPanel('motion')} />
-          <PanelTab label="Style" active={panel === 'style'} onClick={() => setPanel('style')} />
-          <PanelTab label="Cam" active={panel === 'facecam'} onClick={() => setPanel('facecam')} />
-          <PanelTab label="Crop" active={panel === 'crop'} onClick={() => setPanel('crop')} />
-          <PanelTab label="Audio" active={panel === 'audio'} onClick={() => setPanel('audio')} />
-          <PanelTab label="CC" active={panel === 'captions'} onClick={() => setPanel('captions')} />
-        </div>
-
-        <div key={panel} className="panel-in" role="tabpanel" aria-label={`${panel} panel`}>
-          {panel === 'motion' && (
-            <MotionPanel
-              project={project}
-              zoomTrack={zoomTrack}
-              currentTimeUs={currentTimeUs}
-              cursorSamples={cursorSamples}
-              cursorClicks={cursorClicks}
-              commit={commit}
-            />
-          )}
-          {panel === 'style' && <StylePanel project={project} commit={commit} />}
-          {panel === 'facecam' && <FacecamPanel project={project} commit={commit} />}
-          {panel === 'crop' && <CropPanel project={project} commit={commit} />}
-          {panel === 'audio' && <AudioPanel project={project} commit={commit} />}
-          {panel === 'captions' && <CaptionsPanel project={project} captions={captions} commit={commit} onLoaded={setCaptions} />}
-        </div>
-
-        <div className="mt-6 border-t border-hairline pt-4">
-          <Button variant="primary" className="w-full" onClick={() => navigate('export')}>
-            <span className="inline-flex items-center gap-2">
-              <IconDownload size={14} /> Export…
-            </span>
-          </Button>
-        </div>
-      </aside>
     </div>
+  );
+}
+
+function RailTab({
+  label,
+  icon,
+  active,
+  onClick,
+}: {
+  label: string;
+  icon: string | React.ReactNode;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      role="tab"
+      aria-selected={active}
+      onClick={onClick}
+      className={`relative w-10 h-10 rounded-xl flex flex-col items-center justify-center transition-all ${
+        active
+          ? 'bg-blue-600/20 text-blue-400 font-bold'
+          : 'text-white/50 hover:text-white/80 hover:bg-white/5'
+      }`}
+      title={label}
+    >
+      {active ? (
+        <span className="absolute -left-2 w-1 h-5 rounded-r bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.8)]" />
+      ) : null}
+      <span className="text-sm">{icon}</span>
+      <span className="text-[9px] font-medium leading-none mt-0.5">{label}</span>
+    </button>
   );
 }
 
@@ -329,6 +580,7 @@ function PreviewCanvas({
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const videoHostRef = useRef<HTMLDivElement | null>(null);
+  const scratchCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const [frameTick, setFrameTick] = useState(0);
   const [bgImage, setBgImage] = useState<HTMLImageElement | null>(null);
   // FrameSync owns the hidden videos: it seeks them when scrubbing, plays
@@ -459,7 +711,7 @@ function PreviewCanvas({
         const segId = segmentId === '__echo__' || segmentId === '__active__' ? hit.clip.segmentId : segmentId;
         return frameSync.getFrame(segId, screenLocalUs);
       },
-      scratch: document.createElement('canvas'),
+      scratch: (scratchCanvasRef.current ||= document.createElement('canvas')),
       getBackgroundImage: () => bgImage,
       getCameraFrame: () => {
         if (!hit || !project.media.camera) return null;
@@ -678,11 +930,88 @@ function FacecamPanel({
     );
   }
 
-  const positions: Array<{ id: 'tl' | 'tr' | 'bl' | 'br'; label: string }> = [
-    { id: 'tl', label: 'Top left' },
-    { id: 'tr', label: 'Top right' },
-    { id: 'bl', label: 'Bottom left' },
-    { id: 'br', label: 'Bottom right' },
+  const positions: Array<{ id: 'tl' | 'tc' | 'tr' | 'ml' | 'center' | 'mr' | 'bl' | 'bc' | 'br'; label: string; icon: React.ReactNode }> = [
+    {
+      id: 'tl',
+      label: 'Top Left',
+      icon: (
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M7 17V7h10M7 7l10 10" />
+        </svg>
+      ),
+    },
+    {
+      id: 'tc',
+      label: 'Top Center',
+      icon: (
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M12 19V5M5 12l7-7 7 7" />
+        </svg>
+      ),
+    },
+    {
+      id: 'tr',
+      label: 'Top Right',
+      icon: (
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M17 17V7H7M17 7 7 17" />
+        </svg>
+      ),
+    },
+    {
+      id: 'ml',
+      label: 'Middle Left',
+      icon: (
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M19 12H5M12 19l-7-7 7-7" />
+        </svg>
+      ),
+    },
+    {
+      id: 'center',
+      label: 'Center',
+      icon: (
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+          <circle cx="12" cy="12" r="4.5" />
+        </svg>
+      ),
+    },
+    {
+      id: 'mr',
+      label: 'Middle Right',
+      icon: (
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M5 12h14M12 5l7 7-7 7" />
+        </svg>
+      ),
+    },
+    {
+      id: 'bl',
+      label: 'Bottom Left',
+      icon: (
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M7 7v10h10M7 17 17 7" />
+        </svg>
+      ),
+    },
+    {
+      id: 'bc',
+      label: 'Bottom Center',
+      icon: (
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M12 5v14M5 12l7 7 7-7" />
+        </svg>
+      ),
+    },
+    {
+      id: 'br',
+      label: 'Bottom Right',
+      icon: (
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M17 7v10H7M17 17 7 7" />
+        </svg>
+      ),
+    },
   ];
 
   return (
@@ -697,25 +1026,30 @@ function FacecamPanel({
       ) : null}
       {fc.enabled ? (
         <>
-          <Field label="Position">
-            <div className="grid grid-cols-2 gap-2">
-              {positions.map((p) => (
-                <button
-                  key={p.id}
-                  type="button"
-                  aria-label={p.label}
-                  aria-pressed={fc.position === p.id}
-                  onClick={() => setFacecam({ position: p.id })}
-                  className="rounded-lg border px-3 py-2 text-xs font-semibold transition-colors"
-                  style={{
-                    borderColor: fc.position === p.id ? 'var(--accent)' : 'var(--hairline-strong)',
-                    background: fc.position === p.id ? 'var(--accent-subtle)' : 'transparent',
-                    color: fc.position === p.id ? 'var(--accent)' : 'var(--text-secondary)',
-                  }}
-                >
-                  {p.label}
-                </button>
-              ))}
+          <Field label="Position (9-Point Grid)">
+            <div className="grid grid-cols-3 gap-1.5 p-1.5 rounded-xl border border-white/10 bg-white/5">
+              {positions.map((p) => {
+                const isActive = (fc.position ?? 'br') === p.id;
+                return (
+                  <button
+                    key={p.id}
+                    type="button"
+                    aria-label={p.label}
+                    title={p.label}
+                    aria-pressed={isActive}
+                    onClick={() => setFacecam({ position: p.id })}
+                    className="flex flex-col items-center justify-center py-2 px-1 rounded-lg border text-xs font-semibold transition-all hover:scale-[1.03] active:scale-[0.98]"
+                    style={{
+                      borderColor: isActive ? 'var(--accent)' : 'transparent',
+                      background: isActive ? 'var(--accent-subtle, rgba(124, 140, 248, 0.18))' : 'rgba(255, 255, 255, 0.03)',
+                      color: isActive ? 'var(--accent)' : 'var(--text-secondary)',
+                    }}
+                  >
+                    <span className="text-sm leading-none">{p.icon}</span>
+                    <span className="text-[10px] mt-1 font-medium truncate max-w-full">{p.label}</span>
+                  </button>
+                );
+              })}
             </div>
           </Field>
           <Field label={`Size — ${Math.round(fc.widthFraction * 100)}%`}>
@@ -939,12 +1273,14 @@ function CaptionsPanel({
           <div className="flex items-center justify-between text-xs">
             <span className="font-semibold text-white/90">{activeModel.label}</span>
             {activeModel.downloaded ? (
-              <span className="text-[11px] font-medium text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded">
-                ✓ Ready (Downloaded)
+              <span className="text-[11px] font-medium text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded inline-flex items-center gap-1">
+                <IconCheck size={11} />
+                <span>Ready (Downloaded)</span>
               </span>
             ) : (
-              <span className="text-[11px] font-medium text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded">
-                ⬇ Needs Download ({activeModel.sizeMb} MB)
+              <span className="text-[11px] font-medium text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded inline-flex items-center gap-1">
+                <IconDownload size={11} />
+                <span>Needs Download ({activeModel.sizeMb} MB)</span>
               </span>
             )}
           </div>
@@ -956,7 +1292,17 @@ function CaptionsPanel({
               onClick={handleTranscribe}
             >
               <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
-                {transcribing ? 'Generating Subtitles…' : '✨ Generate AI Subtitles'}
+                {transcribing ? (
+                  <>
+                    <span className="inline-block w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    <span>Generating Subtitles…</span>
+                  </>
+                ) : (
+                  <>
+                    <IconSparkle size={14} />
+                    <span>Generate AI Subtitles</span>
+                  </>
+                )}
               </span>
             </Button>
           ) : (
@@ -967,9 +1313,12 @@ function CaptionsPanel({
                 onClick={() => handleDownloadModel(activeModel.id)}
               >
                 <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
-                  {downloadingId === activeModel.id
-                    ? `Downloading… ${downloadPct}%`
-                    : `⬇ Download Model (${activeModel.sizeMb} MB)`}
+                  <IconDownload size={14} />
+                  <span>
+                    {downloadingId === activeModel.id
+                      ? `Downloading… ${downloadPct}%`
+                      : `Download Model (${activeModel.sizeMb} MB)`}
+                  </span>
                 </span>
               </Button>
               {downloadingId === activeModel.id ? (
@@ -998,15 +1347,19 @@ function CaptionsPanel({
                 <span className="text-white/40 ml-1.5">({m.sizeMb} MB)</span>
               </div>
               {m.downloaded ? (
-                <span className="text-emerald-400 text-[11px]">✓ Installed</span>
+                <span className="text-emerald-400 text-[11px] inline-flex items-center gap-1">
+                  <IconCheck size={11} />
+                  <span>Installed</span>
+                </span>
               ) : (
                 <button
                   type="button"
                   disabled={downloadingId === m.id}
                   onClick={() => handleDownloadModel(m.id)}
-                  className="px-2 py-0.5 rounded bg-white/10 hover:bg-white/20 text-[11px] font-medium text-white/90 transition-colors"
+                  className="px-2 py-0.5 rounded bg-white/10 hover:bg-white/20 text-[11px] font-medium text-white/90 transition-colors inline-flex items-center gap-1"
                 >
-                  {downloadingId === m.id ? `${downloadPct}%` : 'Download'}
+                  <IconDownload size={11} />
+                  <span>{downloadingId === m.id ? `${downloadPct}%` : 'Download'}</span>
                 </button>
               )}
             </div>
@@ -1032,6 +1385,74 @@ function CaptionsPanel({
         >
           Export .srt
         </Button>
+      </div>
+
+      {/* Subtitle Visual Appearance */}
+      <div className="pt-2 border-t border-white/10 space-y-3">
+        <h4 className="text-xs font-semibold text-white/90">Subtitle Visual Style</h4>
+        <Field label="Display Style">
+          <Select
+            value={project.style.captions.style}
+            onValueChange={(val) =>
+              commit({
+                ...project,
+                style: {
+                  ...project.style,
+                  captions: { ...project.style.captions, style: val as 'clean' | 'bold' | 'boxed' | 'pill' | 'karaoke' },
+                },
+              })
+            }
+            options={[
+              { value: 'karaoke', label: 'Karaoke Highlight (Active Accent)' },
+              { value: 'pill', label: 'Translucent Glass Pill' },
+              { value: 'boxed', label: 'High-Contrast Box' },
+              { value: 'clean', label: 'Clean Shadowed Text' },
+            ]}
+            ariaLabel="Subtitle style"
+            fullWidth
+          />
+        </Field>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Text Color">
+            <ColorPicker
+              value={project.style.captions.color}
+              onChange={(color) =>
+                commit({
+                  ...project,
+                  style: { ...project.style, captions: { ...project.style.captions, color } },
+                })
+              }
+              ariaLabel="Text Color"
+            />
+          </Field>
+          <Field label="Highlight Color">
+            <ColorPicker
+              value={project.style.captions.highlightColor}
+              onChange={(highlightColor) =>
+                commit({
+                  ...project,
+                  style: { ...project.style, captions: { ...project.style.captions, highlightColor } },
+                })
+              }
+              ariaLabel="Highlight Color"
+            />
+          </Field>
+        </div>
+        <Field label={`Font Size — ${project.style.captions.sizePx}px`}>
+          <Slider
+            value={project.style.captions.sizePx}
+            min={16}
+            max={64}
+            step={2}
+            ariaLabel="Font Size"
+            onValueChange={(sizePx) =>
+              commit({
+                ...project,
+                style: { ...project.style, captions: { ...project.style.captions, sizePx } },
+              })
+            }
+          />
+        </Field>
       </div>
 
       <div>

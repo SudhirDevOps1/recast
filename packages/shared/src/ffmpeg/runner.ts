@@ -115,7 +115,35 @@ export class FfmpegRunner {
     file: string,
   ): Promise<{ durationUs: number; codec: string; width: number; height: number } | null> {
     const probePath = this.ffprobePath;
-    if (!probePath) return null;
+    if (!probePath) {
+      if (!this.ffmpegPath) return null;
+      // Fallback using ffmpeg -i when ffprobe binary is not bundled
+      return new Promise((resolve) => {
+        try {
+          const child = spawn(this.ffmpegPath!, ['-hide_banner', '-i', file], {
+            shell: false,
+            stdio: ['ignore', 'ignore', 'pipe'],
+          });
+          let stderr = '';
+          child.stderr?.on('data', (d: Buffer) => (stderr += d.toString()));
+          child.on('close', () => {
+            const durMatch = /Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)/i.exec(stderr);
+            const resMatch = /Stream #\d+:\d+.*Video:.*?(\d{2,5})x(\d{2,5})/i.exec(stderr);
+            if (!durMatch) return resolve(null);
+            const hours = Number(durMatch[1]);
+            const mins = Number(durMatch[2]);
+            const secs = Number(durMatch[3]);
+            const durationUs = Math.round((hours * 3600 + mins * 60 + secs) * 1_000_000);
+            const width = resMatch ? Number(resMatch[1]) : 1920;
+            const height = resMatch ? Number(resMatch[2]) : 1080;
+            resolve({ durationUs, codec: 'h264', width, height });
+          });
+          child.on('error', () => resolve(null));
+        } catch {
+          resolve(null);
+        }
+      });
+    }
     const res = await new Promise<{ code: number | null; stdout: string }>((resolve, reject) => {
       let child: ChildProcess;
       try {
@@ -139,7 +167,20 @@ export class FfmpegRunner {
       child.on('error', (e) => reject(new FfmpegError(e.message)));
       child.on('close', (code) => resolve({ code, stdout }));
     });
-    if (res.code !== 0) return null;
+    if (res.code !== 0 || !res.stdout) {
+      // Fallback using ffmpeg banner if ffprobe failed or was killed
+      const probeRes = await this.run(['-hide_banner', '-i', file], { timeoutMs: 15_000 });
+      const durMatch = /Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)/i.exec(probeRes.stderr);
+      const resMatch = /Stream #\d+:\d+.*Video:.*?(\d{2,5})x(\d{2,5})/i.exec(probeRes.stderr);
+      if (!durMatch) return null;
+      const hours = Number(durMatch[1]);
+      const mins = Number(durMatch[2]);
+      const secs = Number(durMatch[3]);
+      const durationUs = Math.round((hours * 3600 + mins * 60 + secs) * 1_000_000);
+      const width = resMatch ? Number(resMatch[1]) : 1920;
+      const height = resMatch ? Number(resMatch[2]) : 1080;
+      return { durationUs, codec: 'h264', width, height };
+    }
     try {
       const json = JSON.parse(res.stdout) as {
         streams?: Array<{ codec_name?: string; width?: number; height?: number }>;
@@ -147,7 +188,20 @@ export class FfmpegRunner {
       };
       const stream = json.streams?.[0];
       const durationS = json.format?.duration ? Number(json.format.duration) : NaN;
-      if (!stream || !Number.isFinite(durationS)) return null;
+      if (!stream || !Number.isFinite(durationS)) {
+        // Fallback using ffmpeg banner
+        const probeRes = await this.run(['-hide_banner', '-i', file], { timeoutMs: 15_000 });
+        const durMatch = /Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)/i.exec(probeRes.stderr);
+        const resMatch = /Stream #\d+:\d+.*Video:.*?(\d{2,5})x(\d{2,5})/i.exec(probeRes.stderr);
+        if (!durMatch) return null;
+        const hours = Number(durMatch[1]);
+        const mins = Number(durMatch[2]);
+        const secs = Number(durMatch[3]);
+        const durationUs = Math.round((hours * 3600 + mins * 60 + secs) * 1_000_000);
+        const width = resMatch ? Number(resMatch[1]) : 1920;
+        const height = resMatch ? Number(resMatch[2]) : 1080;
+        return { durationUs, codec: 'h264', width, height };
+      }
       return {
         durationUs: Math.round(durationS * 1_000_000),
         codec: stream.codec_name ?? 'unknown',
@@ -191,6 +245,41 @@ export class FfmpegRunner {
     if (res.code !== 0) throw new FfmpegError(`Thumbnail failed: ${res.stderr.slice(-400)}`, res.stderr);
   }
 
+  async hasAudioStream(file: string): Promise<boolean> {
+    const probePath = this.ffprobePath;
+    if (probePath) {
+      try {
+        const res = await new Promise<{ code: number | null; stdout: string }>((resolve, reject) => {
+          const child = spawn(
+            probePath,
+            [
+              '-v', 'error',
+              '-select_streams', 'a',
+              '-show_entries', 'stream=codec_name',
+              '-of', 'json',
+              file,
+            ],
+            { shell: false },
+          );
+          let stdout = '';
+          child.stdout?.on('data', (d: Buffer) => {
+            stdout += d.toString();
+          });
+          child.on('close', (code) => resolve({ code, stdout }));
+          child.on('error', reject);
+        });
+        if (res.code === 0 && res.stdout) {
+          const parsed = JSON.parse(res.stdout) as { streams?: unknown[] };
+          return Array.isArray(parsed.streams) && parsed.streams.length > 0;
+        }
+      } catch {
+        /* fallback to ffmpeg banner probe below */
+      }
+    }
+    const probeRes = await this.run(['-hide_banner', '-i', file], { timeoutMs: 15_000 });
+    return probeRes.stderr.includes('Audio:') || probeRes.stdout.includes('Audio:');
+  }
+
   async extractWav(videoFile: string, outFile: string, sampleRate = 16_000): Promise<void> {
     const res = await this.run(
       [
@@ -199,7 +288,31 @@ export class FfmpegRunner {
       ],
       { timeoutMs: 10 * 60_000 },
     );
-    if (res.code !== 0) throw new FfmpegError(`Audio extraction failed: ${res.stderr.slice(-400)}`, res.stderr);
+    if (res.code !== 0) {
+      if (
+        res.stderr.includes('does not contain any stream') ||
+        res.stderr.includes('matches no streams') ||
+        res.stderr.includes('Output file #0 does not contain any stream') ||
+        res.stderr.includes('Stream map')
+      ) {
+        throw new FfmpegError('NO_AUDIO_STREAM: Source file contains no audio track to extract.', res.stderr);
+      }
+      const errLines = res.stderr
+        .split(/\r?\n|\r/)
+        .map((l) => l.trim())
+        .filter(
+          (l) =>
+            l &&
+            !l.startsWith('Metadata:') &&
+            !l.startsWith('Duration:') &&
+            !l.startsWith('Stream #') &&
+            !l.startsWith('Output #') &&
+            !l.includes('kb/s') &&
+            !l.includes('fps,'),
+        );
+      const lastLine = errLines[errLines.length - 1] || 'Process exited with error';
+      throw new FfmpegError(`Audio extraction failed: ${lastLine}`, res.stderr);
+    }
   }
 
   /** Audio waveform peaks: decode to PCM and downsample. */

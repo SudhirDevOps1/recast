@@ -363,30 +363,56 @@ export function MotionPanel({
       <section>
         <SectionTitle>Cursor effects</SectionTitle>
         <div className="space-y-3">
-          <Field label="Release bounce">
+          <Field label="Cursor overlay" hint="Turn off if your video already has a recorded cursor to eliminate double cursor.">
             <Switch
-              checked={project.style.cursor.clickBounce}
-              onCheckedChange={(v) => commit({ ...project, style: { ...project.style, cursor: { ...project.style.cursor, clickBounce: v } } })}
-              ariaLabel="Cursor release bounce"
+              checked={project.style.cursor.look !== 'none'}
+              onCheckedChange={(on) =>
+                commit({
+                  ...project,
+                  style: {
+                    ...project.style,
+                    cursor: {
+                      ...project.style.cursor,
+                      look: on ? 'pointer' : 'none',
+                    },
+                  },
+                })
+              }
+              ariaLabel="Cursor overlay"
             />
           </Field>
-          <Field label="Motion trail">
-            <Switch
-              checked={project.style.cursor.trail}
-              onCheckedChange={(v) => commit({ ...project, style: { ...project.style, cursor: { ...project.style.cursor, trail: v } } })}
-              ariaLabel="Cursor motion trail"
-            />
-          </Field>
-          <Field label={`Smoothing — ${Math.round((project.style.cursor.cursorSmoothing ?? 0) * 100)}%`}>
-            <Slider
-              value={project.style.cursor.cursorSmoothing ?? 0}
-              min={0}
-              max={1}
-              step={0.05}
-              ariaLabel="Cursor smoothing"
-              onValueChange={(v) => commit({ ...project, style: { ...project.style, cursor: { ...project.style.cursor, cursorSmoothing: v } } })}
-            />
-          </Field>
+          {project.style.cursor.look === 'none' ? (
+            <div className="rounded-xl border border-white/10 p-2.5 text-xs bg-white/5 text-white/50">
+              Clean video mode active: synthetic cursor overlay and effects are hidden.
+            </div>
+          ) : (
+            <>
+              <Field label="Release bounce">
+                <Switch
+                  checked={project.style.cursor.clickBounce}
+                  onCheckedChange={(v) => commit({ ...project, style: { ...project.style, cursor: { ...project.style.cursor, clickBounce: v } } })}
+                  ariaLabel="Cursor release bounce"
+                />
+              </Field>
+              <Field label="Motion trail">
+                <Switch
+                  checked={project.style.cursor.trail}
+                  onCheckedChange={(v) => commit({ ...project, style: { ...project.style, cursor: { ...project.style.cursor, trail: v } } })}
+                  ariaLabel="Cursor motion trail"
+                />
+              </Field>
+              <Field label={`Smoothing — ${Math.round((project.style.cursor.cursorSmoothing ?? 0) * 100)}%`}>
+                <Slider
+                  value={project.style.cursor.cursorSmoothing ?? 0}
+                  min={0}
+                  max={1}
+                  step={0.05}
+                  ariaLabel="Cursor smoothing"
+                  onValueChange={(v) => commit({ ...project, style: { ...project.style, cursor: { ...project.style.cursor, cursorSmoothing: v } } })}
+                />
+              </Field>
+            </>
+          )}
         </div>
       </section>
     </div>

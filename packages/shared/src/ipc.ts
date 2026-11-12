@@ -276,7 +276,7 @@ export const IPC = {
   'library:open': def(z.object({ id: z.string() }), RecastProjectSchema.nullable()),
   'library:delete': def(z.object({ id: z.string() }), z.void()),
   'library:createSample': def(z.void(), z.object({ projectId: z.string().nullable() })),
-  'library:importMedia': def(z.object({ path: z.string() }), z.object({ projectId: z.string().nullable(), error: z.string().optional() })),
+  'library:importMedia': def(z.object({ path: z.string().optional() }), z.object({ projectId: z.string().nullable(), error: z.string().optional() })),
 
   'projects:save': def(z.object({ project: RecastProjectSchema }), z.void()),
   'projects:generateThumbnails': def(

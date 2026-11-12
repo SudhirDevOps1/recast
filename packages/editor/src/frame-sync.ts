@@ -228,7 +228,9 @@ export class FrameSync {
     const ready = v.readyState >= 2 && !v.error;
     const inRange = Math.abs(v.currentTime - target) <= this.opts.resyncToleranceUs / 1e6;
     if (ready && inRange) {
-      this.captureSnapshot(segmentId, b);
+      if (v.paused || !b.snapshot) {
+        this.captureSnapshot(segmentId, b);
+      }
       return v;
     }
     // Not paintable right now: seek (redraw arrives via `seeked`) and fall

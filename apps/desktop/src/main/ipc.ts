@@ -1,6 +1,6 @@
 import { ipcMain, dialog, shell, BrowserWindow, screen, app, desktopCapturer } from 'electron';
 import { promises as fs, existsSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, basename, extname } from 'node:path';
 import {
   type IpcChannel,
   type ListSourcesResponse,
@@ -226,12 +226,6 @@ export async function registerIpcHandlers(): Promise<void> {
       c.mainWindow.show();
       c.mainWindow.focus();
       c.mainWindow.webContents.send('recorder:requestStop');
-      // Secondary dispatch ensures throttled/sleeping renderer processes receive the message
-      setTimeout(() => {
-        if (c.mainWindow && !c.mainWindow.isDestroyed()) {
-          c.mainWindow.webContents.send('recorder:requestStop');
-        }
-      }, 150);
     }
   });
   register('recorder:minimizeMainWindow', () => {
@@ -329,12 +323,136 @@ export async function registerIpcHandlers(): Promise<void> {
     return { projectId: null };
   });
   register('library:importMedia', async (payload) => {
-    const { path } = payload as { path: string };
-    const probe = await probeFile(path);
-    if (!probe) {
-      return { projectId: null, error: 'Could not read this file. FFmpeg is required to import existing media — install it in Settings → Media engine.' };
+    let sourcePath = (payload as { path?: string })?.path;
+    if (!sourcePath) {
+      const res = await dialog.showOpenDialog(c.mainWindow!, {
+        title: 'Import Video into Recast Studio',
+        properties: ['openFile'],
+        filters: [
+          { name: 'Videos', extensions: ['mp4', 'webm', 'mov', 'mkv', 'avi'] },
+          { name: 'All Files', extensions: ['*'] },
+        ],
+      });
+      if (res.canceled || res.filePaths.length === 0) {
+        return { projectId: null };
+      }
+      sourcePath = res.filePaths[0]!;
     }
-    return { projectId: null, error: 'Importing existing media files lands with the next phase (see STATUS.md).' };
+
+    if (!existsSync(sourcePath)) {
+      return { projectId: null, error: `The selected file does not exist: ${sourcePath}` };
+    }
+
+    const { runner } = await ffmpegState();
+    if (!runner) {
+      return { projectId: null, error: 'FFmpeg is required to import external video files. Please install it in Settings → Media engine.' };
+    }
+
+    const probe = await runner.probe(sourcePath);
+    if (!probe || probe.durationUs <= 0) {
+      return { projectId: null, error: 'Could not read video stream or duration from this file. Ensure it is a valid video.' };
+    }
+
+    const sessionId = `import-${Date.now()}`;
+    const sessionDir = join(recordingsDir(), sessionId);
+    await fs.mkdir(sessionDir, { recursive: true });
+
+    const targetSegFile = 'seg-0000.mp4';
+    const targetSegPath = join(sessionDir, targetSegFile);
+
+    // If source is already an MP4, try fast copy
+    const isMp4 = sourcePath.toLowerCase().endsWith('.mp4');
+    let copyOk = false;
+    if (isMp4) {
+      try {
+        await fs.copyFile(sourcePath, targetSegPath);
+        copyOk = true;
+      } catch {
+        copyOk = false;
+      }
+    }
+
+    if (!copyOk) {
+      // Remux to mp4 with ffmpeg (fast stream copy first, fallback to ultrafast re-encode if copy fails)
+      const remuxRes = await runner.run([
+        '-y', '-i', sourcePath, '-c', 'copy', '-movflags', '+faststart', targetSegPath,
+      ], { timeoutMs: 300_000 });
+      if (remuxRes.code !== 0 || !existsSync(targetSegPath)) {
+        const transcodeRes = await runner.run([
+          '-y', '-i', sourcePath,
+          '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '18',
+          '-c:a', 'aac', '-b:a', '192k',
+          '-movflags', '+faststart', targetSegPath,
+        ], { timeoutMs: 600_000 });
+        if (transcodeRes.code !== 0 || !existsSync(targetSegPath)) {
+          await fs.rm(sessionDir, { recursive: true, force: true }).catch(() => undefined);
+          return { projectId: null, error: `Failed to convert video for Recast Studio: ${transcodeRes.stderr.slice(-200)}` };
+        }
+      }
+    }
+
+    // Check audio and extract WAV for subtitles and waveform
+    const hasAudio = await runner.hasAudioStream(sourcePath).catch(() => false);
+    if (hasAudio) {
+      const audioWavPath = join(sessionDir, 'audio.wav');
+      await runner.extractWav(sourcePath, audioWavPath, 48000).catch(() => undefined);
+    }
+
+    // Poster thumbnail
+    const posterPath = join(sessionDir, 'thumbnail.png');
+    const thumbSec = Math.min(1.0, probe.durationUs / 2_000_000);
+    await runner.thumbnail(targetSegPath, thumbSec, posterPath, 640).catch(() => undefined);
+
+    // Empty cursor file so cursor samplers don't error
+    await fs.writeFile(join(sessionDir, 'cursor.jsonl'), '', 'utf8');
+
+    // Build session manifest
+    const baseName = basename(sourcePath, extname(sourcePath));
+    const targetStat = await fs.stat(targetSegPath).catch(() => ({ size: 0 }));
+    const manifest: SessionManifest = {
+      schemaVersion: 1,
+      id: sessionId,
+      startedAtEpochMs: Date.now(),
+      state: 'completed',
+      pausedUs: 0,
+      displayScaleFactor: 1,
+      video: {
+        width: probe.width || 1920,
+        height: probe.height || 1080,
+        fps: 30,
+        codec: 'avc1',
+      },
+      screen: {
+        segments: [
+          {
+            id: 'seg-0000',
+            file: targetSegFile,
+            startUs: 0,
+            endUs: probe.durationUs,
+            width: probe.width || 1920,
+            height: probe.height || 1080,
+            sizeBytes: targetStat.size,
+          },
+        ],
+      },
+      audio: hasAudio ? { file: 'audio.wav', codec: 'pcm_s16le', channels: 2, sampleRate: 48000 } : null,
+      camera: null,
+    };
+
+    await fs.writeFile(join(sessionDir, 'manifest.json'), JSON.stringify(manifest, null, 2), 'utf8');
+
+    // Build project from session
+    const project = buildProjectFromSession({ sessionId, manifest, name: baseName || 'Imported Video' });
+    // For imported video: disable synthetic cursor overlay (clean video mode) to prevent duplicate cursors!
+    project.style.cursor.look = 'none';
+    if (project.media.cursor) {
+      project.media.cursor.available = false;
+    }
+    project.zoom.mode = 'manual';
+
+    saveProject(project);
+    upsertProjectMeta(project, { thumbnailFile: 'thumbnail.png' });
+    return { projectId: project.id };
   });
   register('projects:save', (payload) => {
     const { project } = payload as { project: import('@recast/shared').RecastProject };
@@ -667,7 +785,7 @@ export async function registerIpcHandlers(): Promise<void> {
 
         // If recording with camera, launch draggable floating webcam bubble
         if (c.recorderRequest?.cameraDeviceId) {
-          const cam = createFloatingCameraWindow();
+          const cam = createFloatingCameraWindow(c.recorderRequest.cameraDeviceId);
           cam.showInactive();
         }
       });

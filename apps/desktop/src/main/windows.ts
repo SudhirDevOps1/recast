@@ -97,10 +97,10 @@ export function createToolbarWindow(): BrowserWindow {
   const c = context();
   if (c.toolbarWindow) return c.toolbarWindow;
   const primary = screen.getPrimaryDisplay();
-  const width = 410;
-  const height = 50;
+  const width = 480;
+  const height = 54;
   const x = Math.round(primary.workArea.x + (primary.workArea.width - width) / 2);
-  const y = Math.round(primary.workArea.y + primary.workArea.height - height - 28);
+  const y = Math.round(primary.workArea.y + primary.workArea.height - height - 24);
 
   const win = new BrowserWindow({
     x,
@@ -123,15 +123,25 @@ export function createToolbarWindow(): BrowserWindow {
       backgroundThrottling: false,
     },
   });
-  win.setAlwaysOnTop(true, 'floating');
+  win.setAlwaysOnTop(true, 'screen-saver');
+  try {
+    win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+  } catch {
+    /* platform specific */
+  }
   // Exclude floating toolbar from screen recording so it is never baked into footage
   win.setContentProtection(true);
   win.on('show', () => {
     try {
       win.setContentProtection(true);
+      win.setAlwaysOnTop(true, 'screen-saver');
     } catch {
       /* ignore */
     }
+  });
+  win.once('ready-to-show', () => {
+    win.show();
+    win.setAlwaysOnTop(true, 'screen-saver');
   });
 
   const devUrl = process.env.RECAST_DEV_URL ?? process.env.ELECTRON_RENDERER_URL;
@@ -145,7 +155,7 @@ export function createToolbarWindow(): BrowserWindow {
   return win;
 }
 
-export function createFloatingCameraWindow(): BrowserWindow {
+export function createFloatingCameraWindow(targetDeviceId?: string): BrowserWindow {
   const c = context();
   if (c.cameraWindow) return c.cameraWindow;
   const primary = screen.getPrimaryDisplay();
@@ -174,20 +184,31 @@ export function createFloatingCameraWindow(): BrowserWindow {
       backgroundThrottling: false,
     },
   });
-  win.setAlwaysOnTop(true, 'floating');
+  win.setAlwaysOnTop(true, 'screen-saver');
+  try {
+    win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+  } catch {
+    /* platform specific */
+  }
   // Exclude floating webcam window from screen capture so footage is clean!
   win.setContentProtection(true);
   win.on('show', () => {
     try {
       win.setContentProtection(true);
+      win.setAlwaysOnTop(true, 'screen-saver');
     } catch {
       /* ignore */
     }
   });
+  win.once('ready-to-show', () => {
+    win.show();
+    win.setAlwaysOnTop(true, 'screen-saver');
+  });
 
   const devUrl = process.env.RECAST_DEV_URL ?? process.env.ELECTRON_RENDERER_URL;
-  if (devUrl) void win.loadURL(`${devUrl.replace(/\/$/, '')}/camera.html`);
-  else void win.loadFile(join(__dirname, '../renderer/camera.html'));
+  const query = targetDeviceId ? `?deviceId=${encodeURIComponent(targetDeviceId)}` : '';
+  if (devUrl) void win.loadURL(`${devUrl.replace(/\/$/, '')}/camera.html${query}`);
+  else void win.loadFile(join(__dirname, '../renderer/camera.html'), { search: query ? query.slice(1) : undefined });
 
   win.on('closed', () => {
     const ctx = context();

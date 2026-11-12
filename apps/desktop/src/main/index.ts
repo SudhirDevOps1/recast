@@ -1,4 +1,4 @@
-import { app, globalShortcut, powerMonitor, ipcMain, BrowserWindow } from 'electron';
+import { app, globalShortcut, powerMonitor, ipcMain, BrowserWindow, session } from 'electron';
 
 // Ensure canonical app name immediately before evaluating any paths
 app.setName('Recast');
@@ -29,6 +29,9 @@ import { setupUpdater } from './updater';
 // setups, containers and VMs — exhausting it freezes the renderer mid-
 // playback. Redirect that shared memory to /tmp; no downside on desktops.
 app.commandLine.appendSwitch('disable-dev-shm-usage');
+// On Windows WebRTC desktop capture, suppress hardware mouse pointer embedding
+// so Recast can capture clean footage without baked-in double cursors.
+app.commandLine.appendSwitch('enable-features', 'WebRtcHidePointerOnGetDisplayMedia');
 
 const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) {
@@ -46,6 +49,18 @@ async function bootstrap(): Promise<void> {
 
   await app.whenReady();
   handleMediaProtocol();
+
+  // Explicitly grant media (microphone & webcam) and display-capture permissions to sandboxed renderers
+  session.defaultSession.setPermissionRequestHandler((_wc, permission, callback) => {
+    if (permission === 'media' || permission === 'display-capture') {
+      callback(true);
+      return;
+    }
+    callback(false);
+  });
+  session.defaultSession.setPermissionCheckHandler((_wc, permission) => {
+    return permission === 'media' || permission === 'display-capture';
+  });
 
   // Must exist before any renderer calls getDisplayMedia() — without it the
   // request is denied and recording can never start.
@@ -184,10 +199,16 @@ function registerRecordingAppEvents(): void {
 }
 
 // Recording state → tray & broadcast to all floating windows (ToolbarApp etc.)
+let lastTrayUpdate = 0;
 ipcMain.on('recorder:stats', (_e, stats: { phase: string; elapsedUs: number; bytes: number; micMeterDb?: number | null; sessionId?: string | null }) => {
+  const now = Date.now();
   if (stats.phase === 'recording' || stats.phase === 'paused') {
-    renderRecordingMenu(Date.now() - stats.elapsedUs / 1000, stats.bytes, stats.phase === 'paused');
+    if (now - lastTrayUpdate >= 1_000) {
+      lastTrayUpdate = now;
+      renderRecordingMenu(Date.now() - stats.elapsedUs / 1000, stats.bytes, stats.phase === 'paused');
+    }
   } else {
+    lastTrayUpdate = 0;
     renderStoppedMenu();
   }
   const c = context();

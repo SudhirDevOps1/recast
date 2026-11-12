@@ -115,13 +115,20 @@ export const FacecamBorderGradientSchema = z.object({
 });
 export type FacecamBorderGradient = z.infer<typeof FacecamBorderGradientSchema>;
 
+export const FacecamPosition = z.enum([
+  'tl', 'tc', 'tr',
+  'ml', 'center', 'mr',
+  'bl', 'bc', 'br',
+]);
+export type FacecamPosition = z.infer<typeof FacecamPosition>;
+
 /** Face-cam picture-in-picture (Screen-Studio style overlay). Rendered only
  *  when the session actually recorded a camera track — the schema is honest
  *  about availability: project.media.camera drives enablement at draw time. */
 export const FacecamSchema = z.object({
   enabled: z.boolean().default(false),
-  /** Corner placement on the final composition. */
-  position: z.enum(['tl', 'tr', 'bl', 'br']).default('br'),
+  /** Anchor placement on the 9-point composition grid. Defaults to bottom-right. */
+  position: FacecamPosition.default('br'),
   /** Display width as a fraction of output width (0.08–0.45). */
   widthFraction: z.number().min(0.08).max(0.45).default(0.22),
   /** Circular crop (crops the source to a centered square first). */

@@ -17,6 +17,7 @@ files:
   - "!node_modules/**/test/**"
 asarUnpack:
   - "node_modules/better-sqlite3/**"
+  - "node_modules/uiohook-napi/**"
 # Per-platform extraResources: electron-builder resolves ${os} differently per
 # platform ("mac" vs process.platform "darwin"), while the runtime resolver
 # (packages/shared/src/ffmpeg/resolve.ts) always uses process.platform names

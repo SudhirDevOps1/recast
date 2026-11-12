@@ -185,7 +185,17 @@ export async function acquireCaptureSources(
       } catch (e2) {
         const err2 = e2 as Error;
         logCapture('audio-init', 'warn', 'no mic available — recording continues without mic audio', `${err2.name}: ${err2.message}`);
-        showToast('Microphone unavailable — recording continues without mic audio.', 'error');
+        const isPermission = err2.name === 'NotAllowedError' || err2.name === 'PermissionDeniedError';
+        showToast(
+          isPermission
+            ? 'Microphone blocked by Windows Privacy settings. Allow access in Windows Settings.'
+            : 'Microphone unavailable — recording continues without mic audio.',
+          'error',
+          {
+            label: 'Fix in Settings',
+            run: () => void bridge().invoke('permissions:openSystemSettings', { kind: 'microphone' }),
+          },
+        );
       }
     }
   }
@@ -532,10 +542,14 @@ export function releaseRendererRecorder(): void {
   currentHandle = null;
 }
 
+let isStoppingFlow = false;
+
 /** Full stop flow: flush encoder + segments, attach audio, finalize project. */
 export async function stopRecordingFlow(): Promise<string | null> {
+  if (isStoppingFlow) return null;
   const handle = currentHandle;
   if (!handle) return null;
+  isStoppingFlow = true;
   const sessionId = useApp.getState().recorderState?.sessionId ?? '';
   try {
     const { manifest, audioFiles } = await handle.stop();
@@ -551,6 +565,7 @@ export async function stopRecordingFlow(): Promise<string | null> {
     logCapture('pipeline', 'error', 'handle.stop() encountered an error', (err as Error).message);
   } finally {
     releaseRendererRecorder();
+    isStoppingFlow = false;
   }
 
   try {

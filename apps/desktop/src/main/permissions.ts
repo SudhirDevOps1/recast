@@ -28,19 +28,29 @@ function mapStatus(s: string): PermissionStatus['screen'] {
   return 'unsupported';
 }
 
-const DEEP_LINKS = {
+const DEEP_LINKS_DARWIN = {
   screen: 'x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture',
   microphone: 'x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone',
   camera: 'x-apple.systempreferences:com.apple.preference.security?Privacy_Camera',
 } as const;
 
-export async function openPermissionSettings(kind: keyof typeof DEEP_LINKS): Promise<void> {
-  if (process.platform !== 'darwin') {
-    // Honest fallback: we can't deep-link TCC on Windows/Linux.
-    await shell.openExternal('https://github.com/SudhirDevOps1/recast/blob/main/docs/platform-support.md');
+const DEEP_LINKS_WIN = {
+  screen: 'ms-settings:display',
+  microphone: 'ms-settings:privacy-microphone',
+  camera: 'ms-settings:privacy-webcam',
+} as const;
+
+export async function openPermissionSettings(kind: 'screen' | 'microphone' | 'camera'): Promise<void> {
+  if (process.platform === 'darwin') {
+    await shell.openExternal(DEEP_LINKS_DARWIN[kind]);
     return;
   }
-  await shell.openExternal(DEEP_LINKS[kind]);
+  if (process.platform === 'win32') {
+    await shell.openExternal(DEEP_LINKS_WIN[kind]);
+    return;
+  }
+  // Linux fallback:
+  await shell.openExternal('https://github.com/SudhirDevOps1/recast/blob/main/docs/platform-support.md');
 }
 
 export async function requestAccess(kind: 'microphone' | 'camera'): Promise<boolean> {

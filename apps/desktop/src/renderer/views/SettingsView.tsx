@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useApp } from '../state/stores';
 import { bridge } from '../lib/bridge';
-import { Button, Field, Select, Switch, Badge, Divider } from '@recast/ui';
+import { Button, Field, Select, Switch, Badge, Divider, IconCheck } from '@recast/ui';
 import { GITHUB_URL } from '@recast/shared';
 
 /** Settings: appearance, permissions, media engine (ffmpeg + whisper), about. */
@@ -235,7 +235,10 @@ export function SettingsView() {
                       {m.sizeMb ? <span className="ml-2 text-muted">({m.sizeMb} MB)</span> : null}
                     </div>
                     {m.downloaded ? (
-                      <span className="text-emerald-400 flex items-center gap-1 font-medium">✓ Ready</span>
+                      <span className="text-emerald-400 flex items-center gap-1 font-medium">
+                        <IconCheck size={12} />
+                        <span>Ready</span>
+                      </span>
                     ) : isDownloading ? (
                       <span className="text-accent tabular font-medium">{pct}%</span>
                     ) : (

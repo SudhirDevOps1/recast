@@ -10,21 +10,22 @@ import type { RecastProject } from '@recast/shared';
 
 /** Quick-apply export bundles — every field stays editable below. */
 const EXPORT_PRESETS: Array<{
+  id: string;
   label: string;
   format: 'mp4' | 'webm' | 'hevc' | 'prores' | 'gif';
   resolution: '720p' | '1080p' | '1440p' | '2160p' | 'source';
   fps: 24 | 30 | 60;
   aspect?: string;
 }> = [
-  { label: 'YouTube 1080p', format: 'mp4', resolution: '1080p', fps: 30 },
-  { label: 'Reels / Shorts (9:16)', format: 'mp4', resolution: '1080p', fps: 30, aspect: '9:16' },
-  { label: 'Social Square (1:1)', format: 'mp4', resolution: '1080p', fps: 30, aspect: '1:1' },
-  { label: 'Social Portrait (4:5)', format: 'mp4', resolution: '1080p', fps: 30, aspect: '4:5' },
-  { label: 'Smooth 60 fps', format: 'mp4', resolution: '1080p', fps: 60 },
-  { label: '4K Master', format: 'mp4', resolution: '2160p', fps: 30 },
-  { label: 'Light 720p', format: 'mp4', resolution: '720p', fps: 24 },
-  { label: 'Animated GIF', format: 'gif', resolution: '720p', fps: 24 },
-  { label: 'WebM lossless', format: 'webm', resolution: 'source', fps: 30 },
+  { id: 'youtube-1080p', label: 'YouTube 1080p', format: 'mp4', resolution: '1080p', fps: 30 },
+  { id: 'reels-shorts', label: 'Reels / Shorts (9:16)', format: 'mp4', resolution: '1080p', fps: 30, aspect: '9:16' },
+  { id: 'social-square', label: 'Social Square (1:1)', format: 'mp4', resolution: '1080p', fps: 30, aspect: '1:1' },
+  { id: 'social-portrait', label: 'Social Portrait (4:5)', format: 'mp4', resolution: '1080p', fps: 30, aspect: '4:5' },
+  { id: 'smooth-60fps', label: 'Smooth 60 fps', format: 'mp4', resolution: '1080p', fps: 60 },
+  { id: '4k-master', label: '4K Master', format: 'mp4', resolution: '2160p', fps: 30 },
+  { id: 'light-720p', label: 'Light 720p', format: 'mp4', resolution: '720p', fps: 24 },
+  { id: 'animated-gif', label: 'Animated GIF', format: 'gif', resolution: '720p', fps: 24 },
+  { id: 'webm-lossless', label: 'WebM lossless', format: 'webm', resolution: 'source', fps: 30 },
 ];
 
 /** Export: format, resolution, honest estimates, used-path display, verify. */
@@ -34,6 +35,7 @@ export function ExportView() {
   const showToast = useApp((s) => s.showToast);
   const settings = useApp((s) => s.settings);
   const ffmpeg = useApp((s) => s.ffmpeg);
+  const [selectedPresetId, setSelectedPresetId] = useState<string | null>('youtube-1080p');
   const [format, setFormat] = useState<'mp4' | 'webm' | 'hevc' | 'prores' | 'gif'>('mp4');
   const [resolution, setResolution] = useState<'720p' | '1080p' | '1440p' | '2160p' | 'source'>('1080p');
   const [fps, setFps] = useState<number>(30);
@@ -81,7 +83,14 @@ export function ExportView() {
             holdUs: 1_800_000,
           });
         } else {
-          kfs = [];
+          kfs = computeAutoZoom(samples, [], w, h, p.zoom.intensity, {
+            ignoreSpeed: true,
+            includeDwell: true,
+            dwellRadiusPx: 12,
+            minDwellUs: 600_000,
+            returnToFullScreen: true,
+            holdUs: 1_800_000,
+          });
         }
       } else {
         kfs = p.zoom.autoKeyframes;
@@ -238,13 +247,14 @@ export function ExportView() {
         </div>
         <div className="flex flex-wrap gap-2">
           {EXPORT_PRESETS.map((p) => {
-            const active = format === p.format && resolution === p.resolution && fps === p.fps;
+            const active = selectedPresetId === p.id;
             return (
               <button
-                key={p.label}
+                key={p.id}
                 type="button"
                 aria-pressed={active}
                 onClick={() => {
+                  setSelectedPresetId(p.id);
                   setFormat(p.format);
                   setResolution(p.resolution);
                   setFps(p.fps);
@@ -270,7 +280,14 @@ export function ExportView() {
         <Field label="Format">
           <Select
             value={format}
-            onValueChange={(v) => setFormat(v as typeof format)}
+            onValueChange={(v) => {
+              const nextFmt = v as typeof format;
+              setFormat(nextFmt);
+              const match = EXPORT_PRESETS.find(
+                (p) => p.format === nextFmt && p.resolution === resolution && p.fps === fps && (!p.aspect || p.aspect === project?.style.aspect)
+              );
+              setSelectedPresetId(match ? match.id : null);
+            }}
             options={[
               { value: 'mp4', label: 'MP4 · H.264 (recommended)' },
               { value: 'webm', label: 'WebM · VP9' },
@@ -284,7 +301,14 @@ export function ExportView() {
         <Field label="Resolution">
           <Select
             value={resolution}
-            onValueChange={(v) => setResolution(v as typeof resolution)}
+            onValueChange={(v) => {
+              const nextRes = v as typeof resolution;
+              setResolution(nextRes);
+              const match = EXPORT_PRESETS.find(
+                (p) => p.format === format && p.resolution === nextRes && p.fps === fps && (!p.aspect || p.aspect === project?.style.aspect)
+              );
+              setSelectedPresetId(match ? match.id : null);
+            }}
             options={[
               { value: '720p', label: '720p' },
               { value: '1080p', label: '1080p' },
@@ -298,7 +322,14 @@ export function ExportView() {
         <Field label="Frame rate">
           <Select
             value={String(fps)}
-            onValueChange={(v) => setFps(Number(v))}
+            onValueChange={(v) => {
+              const nextFps = Number(v);
+              setFps(nextFps);
+              const match = EXPORT_PRESETS.find(
+                (p) => p.format === format && p.resolution === resolution && p.fps === nextFps && (!p.aspect || p.aspect === project?.style.aspect)
+              );
+              setSelectedPresetId(match ? match.id : null);
+            }}
             options={[
               { value: '15', label: '15 fps (compact)' },
               { value: '24', label: '24 fps' },

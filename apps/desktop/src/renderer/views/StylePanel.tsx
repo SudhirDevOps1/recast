@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { Button, ColorPicker, Field, Select, Slider, Switch, IconDownload, IconUpload } from '@recast/ui';
 import type { RecastProject, StylePreset } from '@recast/shared';
 import { BUILTIN_PRESETS } from '@recast/shared';
@@ -35,6 +35,11 @@ export function StylePanel({
   const setBackground = (patch: Partial<StylePreset['frame']['background']>): void =>
     setFrame({ background: { ...style.frame.background, ...patch } });
   const setCursor = (patch: Partial<StylePreset['cursor']>): void => setStyle({ cursor: { ...style.cursor, ...patch } });
+
+  const lastLookRef = useRef<StylePreset['cursor']['look']>(style.cursor.look !== 'none' ? style.cursor.look : 'pointer');
+  if (style.cursor.look !== 'none') {
+    lastLookRef.current = style.cursor.look;
+  }
 
   const bg = style.frame.background;
 
@@ -237,27 +242,42 @@ export function StylePanel({
           />
         </Field>
         {bg.type === 'procedural' ? (
-          <Field label="Wallpaper theme">
-            <Select
-              value={bg.procedural?.preset ?? 'aurora'}
-              onValueChange={(p) =>
-                setBackground({
-                  procedural: {
-                    preset: p as 'aurora' | 'sunset' | 'midnight' | 'cyber' | 'obsidian',
-                    animationSpeed: 0,
-                  },
-                })
-              }
-              options={[
-                { value: 'aurora', label: 'Aurora Borealis' },
-                { value: 'sunset', label: 'Sunset Mirage' },
-                { value: 'midnight', label: 'Midnight Cyan' },
-                { value: 'cyber', label: 'Cyber Synthwave' },
-                { value: 'obsidian', label: 'Obsidian Studio' },
-              ]}
-              ariaLabel="Wallpaper theme"
-            />
-          </Field>
+          <div className="space-y-2">
+            <span className="text-[11px] font-medium text-white/70">Studio Wallpaper Presets</span>
+            <div className="grid grid-cols-2 gap-2">
+              {[
+                { id: 'aurora', label: 'Aurora Borealis', bg: 'linear-gradient(135deg, #0f172a, #064e3b, #0284c7)' },
+                { id: 'sunset', label: 'Sunset Mirage', bg: 'linear-gradient(135deg, #4c0519, #831843, #f59e0b)' },
+                { id: 'midnight', label: 'Midnight Cyan', bg: 'linear-gradient(135deg, #020617, #083344, #06b6d4)' },
+                { id: 'cyber', label: 'Cyber Synthwave', bg: 'linear-gradient(135deg, #2e1065, #701a75, #ec4899)' },
+                { id: 'obsidian', label: 'Obsidian Studio', bg: 'linear-gradient(135deg, #09090b, #18181b, #27272a)' },
+              ].map((wp) => {
+                const isActive = (bg.procedural?.preset ?? 'aurora') === wp.id;
+                return (
+                  <button
+                    key={wp.id}
+                    type="button"
+                    onClick={() =>
+                      setBackground({
+                        procedural: {
+                          preset: wp.id as 'aurora' | 'sunset' | 'midnight' | 'cyber' | 'obsidian',
+                          animationSpeed: 0,
+                        },
+                      })
+                    }
+                    className="flex flex-col items-start p-2 rounded-xl border text-left transition-all hover:scale-[1.02] active:scale-[0.98]"
+                    style={{
+                      borderColor: isActive ? 'var(--accent)' : 'rgba(255,255,255,0.08)',
+                      background: isActive ? 'rgba(124, 140, 248, 0.12)' : 'rgba(255,255,255,0.02)',
+                    }}
+                  >
+                    <div className="w-full h-8 rounded-lg mb-1.5 shadow-inner border border-white/10" style={{ background: wp.bg }} />
+                    <span className="text-[11px] font-semibold text-white/90">{wp.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
         ) : null}
 
         <Field label="Dot pattern overlay">
@@ -419,85 +439,113 @@ export function StylePanel({
 
       <section>
         <SectionTitle>Cursor</SectionTitle>
-        <Field label="Look">
-          <Select
-            value={style.cursor.look}
-            onValueChange={(v) => setCursor({ look: v as StylePreset['cursor']['look'] })}
-            options={[
-              { value: 'pointer', label: 'Rendered pointer' },
-              { value: 'dot', label: 'Dot' },
-              { value: 'circle', label: 'Circle' },
-              { value: 'native', label: 'Native arrow' },
-              { value: 'none', label: 'Hidden (no cursor)' },
-            ]}
-            ariaLabel="Cursor look"
+        <Field label="Cursor overlay" hint="Turn off if your video already has a recorded cursor from Windows to eliminate double cursor.">
+          <Switch
+            checked={style.cursor.look !== 'none'}
+            onCheckedChange={(on) =>
+              setCursor({
+                look: on ? (lastLookRef.current !== 'none' ? lastLookRef.current : 'pointer') : 'none',
+              })
+            }
+            ariaLabel="Cursor overlay"
           />
         </Field>
-        <Field label={`Size — ${style.cursor.sizePx} px`}>
-          <Slider value={style.cursor.sizePx} min={8} max={96} ariaLabel="Cursor size" onValueChange={(v) => setCursor({ sizePx: v })} />
-        </Field>
-        <Field label="Colors">
-          <div className="flex items-center gap-3">
-            <ColorPicker value={style.cursor.color} onChange={(color) => setCursor({ color })} ariaLabel="Cursor color" />
-            <span className="text-xs" style={{ color: 'var(--text-muted)' }}>outline</span>
-            <ColorPicker value={style.cursor.outlineColor} onChange={(outlineColor) => setCursor({ outlineColor })} ariaLabel="Cursor outline color" />
+
+        {style.cursor.look === 'none' ? (
+          <div className="rounded-xl border border-white/10 p-3 text-xs bg-white/5 space-y-1.5 text-white/70">
+            <span className="font-semibold text-emerald-400 flex items-center gap-1.5">
+              <span>Clean video mode active</span>
+            </span>
+            <p className="text-[11px] text-white/50 leading-relaxed">
+              Synthetic cursor overlay, radar rings, trails, and ripples are completely suppressed. Your video displays its original recorded desktop screen without double cursors.
+            </p>
           </div>
-        </Field>
-        <Field label={`Outline — ${style.cursor.outlineWidthPx} px`}>
-          <Slider value={style.cursor.outlineWidthPx} min={0} max={8} step={0.5} ariaLabel="Cursor outline width" onValueChange={(v) => setCursor({ outlineWidthPx: v })} />
-        </Field>
-        <Field label="Drop shadow">
-          <Switch checked={style.cursor.shadow} onCheckedChange={(v) => setCursor({ shadow: v })} ariaLabel="Cursor shadow" />
-        </Field>
-        <Field label="Click ripple">
-          <Switch checked={style.cursor.ripple} onCheckedChange={(v) => setCursor({ ripple: v })} ariaLabel="Click ripple" />
-        </Field>
-        {style.cursor.ripple ? (
-          <Field label="Ripple color">
-            <ColorPicker value={style.cursor.rippleColor ?? '#FFFFFF'} onChange={(rippleColor) => setCursor({ rippleColor })} ariaLabel="Ripple color" />
-          </Field>
-        ) : null}
-        <Field label={`Press scale — ${style.cursor.pressScale.toFixed(2)}×`}>
-          <Slider value={style.cursor.pressScale} min={0.6} max={1.4} step={0.05} ariaLabel="Press scale" onValueChange={(v) => setCursor({ pressScale: v })} />
-        </Field>
-        <Field label={`Idle fade — ${style.cursor.idleFadeMs === 0 ? 'never' : `${style.cursor.idleFadeMs} ms`}`}>
-          <Slider value={style.cursor.idleFadeMs} min={0} max={5000} step={100} ariaLabel="Idle fade" onValueChange={(v) => setCursor({ idleFadeMs: v })} />
-        </Field>
-        <Field label={`Motion smoothing — ${Math.round(style.cursor.cursorSmoothing * 100)}%`}>
-          <Slider value={style.cursor.cursorSmoothing ?? 0} min={0} max={1} step={0.05} ariaLabel="Cursor smoothing" onValueChange={(v) => setCursor({ cursorSmoothing: v })} />
-        </Field>
-        <Field label="Motion trail">
-          <Switch checked={style.cursor.trail ?? false} onCheckedChange={(v) => setCursor({ trail: v })} ariaLabel="Cursor motion trail" />
-        </Field>
-        <Field label="Click bounce">
-          <Switch checked={style.cursor.clickBounce ?? false} onCheckedChange={(v) => setCursor({ clickBounce: v })} ariaLabel="Click bounce" />
-        </Field>
-        <Field label="Radar wave rings">
-          <Switch checked={style.cursor.radarRings ?? false} onCheckedChange={(radarRings) => setCursor({ radarRings })} ariaLabel="Radar wave rings" />
-        </Field>
-        {style.cursor.radarRings ? (
+        ) : (
           <>
-            <Field label="Radar wave color">
-              <ColorPicker value={style.cursor.radarColor ?? '#7C8CF8'} onChange={(radarColor) => setCursor({ radarColor })} ariaLabel="Radar wave color" />
+            <Field label="Look">
+              <Select
+                value={style.cursor.look}
+                onValueChange={(v) => {
+                  lastLookRef.current = v as StylePreset['cursor']['look'];
+                  setCursor({ look: v as StylePreset['cursor']['look'] });
+                }}
+                options={[
+                  { value: 'pointer', label: 'Rendered pointer' },
+                  { value: 'dot', label: 'Dot' },
+                  { value: 'circle', label: 'Circle' },
+                  { value: 'native', label: 'Native arrow' },
+                  { value: 'none', label: 'Hidden (no cursor)' },
+                ]}
+                ariaLabel="Cursor look"
+              />
             </Field>
-            <Field label={`Radar ring count — ${style.cursor.radarRingCount ?? 3}`}>
-              <Slider value={style.cursor.radarRingCount ?? 3} min={1} max={4} step={1} ariaLabel="Radar ring count" onValueChange={(radarRingCount) => setCursor({ radarRingCount })} />
+            <Field label={`Size — ${style.cursor.sizePx} px`}>
+              <Slider value={style.cursor.sizePx} min={8} max={96} ariaLabel="Cursor size" onValueChange={(v) => setCursor({ sizePx: v })} />
             </Field>
+            <Field label="Colors">
+              <div className="flex items-center gap-3">
+                <ColorPicker value={style.cursor.color} onChange={(color) => setCursor({ color })} ariaLabel="Cursor color" />
+                <span className="text-xs" style={{ color: 'var(--text-muted)' }}>outline</span>
+                <ColorPicker value={style.cursor.outlineColor} onChange={(outlineColor) => setCursor({ outlineColor })} ariaLabel="Cursor outline color" />
+              </div>
+            </Field>
+            <Field label={`Outline — ${style.cursor.outlineWidthPx} px`}>
+              <Slider value={style.cursor.outlineWidthPx} min={0} max={8} step={0.5} ariaLabel="Cursor outline width" onValueChange={(v) => setCursor({ outlineWidthPx: v })} />
+            </Field>
+            <Field label="Drop shadow">
+              <Switch checked={style.cursor.shadow} onCheckedChange={(v) => setCursor({ shadow: v })} ariaLabel="Cursor shadow" />
+            </Field>
+            <Field label="Click ripple">
+              <Switch checked={style.cursor.ripple} onCheckedChange={(v) => setCursor({ ripple: v })} ariaLabel="Click ripple" />
+            </Field>
+            {style.cursor.ripple ? (
+              <Field label="Ripple color">
+                <ColorPicker value={style.cursor.rippleColor ?? '#FFFFFF'} onChange={(rippleColor) => setCursor({ rippleColor })} ariaLabel="Ripple color" />
+              </Field>
+            ) : null}
+            <Field label={`Press scale — ${style.cursor.pressScale.toFixed(2)}×`}>
+              <Slider value={style.cursor.pressScale} min={0.6} max={1.4} step={0.05} ariaLabel="Press scale" onValueChange={(v) => setCursor({ pressScale: v })} />
+            </Field>
+            <Field label={`Idle fade — ${style.cursor.idleFadeMs === 0 ? 'never' : `${style.cursor.idleFadeMs} ms`}`}>
+              <Slider value={style.cursor.idleFadeMs} min={0} max={5000} step={100} ariaLabel="Idle fade" onValueChange={(v) => setCursor({ idleFadeMs: v })} />
+            </Field>
+            <Field label={`Motion smoothing — ${Math.round(style.cursor.cursorSmoothing * 100)}%`}>
+              <Slider value={style.cursor.cursorSmoothing ?? 0} min={0} max={1} step={0.05} ariaLabel="Cursor smoothing" onValueChange={(v) => setCursor({ cursorSmoothing: v })} />
+            </Field>
+            <Field label="Motion trail">
+              <Switch checked={style.cursor.trail ?? false} onCheckedChange={(v) => setCursor({ trail: v })} ariaLabel="Cursor motion trail" />
+            </Field>
+            <Field label="Click bounce">
+              <Switch checked={style.cursor.clickBounce ?? false} onCheckedChange={(v) => setCursor({ clickBounce: v })} ariaLabel="Click bounce" />
+            </Field>
+            <Field label="Radar wave rings">
+              <Switch checked={style.cursor.radarRings ?? false} onCheckedChange={(radarRings) => setCursor({ radarRings })} ariaLabel="Radar wave rings" />
+            </Field>
+            {style.cursor.radarRings ? (
+              <>
+                <Field label="Radar wave color">
+                  <ColorPicker value={style.cursor.radarColor ?? '#7C8CF8'} onChange={(radarColor) => setCursor({ radarColor })} ariaLabel="Radar wave color" />
+                </Field>
+                <Field label={`Radar ring count — ${style.cursor.radarRingCount ?? 3}`}>
+                  <Slider value={style.cursor.radarRingCount ?? 3} min={1} max={4} step={1} ariaLabel="Radar ring count" onValueChange={(radarRingCount) => setCursor({ radarRingCount })} />
+                </Field>
+              </>
+            ) : null}
+            <Field label="Cursor spotlight">
+              <Switch checked={style.cursor.spotlight ?? false} onCheckedChange={(spotlight) => setCursor({ spotlight })} ariaLabel="Cursor spotlight" />
+            </Field>
+            {style.cursor.spotlight ? (
+              <>
+                <Field label={`Spotlight radius — ${style.cursor.spotlightRadiusPx ?? 120} px`}>
+                  <Slider value={style.cursor.spotlightRadiusPx ?? 120} min={40} max={260} step={5} ariaLabel="Spotlight radius" onValueChange={(spotlightRadiusPx) => setCursor({ spotlightRadiusPx })} />
+                </Field>
+                <Field label={`Spotlight dim — ${Math.round((style.cursor.spotlightOpacity ?? 0.45) * 100)}%`}>
+                  <Slider value={style.cursor.spotlightOpacity ?? 0.45} min={0.15} max={0.85} step={0.05} ariaLabel="Spotlight opacity" onValueChange={(spotlightOpacity) => setCursor({ spotlightOpacity })} />
+                </Field>
+              </>
+            ) : null}
           </>
-        ) : null}
-        <Field label="Cursor spotlight">
-          <Switch checked={style.cursor.spotlight ?? false} onCheckedChange={(spotlight) => setCursor({ spotlight })} ariaLabel="Cursor spotlight" />
-        </Field>
-        {style.cursor.spotlight ? (
-          <>
-            <Field label={`Spotlight radius — ${style.cursor.spotlightRadiusPx ?? 120} px`}>
-              <Slider value={style.cursor.spotlightRadiusPx ?? 120} min={40} max={260} step={5} ariaLabel="Spotlight radius" onValueChange={(spotlightRadiusPx) => setCursor({ spotlightRadiusPx })} />
-            </Field>
-            <Field label={`Spotlight dim — ${Math.round((style.cursor.spotlightOpacity ?? 0.45) * 100)}%`}>
-              <Slider value={style.cursor.spotlightOpacity ?? 0.45} min={0.15} max={0.85} step={0.05} ariaLabel="Spotlight opacity" onValueChange={(spotlightOpacity) => setCursor({ spotlightOpacity })} />
-            </Field>
-          </>
-        ) : null}
+        )}
       </section>
 
       <div className="flex gap-2 pt-1">

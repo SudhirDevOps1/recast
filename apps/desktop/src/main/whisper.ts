@@ -28,9 +28,14 @@ export async function installWhisperBinary(onProgress: (pct: number) => void): P
   }
 
   const destDir = whisperDir();
+  await fs.mkdir(destDir, { recursive: true });
   const archivePath = join(destDir, url.endsWith('.tar.gz') ? 'whisper-download.tar.gz' : 'whisper-download.zip');
   try {
-    const res = await fetch(url);
+    const res = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Recast/0.1.4',
+      },
+    });
     if (!res.ok) throw new Error(`HTTP ${res.status} fetching whisper binary package`);
     const total = Number(res.headers.get('content-length') ?? 9_000_000);
     const writer = createWriteStream(archivePath);
@@ -152,7 +157,10 @@ async function findWhisperBinary(): Promise<string | null> {
   for (const c of candidates) {
     for (const root of [
       join(process.cwd(), 'resources', 'whisper', platArch),
-      join(process.cwd(), 'resources', 'whisper', platArch, 'Release'),
+      join(process.cwd(), '..', '..', 'resources', 'whisper', platArch),
+      join(process.cwd(), '..', 'resources', 'whisper', platArch),
+      join(__dirname, '../../resources/whisper', platArch),
+      join(__dirname, '../../../resources/whisper', platArch),
       join(process.cwd(), 'resources', 'whisper'),
     ]) {
       try {
@@ -199,33 +207,52 @@ async function findWhisperBinary(): Promise<string | null> {
 export async function downloadWhisperModel(modelId: string, onProgress: (pct: number) => void): Promise<{ ok: boolean; error?: string }> {
   const def = MODEL_DEFS.find((m) => m.id === modelId);
   if (!def) return { ok: false, error: `Unknown model ${modelId}` };
-  const dest = join(modelsDir(), def.file);
-  try {
-    const url = `${MODEL_BASE}${def.file}?download=true`;
-    const res = await fetch(url);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const total = Number(res.headers.get('content-length') ?? def.sizeMb * 1_000_000);
-    const writer = createWriteStream(`${dest}.part`);
-    const { Readable } = await import('node:stream');
-    const { pipeline } = await import('node:stream/promises');
-    let received = 0;
-    let lastPct = -1;
-    const reader = Readable.fromWeb(res.body as import('node:stream/web').ReadableStream);
-    reader.on('data', (chunk: Buffer) => {
-      received += chunk.length;
-      const pct = Math.min(100, Math.floor((received / total) * 100));
-      if (pct !== lastPct) {
-        lastPct = pct;
-        onProgress(pct);
+  const dir = modelsDir();
+  await fs.mkdir(dir, { recursive: true });
+  const dest = join(dir, def.file);
+  const urls = [
+    `https://huggingface.co/ggerganov/whisper.cpp/resolve/main/${def.file}?download=true`,
+    `https://huggingface.co/ggerganov/whisper.cpp/resolve/main/${def.file}`,
+    `https://huggingface.co/datasets/ggerganov/whisper.cpp/resolve/main/${def.file}?download=true`,
+    `https://huggingface.co/datasets/ggerganov/whisper.cpp/resolve/main/${def.file}`,
+  ];
+
+  let lastStatus = '';
+  for (const url of urls) {
+    try {
+      const res = await fetch(url, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Recast/0.1.4',
+        },
+      });
+      if (!res.ok) {
+        lastStatus = `HTTP ${res.status}`;
+        continue;
       }
-    });
-    await pipeline(reader, writer);
-    await fs.rename(`${dest}.part`, dest);
-    return { ok: true };
-  } catch (e) {
-    await fs.rm(`${dest}.part`, { force: true }).catch(() => undefined);
-    return { ok: false, error: (e as Error).message };
+      const total = Number(res.headers.get('content-length') ?? def.sizeMb * 1_000_000);
+      const writer = createWriteStream(`${dest}.part`);
+      const { Readable } = await import('node:stream');
+      const { pipeline } = await import('node:stream/promises');
+      let received = 0;
+      let lastPct = -1;
+      const reader = Readable.fromWeb(res.body as import('node:stream/web').ReadableStream);
+      reader.on('data', (chunk: Buffer) => {
+        received += chunk.length;
+        const pct = Math.min(100, Math.floor((received / total) * 100));
+        if (pct !== lastPct) {
+          lastPct = pct;
+          onProgress(pct);
+        }
+      });
+      await pipeline(reader, writer);
+      await fs.rename(`${dest}.part`, dest);
+      return { ok: true };
+    } catch (err) {
+      lastStatus = (err as Error).message;
+      await fs.rm(`${dest}.part`, { force: true }).catch(() => undefined);
+    }
   }
+  return { ok: false, error: `Failed to download ${def.label} (${lastStatus || 'connection error'}). Please check internet connection.` };
 }
 
 export interface TranscribeRequest {
@@ -276,8 +303,12 @@ export async function transcribe(req: TranscribeRequest, whisperBin: string, ffm
         if (!validAudio) {
           const firstSeg = files.find((f) => f.startsWith('seg-') && f.endsWith('.mp4'));
           if (firstSeg) {
-            sourceFile = join(parentDir, firstSeg);
-            validAudio = true;
+            const segPath = join(parentDir, firstSeg);
+            const hasAudio = await ffmpeg.hasAudioStream(segPath).catch(() => false);
+            if (hasAudio) {
+              sourceFile = segPath;
+              validAudio = true;
+            }
           }
         }
       } catch {
@@ -289,7 +320,16 @@ export async function transcribe(req: TranscribeRequest, whisperBin: string, ffm
       return {
         ok: false,
         srt: null,
-        error: 'No valid audio was captured in this recording. Microphone track is empty or missing.',
+        error: 'No audio was recorded in this video. Please ensure your microphone is enabled and allowed before recording.',
+      };
+    }
+
+    const hasAudio = await ffmpeg.hasAudioStream(sourceFile).catch(() => false);
+    if (!hasAudio) {
+      return {
+        ok: false,
+        srt: null,
+        error: 'No audio was recorded in this video. Please ensure your microphone is enabled and allowed before recording.',
       };
     }
 
@@ -298,14 +338,27 @@ export async function transcribe(req: TranscribeRequest, whisperBin: string, ffm
       await ffmpeg.extractWav(sourceFile, wavFile, 16_000);
     } catch (extractErr) {
       const msg = (extractErr as Error).message || '';
+      if (
+        msg.includes('NO_AUDIO_STREAM') ||
+        msg.includes('no audio track') ||
+        msg.includes('does not contain any stream') ||
+        msg.includes('matches no streams')
+      ) {
+        return {
+          ok: false,
+          srt: null,
+          error: 'No voice audio track found in this recording. Please enable your microphone before recording.',
+        };
+      }
       if (msg.includes('invalid as first byte of an EBML number') || msg.includes('End of file') || msg.includes('Duplicate element')) {
         return {
           ok: false,
           srt: null,
-          error: 'Microphone audio recording is empty or corrupt. Please ensure microphone access is granted in Settings.',
+          error: 'Microphone audio recording is empty or corrupt. Please ensure microphone access is granted in Windows Settings.',
         };
       }
-      return { ok: false, srt: null, error: `Audio extraction failed: ${msg.slice(0, 160)}` };
+      const cleanMsg = msg.replace(/^Audio extraction failed:\s*/i, '');
+      return { ok: false, srt: null, error: `Audio extraction failed: ${cleanMsg.slice(0, 160)}` };
     }
 
     // Verify extracted WAV has content

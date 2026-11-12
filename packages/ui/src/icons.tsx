@@ -259,3 +259,17 @@ export const IconSearch = (p: P) => (
     <path d="m16 16 4.5 4.5" />
   </Base>
 );
+
+export const IconCrop = (p: P) => (
+  <Base {...p}>
+    <path d="M6 2v14a2 2 0 0 0 2 2h14" />
+    <path d="M18 22V8a2 2 0 0 0-2-2H2" />
+  </Base>
+);
+
+export const IconCaptions = (p: P) => (
+  <Base {...p}>
+    <rect x={3.5} y={5} width={17} height={14} rx={2.5} />
+    <path d="M7 15h4M15 15h2M7 11h2M13 11h4" />
+  </Base>
+);

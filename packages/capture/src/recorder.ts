@@ -38,11 +38,12 @@ export interface RecorderHandle {
 
 function bitrateForQuality(width: number, height: number, fps: number): number {
   // Screen recording has sharp text, syntax code, and UI chrome.
-  // 0.20 bits/pixel at 30 fps is crystal-clear while avoiding GPU encoder backpressure and frame drops.
-  // ~2.5 Mbps at 720p/1366x768, ~5 Mbps at 1080p, up to 16 Mbps at 4K.
-  const pixels = width * height;
-  const base = pixels * 0.20 * (fps / 30);
-  return Math.round(Math.min(16_000_000, Math.max(2_500_000, base)));
+  // 0.15 bits/pixel at target fps gives crystal-clear text without GPU encoder backpressure
+  // on dual-core laptops (e.g. Intel Core i5-6300U + HD Graphics 520).
+  // ~4.7 Mbps at 1366x768 @ 30fps, ~9.3 Mbps at 1080p @ 60fps, capped at 16 Mbps for 4K.
+  const pixelsPerSec = width * height * fps;
+  const target = pixelsPerSec * 0.15;
+  return Math.round(Math.min(16_000_000, Math.max(3_500_000, target)));
 }
 
 export async function startRecording(
@@ -303,7 +304,7 @@ export async function startRecording(
       micPeak: latestMicPeak,
       compatibilityMode: false,
     });
-  }, 250);
+  }, 1_000);
 
   const encoderPath = probed.path;
   const compatibilityMode = false;
@@ -330,8 +331,8 @@ export async function startRecording(
       phase = 'stopping';
       try {
         // Immediately halt screen acquisition to release GPU/D3D capture buffers
-        videoTrack.stop();
         await reader?.cancel().catch(() => undefined);
+        videoTrack.stop();
         // Let the pump unwind, then flush what's still in flight.
         const deadline = Date.now() + 800;
         while (pumpActive && Date.now() < deadline) {

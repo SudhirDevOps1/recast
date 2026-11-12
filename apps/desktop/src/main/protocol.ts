@@ -73,6 +73,8 @@ export function handleMediaProtocol(): void {
     const mime =
       ext === '.mp4' ? 'video/mp4'
       : ext === '.webm' ? 'video/webm'
+      : ext === '.mov' ? 'video/quicktime'
+      : ext === '.wav' ? 'audio/wav'
       : ext === '.png' ? 'image/png'
       : ext === '.jpg' || ext === '.jpeg' ? 'image/jpeg'
       : ext === '.json' ? 'application/json'

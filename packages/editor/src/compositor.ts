@@ -263,7 +263,10 @@ export function computeComposition(project: RecastProject, tUs: number, outW: nu
   const timeMap = buildTimeMap(project.timeline.clips);
   const hit = timelineToSource(timeMap, tUs);
   const sourceTUs = hit ? hit.sourceUs : tUs;
-  const cursor = mapCursor(project, sourceTUs, deps.cursorEvents, screenRect, visibleSrc, style.cursor);
+  const cursor =
+    style.cursor?.look === 'none'
+      ? null
+      : mapCursor(project, sourceTUs, deps.cursorEvents, screenRect, visibleSrc, style.cursor);
 
   // Clip intro transition: offset/zoom the screen card before cursor and
   // annotation mapping so overlays ride along with the motion.
@@ -310,11 +313,50 @@ export function computeComposition(project: RecastProject, tUs: number, outW: nu
     const isSquare = effectiveShape === 'circle' || effectiveShape === 'squircle';
     const h = isSquare ? w : w / camAspect;
     const margin = fcStyle.marginFraction * outH;
-    const x = fcStyle.position === 'tl' || fcStyle.position === 'bl' ? margin : outW - w - margin;
-    const y = fcStyle.position === 'tl' || fcStyle.position === 'tr' ? margin : outH - h - margin;
+    let x: number;
+    let y: number;
+
+    switch (fcStyle.position) {
+      case 'tl':
+      case 'ml':
+      case 'bl':
+        x = margin;
+        break;
+      case 'tc':
+      case 'center':
+      case 'bc':
+        x = (outW - w) / 2;
+        break;
+      case 'tr':
+      case 'mr':
+      case 'br':
+      default:
+        x = outW - w - margin;
+        break;
+    }
+
+    switch (fcStyle.position) {
+      case 'tl':
+      case 'tc':
+      case 'tr':
+        y = margin;
+        break;
+      case 'ml':
+      case 'center':
+      case 'mr':
+        y = (outH - h) / 2;
+        break;
+      case 'bl':
+      case 'bc':
+      case 'br':
+      default:
+        y = outH - h - margin;
+        break;
+    }
+
     facecam = {
       rect: { x, y, w, h },
-      radiusPx: effectiveShape === 'circle' ? w / 2 : Math.min(14, w / 8),
+      radiusPx: effectiveShape === 'circle' ? w / 2 : Math.round(w * 0.16),
       round: effectiveShape === 'circle',
       shape: effectiveShape,
       squircleCurvature: fcStyle.squircleCurvature ?? 0.6,
@@ -588,17 +630,20 @@ function drawSquirclePath(ctx: CanvasRenderingContext2D, r: Rect, curvature = 0.
   const y = r.y;
   const w = r.w;
   const h = r.h;
-  const rRad = Math.min(w, h) * 0.28 * (curvature / 0.6);
+  const rRad = Math.min(w, h) * 0.28 * Math.max(0.2, Math.min(1.2, curvature / 0.6));
+  const k = 0.551915024494; // Standard cubic bezier circular approximation factor
+  const offset = rRad * (1 - k);
+
   ctx.beginPath();
   ctx.moveTo(x + rRad, y);
   ctx.lineTo(x + w - rRad, y);
-  ctx.bezierCurveTo(x + w, y, x + w, y + rRad, x + w, y + rRad);
+  ctx.bezierCurveTo(x + w - offset, y, x + w, y + offset, x + w, y + rRad);
   ctx.lineTo(x + w, y + h - rRad);
-  ctx.bezierCurveTo(x + w, y + h, x + w - rRad, y + h, x + w - rRad, y + h);
+  ctx.bezierCurveTo(x + w, y + h - offset, x + w - offset, y + h, x + w - rRad, y + h);
   ctx.lineTo(x + rRad, y + h);
-  ctx.bezierCurveTo(x, y + h, x, y + h - rRad, x, y + h - rRad);
+  ctx.bezierCurveTo(x + offset, y + h, x, y + h - offset, x, y + h - rRad);
   ctx.lineTo(x, y + rRad);
-  ctx.bezierCurveTo(x, y, x + rRad, y, x + rRad, y);
+  ctx.bezierCurveTo(x, y + offset, x + offset, y, x + rRad, y);
   ctx.closePath();
 }
 
@@ -1041,6 +1086,7 @@ function drawCursor(ctx: CanvasRenderingContext2D, comp: Composition): void {
   const c = comp.cursor;
   if (!c || !c.visible) return;
   const style = comp.cursorStyle;
+  if (!style || style.look === 'none') return;
   ctx.save();
   ctx.globalAlpha = c.alpha;
   const size = (style.sizePx / 1000) * comp.outH * c.scale;
@@ -1113,11 +1159,6 @@ function drawCursor(ctx: CanvasRenderingContext2D, comp: Composition): void {
     ctx.fillStyle = style.color;
     ctx.fill();
   };
-
-  if (style.look === 'none') {
-    ctx.restore();
-    return;
-  }
 
   if (style.look === 'dot' || style.look === 'circle') {
     ctx.beginPath();

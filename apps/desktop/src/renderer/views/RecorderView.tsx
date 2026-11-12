@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useApp, useRecorder } from '../state/stores';
 import { bridge } from '../lib/bridge';
-import { Button, Field, Select, Switch, Slider, Badge, IconRecord, IconStop, IconPause, IconPlay, IconMonitor, IconMic, IconSpeaker, IconCamera, IconRefresh } from '@recast/ui';
+import { Button, Field, Select, Switch, Slider, Badge, IconRecord, IconStop, IconPause, IconPlay, IconMonitor, IconMic, IconSpeaker, IconCamera, IconRefresh, IconWarning } from '@recast/ui';
 import type { DeviceInfo, ListSourcesResponse } from '@recast/shared';
 import { formatClock } from '@recast/shared';
 import { startRecordingFlow, stopRecordingFlow, rendererRecorderHandle, acquireCaptureSources, releaseAcquiredSources, RecordingError, type AcquiredSources } from '../lib/record-flow';
@@ -29,6 +29,9 @@ export function RecorderView() {
   const acquiredRef = useRef<AcquiredSources | null>(null);
   const cancelledRef = useRef(false);
   const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
+  const [micBlocked, setMicBlocked] = useState(false);
+  const [cameraBlocked, setCameraBlocked] = useState(false);
+  const [permissionCheckTick, setPermissionCheckTick] = useState(0);
 
   const refreshSources = useCallback(async (): Promise<void> => {
     setRefreshingSources(true);
@@ -84,10 +87,13 @@ export function RecorderView() {
 
   // Screen-changed detection: the set of windows/displays on screen drifts
   // while the picker sits open, so re-enumerate (with fresh thumbnails)
-  // Whenever the app window regains focus and when displays are reconfigured.
+  // whenever the app window regains focus and when displays are reconfigured.
   useEffect(() => {
     const onFocus = (): void => {
-      if (recorderStateRef.current == null) void refreshSources();
+      if (recorderStateRef.current == null) {
+        void refreshSources();
+        setPermissionCheckTick((t) => t + 1);
+      }
     };
     window.addEventListener('focus', onFocus);
     return () => window.removeEventListener('focus', onFocus);
@@ -99,46 +105,75 @@ export function RecorderView() {
       streamRef.current?.getTracks().forEach((t) => t.stop());
       streamRef.current = null;
       setMicMeter(null);
+      setMicBlocked(false);
       return;
     }
     let cancelled = false;
     void (async () => {
+      const micConstraint =
+        opts.micDeviceId && opts.micDeviceId !== 'default'
+          ? { deviceId: { exact: opts.micDeviceId } }
+          : true;
+      let stream: MediaStream | null = null;
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        if (cancelled) {
-          stream.getTracks().forEach((t) => t.stop());
-          return;
-        }
-        streamRef.current = stream;
-        // Mic permission just got granted — labels in enumerateDevices() are
-        // now real; refresh the device list once.
-        void refreshDevices();
-        const ctx = new AudioContext();
-        const src = ctx.createMediaStreamSource(stream);
-        const analyser = ctx.createAnalyser();
-        analyser.fftSize = 256;
-        src.connect(analyser);
-        const buf = new Float32Array(analyser.fftSize);
-        const tick = (): void => {
-          if (cancelled) {
-            void ctx.close();
+        stream = await navigator.mediaDevices.getUserMedia({ audio: micConstraint });
+      } catch (err1) {
+        // Fallback to default audio endpoint if specific deviceId was unavailable
+        if (opts.micDeviceId && opts.micDeviceId !== 'default') {
+          try {
+            stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          } catch (err2) {
+            const e = err2 as DOMException;
+            if (!cancelled) {
+              const isPermission = e.name === 'NotAllowedError' || e.name === 'PermissionDeniedError';
+              setMicBlocked(isPermission);
+              setMicMeter(null);
+            }
             return;
           }
-          analyser.getFloatTimeDomainData(buf);
-          let peak = 0;
-          for (const v of buf) peak = Math.max(peak, Math.abs(v));
-          setMicMeter(peak);
-          requestAnimationFrame(tick);
-        };
-        tick();
-      } catch {
-        setMicMeter(null);
+        } else {
+          const e = err1 as DOMException;
+          if (!cancelled) {
+            const isPermission = e.name === 'NotAllowedError' || e.name === 'PermissionDeniedError';
+            setMicBlocked(isPermission);
+            setMicMeter(null);
+          }
+          return;
+        }
       }
+
+      if (cancelled) {
+        stream?.getTracks().forEach((t) => t.stop());
+        return;
+      }
+      if (!stream) return;
+
+      streamRef.current = stream;
+      setMicBlocked(false);
+      void refreshDevices();
+      const ctx = new AudioContext();
+      const src = ctx.createMediaStreamSource(stream);
+      const analyser = ctx.createAnalyser();
+      analyser.fftSize = 256;
+      src.connect(analyser);
+      const buf = new Float32Array(analyser.fftSize);
+      const tick = (): void => {
+        if (cancelled) {
+          void ctx.close();
+          return;
+        }
+        analyser.getFloatTimeDomainData(buf);
+        let peak = 0;
+        for (const v of buf) peak = Math.max(peak, Math.abs(v));
+        setMicMeter(peak);
+        requestAnimationFrame(tick);
+      };
+      tick();
     })();
     return () => {
       cancelled = true;
     };
-  }, [opts.micEnabled, refreshDevices]);
+  }, [opts.micEnabled, opts.micDeviceId, refreshDevices, permissionCheckTick]);
 
   // Live face-cam preview when enabled in recorder options
   useEffect(() => {
@@ -147,6 +182,7 @@ export function RecorderView() {
         cameraStream.getTracks().forEach((t) => t.stop());
         setCameraStream(null);
       }
+      setCameraBlocked(false);
       return;
     }
     let cancelled = false;
@@ -162,9 +198,13 @@ export function RecorderView() {
           stream.getTracks().forEach((t) => t.stop());
           return;
         }
+        setCameraBlocked(false);
         setCameraStream(stream);
       } catch {
-        if (!cancelled) setCameraStream(null);
+        if (!cancelled) {
+          setCameraBlocked(true);
+          setCameraStream(null);
+        }
       }
     })();
     return () => {
@@ -173,7 +213,7 @@ export function RecorderView() {
         cameraStream.getTracks().forEach((t) => t.stop());
       }
     };
-  }, [opts.cameraEnabled, opts.cameraDeviceId]);
+  }, [opts.cameraEnabled, opts.cameraDeviceId, permissionCheckTick]);
 
   const recording = recorderState?.phase === 'recording' || recorderState?.phase === 'paused';
   const paused = recorderState?.phase === 'paused';
@@ -335,6 +375,26 @@ export function RecorderView() {
             </div>
           </div>
         </Field>
+        {opts.micEnabled && micBlocked ? (
+          <div className="col-span-1 md:col-span-2 flex items-center justify-between p-3 rounded-xl border border-rose-500/30 bg-rose-500/10 text-xs">
+            <div className="flex items-center gap-2 text-rose-300">
+              <span className="font-semibold flex items-center gap-1.5"><IconWarning size={14} className="text-rose-400" /> Microphone access blocked by Windows</span>
+              <span className="text-white/70 hidden sm:inline">Ensure "Let desktop apps access your microphone" is On in Windows Settings.</span>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <Button
+                size="sm"
+                variant="primary"
+                onClick={() => void bridge().invoke('permissions:openSystemSettings', { kind: 'microphone' })}
+              >
+                Allow in Windows Settings
+              </Button>
+              <Button size="sm" onClick={() => setPermissionCheckTick((t) => t + 1)}>
+                Re-check
+              </Button>
+            </div>
+          </div>
+        ) : null}
         <Field label="System audio" hint={platform?.capabilities.systemAudioNote}>
           <div className="flex items-center gap-3">
             <Switch
@@ -359,6 +419,26 @@ export function RecorderView() {
         </Field>
         {opts.cameraEnabled ? (
           <>
+            {cameraBlocked ? (
+              <div className="col-span-1 md:col-span-2 flex items-center justify-between p-3 rounded-xl border border-amber-500/30 bg-amber-500/10 text-xs">
+                <div className="flex items-center gap-2 text-amber-300">
+                  <span className="font-semibold flex items-center gap-1.5"><IconWarning size={14} className="text-amber-400" /> Camera access unavailable</span>
+                  <span className="text-white/70 hidden sm:inline">Allow camera access in Windows Settings or close any app using it.</span>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <Button
+                    size="sm"
+                    variant="primary"
+                    onClick={() => void bridge().invoke('permissions:openSystemSettings', { kind: 'camera' })}
+                  >
+                    Allow Camera
+                  </Button>
+                  <Button size="sm" onClick={() => setPermissionCheckTick((t) => t + 1)}>
+                    Re-check
+                  </Button>
+                </div>
+              </div>
+            ) : null}
             <Field label="Camera device" hint="Used for the face-cam overlay; style it in the editor's Cam panel.">
               <Select
                 value={opts.cameraDeviceId ?? 'default'}
@@ -385,6 +465,16 @@ export function RecorderView() {
                     playsInline
                     className="w-full h-full object-cover scale-x-[-1]"
                   />
+                ) : cameraBlocked ? (
+                  <div className="w-full h-full flex flex-col items-center justify-center text-[10px] text-amber-200 p-2 text-center bg-black/60">
+                    <span className="font-semibold">Camera Blocked</span>
+                    <button
+                      onClick={() => void bridge().invoke('permissions:openSystemSettings', { kind: 'camera' })}
+                      className="mt-1 text-[9px] underline text-accent font-bold cursor-pointer"
+                    >
+                      Allow
+                    </button>
+                  </div>
                 ) : (
                   <div className="w-full h-full flex items-center justify-center text-[10px] text-muted">
                     Connecting…
@@ -462,45 +552,39 @@ export function RecorderView() {
       </div>
 
       {countingDown != null ? (
-        <div className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-6" style={{ background: 'rgba(6,8,12,0.92)' }}>
+        <div className="fixed inset-0 z-50 flex flex-col items-center justify-center pointer-events-none select-none">
+          {/* Recordly Centered Dark Glass Countdown Card (Recordly_ISDNNljOWY.png parity) */}
           <div
-            className="flex items-center justify-center rounded-full"
+            className="flex items-center justify-center rounded-3xl border border-white/10 shadow-2xl animate-in zoom-in-95 duration-200"
             style={{
-              width: 132,
-              height: 132,
-              border: '6px solid var(--accent)',
-              boxShadow: '0 0 0 1px var(--hairline), 0 8px 40px rgba(0,0,0,0.5)',
+              width: 140,
+              height: 140,
+              background: 'rgba(12, 14, 20, 0.88)',
+              backdropFilter: 'blur(32px)',
+              boxShadow: '0 24px 60px rgba(0, 0, 0, 0.75), 0 0 0 1px rgba(255, 255, 255, 0.1)',
             }}
           >
-            <div className="tabular text-6xl font-bold" style={{ color: 'var(--accent)' }} aria-live="polite">
+            <div className="tabular text-7xl font-bold tracking-tight text-white drop-shadow-lg" aria-live="polite">
               {countingDown}
             </div>
           </div>
-          <div className="text-sm" style={{ color: 'var(--text-secondary)' }}>
-            Recording starts in {countingDown}s — press <kbd>Esc</kbd> to cancel
+          <div className="mt-4 text-xs font-medium text-white/60 bg-black/50 px-3 py-1 rounded-full border border-white/10 backdrop-blur-md">
+            Recording starts in {countingDown}s · press <kbd className="font-mono text-white">Esc</kbd> to cancel
           </div>
-          {/* Live preview underneath the ring: proof of what is being captured. */}
-          <video
-            ref={(el) => {
-              previewRef.current = el;
-              if (el && acquiredRef.current && el.srcObject !== acquiredRef.current.displayStream) {
-                el.srcObject = acquiredRef.current.displayStream;
-                void el.play().catch(() => undefined);
-              }
-            }}
-            autoPlay
-            muted
-            playsInline
-            className="max-h-[52vh] rounded-lg border border-hairline object-contain"
-            style={{ background: '#000' }}
-            aria-label="Live capture preview during countdown"
-          />
         </div>
       ) : null}
     </div>
   );
 
   async function start(): Promise<void> {
+    if (opts.micEnabled && micBlocked) {
+      showToast('Microphone blocked by Windows. Allow in Settings, or turn off Mic to record video only.', 'error', {
+        label: 'Allow in Settings',
+        run: () => void bridge().invoke('permissions:openSystemSettings', { kind: 'microphone' }),
+      });
+      return;
+    }
+
     // 1) Acquire the streams SYNCHRONOUSLY inside the click's transient
     //    activation. The old flow ran the countdown first, so with a 5 s or
     //    10 s countdown Chromium rejected getDisplayMedia (activation expired)
@@ -522,6 +606,13 @@ export function RecorderView() {
         cameraStream.getTracks().forEach((t) => t.stop());
         setCameraStream(null);
       }
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((t) => t.stop());
+        streamRef.current = null;
+      }
+      // Give Windows DirectShow/MediaFoundation driver a tick to release device handles
+      await new Promise((r) => setTimeout(r, 60));
+
       acquiredRef.current = await acquireCaptureSources(showToast);
       logCapture('display-media', 'info', 'streams acquired before countdown');
 

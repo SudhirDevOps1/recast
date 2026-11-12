@@ -8,6 +8,7 @@ import {
   IconRecord,
   IconTrash,
   IconSearch,
+  IconUpload,
   Badge,
   IconButton,
   Select,
@@ -53,8 +54,28 @@ export function Library() {
   const [sort, setSort] = useState<SortKey>('newest');
   const [thumbs, setThumbs] = useState<Record<string, string>>({});
   const [thumbPending, setThumbPending] = useState<Record<string, boolean>>({});
+  const [importing, setImporting] = useState(false);
+  const [isDragOver, setIsDragOver] = useState(false);
   const requested = useRef<Set<string>>(new Set());
   const mounted = useRef(true);
+
+  async function handleImport(path?: string): Promise<void> {
+    setImporting(true);
+    try {
+      const res = await bridge().invoke('library:importMedia', path ? { path } : undefined);
+      if (res.projectId) {
+        showToast('Video imported successfully into Recast Studio!', 'success');
+        await refreshLibrary();
+        await open(res.projectId);
+      } else if (res.error) {
+        showToast(res.error, 'error');
+      }
+    } catch (e) {
+      showToast(`Import failed: ${(e as Error).message}`, 'error');
+    } finally {
+      if (mounted.current) setImporting(false);
+    }
+  }
 
   useEffect(() => {
     mounted.current = true;
@@ -154,23 +175,90 @@ export function Library() {
 
   if (library.length === 0) {
     return (
-      <EmptyState
-        icon={<IconFilm size={40} />}
-        title="No recordings yet"
-        body="Record your first clip — 90 seconds of product demo, auto-zoomed and exported in under five minutes. Everything stays on your machine."
-        action={
-          <Button variant="primary" onClick={() => navigate('record')}>
-            <span className="inline-flex items-center gap-2">
-              <IconRecord size={12} /> Record now
-            </span>
-          </Button>
-        }
-      />
+      <div
+        className="relative h-full flex flex-col justify-center"
+        onDragOver={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          setIsDragOver(true);
+        }}
+        onDragLeave={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          setIsDragOver(false);
+        }}
+        onDrop={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          setIsDragOver(false);
+          const file = e.dataTransfer.files[0];
+          if (file) {
+            const p = bridge().pathForFile(file);
+            void handleImport(p);
+          }
+        }}
+      >
+        {isDragOver ? (
+          <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-black/80 backdrop-blur-sm border-2 border-dashed border-indigo-400 rounded-xl m-4 pointer-events-none">
+            <IconUpload size={48} className="text-indigo-400 mb-3" />
+            <p className="text-lg font-semibold text-white">Drop video here to import into Recast Studio</p>
+            <p className="text-xs text-white/60 mt-1">Supports MP4, WebM, MOV, MKV, AVI</p>
+          </div>
+        ) : null}
+        <EmptyState
+          icon={<IconFilm size={40} />}
+          title="No recordings yet"
+          body="Record your first clip — or import an existing video to edit, crop (9:16 Shorts), apply studio wallpapers, and add subtitles. Everything stays local on your machine."
+          action={
+            <div className="flex flex-wrap items-center justify-center gap-3">
+              <Button variant="secondary" onClick={() => void handleImport()} disabled={importing}>
+                <span className="inline-flex items-center gap-2">
+                  <IconUpload size={14} /> {importing ? 'Importing…' : 'Import video'}
+                </span>
+              </Button>
+              <Button variant="primary" onClick={() => navigate('record')}>
+                <span className="inline-flex items-center gap-2">
+                  <IconRecord size={12} /> Record now
+                </span>
+              </Button>
+            </div>
+          }
+        />
+      </div>
     );
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
+    <div
+      className="relative flex h-full min-h-0 flex-col"
+      onDragOver={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsDragOver(true);
+      }}
+      onDragLeave={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsDragOver(false);
+      }}
+      onDrop={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsDragOver(false);
+        const file = e.dataTransfer.files[0];
+        if (file) {
+          const p = bridge().pathForFile(file);
+          void handleImport(p);
+        }
+      }}
+    >
+      {isDragOver ? (
+        <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-black/80 backdrop-blur-sm border-2 border-dashed border-indigo-400 rounded-xl m-4 pointer-events-none">
+          <IconUpload size={48} className="text-indigo-400 mb-3" />
+          <p className="text-lg font-semibold text-white">Drop video here to import into Recast Studio</p>
+          <p className="text-xs text-white/60 mt-1">Supports MP4, WebM, MOV, MKV, AVI</p>
+        </div>
+      ) : null}
       <div className="rc-library-toolbar">
         <div className="min-w-0">
           <h1 className="text-xl font-bold tracking-tight">Library</h1>
@@ -179,6 +267,11 @@ export function Library() {
           </p>
         </div>
         <div className="ml-auto flex items-center gap-2">
+          <Button variant="secondary" size="sm" onClick={() => void handleImport()} disabled={importing}>
+            <span className="inline-flex items-center gap-1.5">
+              <IconUpload size={14} /> {importing ? 'Importing…' : 'Import video'}
+            </span>
+          </Button>
           <label className="relative">
             <span className="sr-only">Search recordings</span>
             <span className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2" style={{ color: 'var(--text-muted)' }}>

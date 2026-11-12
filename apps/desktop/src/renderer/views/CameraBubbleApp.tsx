@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { bridge } from '../lib/bridge';
+import { IconX } from '@recast/ui';
 
 /**
  * Floating studio webcam HUD:
@@ -29,17 +30,18 @@ export default function CameraBubbleApp(): React.ReactElement {
 
   useEffect(() => {
     let active = true;
+    const urlParams = new URLSearchParams(window.location.search);
+    const targetDeviceId = urlParams.get('deviceId') ?? undefined;
 
-    async function initCamera(): Promise<void> {
+    async function initCamera(retryCount = 0): Promise<void> {
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: {
-            width: { ideal: 640 },
-            height: { ideal: 480 },
-            frameRate: { ideal: 30 },
-          },
+        const constraints: MediaStreamConstraints = {
+          video: targetDeviceId
+            ? { deviceId: { exact: targetDeviceId }, width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { ideal: 30 } }
+            : { width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { ideal: 30 } },
           audio: false,
-        });
+        };
+        const stream = await navigator.mediaDevices.getUserMedia(constraints);
         if (!active) {
           stream.getTracks().forEach((t) => t.stop());
           return;
@@ -49,8 +51,17 @@ export default function CameraBubbleApp(): React.ReactElement {
           videoRef.current.srcObject = stream;
           await videoRef.current.play().catch(() => undefined);
         }
+        setError(null);
       } catch (e) {
-        if (active) setError((e as Error).message);
+        if (!active) return;
+        if (retryCount < 3) {
+          // Retry after brief backoff to allow Windows DirectShow/MediaFoundation driver to release lock
+          setTimeout(() => {
+            if (active) void initCamera(retryCount + 1);
+          }, 300 * (retryCount + 1));
+        } else {
+          setError((e as Error).message);
+        }
       }
     }
 
@@ -158,28 +169,41 @@ export default function CameraBubbleApp(): React.ReactElement {
               {/* Mirror Toggle */}
               <button
                 onClick={() => setMirrored((m) => !m)}
-                className="p-1 rounded-full bg-black/70 hover:bg-black/90 text-white/80 hover:text-white border border-white/20 transition-all text-[11px] w-6 h-6 flex items-center justify-center"
+                className="p-1 rounded-full bg-black/70 hover:bg-black/90 text-white/80 hover:text-white border border-white/20 transition-all w-6 h-6 flex items-center justify-center cursor-pointer"
                 title="Mirror Webcam"
               >
-                ⇄
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M8 3 4 7l4 4" />
+                  <path d="M4 7h16" />
+                  <path d="m16 21 4-4-4-4" />
+                  <path d="M20 17H4" />
+                </svg>
               </button>
 
               {/* Shape Toggle */}
               <button
                 onClick={() => setShape((s) => (s === 'circle' ? 'squircle' : 'circle'))}
-                className="p-1 rounded-full bg-black/70 hover:bg-black/90 text-white/80 hover:text-white border border-white/20 transition-all text-[11px] w-6 h-6 flex items-center justify-center"
+                className="p-1 rounded-full bg-black/70 hover:bg-black/90 text-white/80 hover:text-white border border-white/20 transition-all w-6 h-6 flex items-center justify-center cursor-pointer"
                 title="Toggle Shape (Circle / Squircle)"
               >
-                {shape === 'circle' ? '▢' : '◯'}
+                {shape === 'circle' ? (
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                    <rect x="3" y="3" width="18" height="18" rx="5" />
+                  </svg>
+                ) : (
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                    <circle cx="12" cy="12" r="9" />
+                  </svg>
+                )}
               </button>
 
               {/* Close / Hide Bubble */}
               <button
                 onClick={() => window.close()}
-                className="p-1 rounded-full bg-black/70 hover:bg-red-600/90 text-white/80 hover:text-white border border-white/20 transition-all text-[11px] w-6 h-6 flex items-center justify-center"
+                className="p-1 rounded-full bg-black/70 hover:bg-red-600/90 text-white/80 hover:text-white border border-white/20 transition-all w-6 h-6 flex items-center justify-center cursor-pointer"
                 title="Hide live bubble"
               >
-                ✕
+                <IconX size={12} />
               </button>
             </div>
           </div>

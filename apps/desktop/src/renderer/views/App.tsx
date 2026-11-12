@@ -36,6 +36,17 @@ export default function App() {
         useApp.setState({ settings: s });
         document.documentElement.dataset.theme = s.theme === 'system' ? 'dark' : s.theme;
       });
+
+    // Window-level shield against Chromium default navigation on accidental file drop
+    const preventDrag = (e: DragEvent) => {
+      e.preventDefault();
+    };
+    window.addEventListener('dragover', preventDrag);
+    window.addEventListener('drop', preventDrag);
+    return () => {
+      window.removeEventListener('dragover', preventDrag);
+      window.removeEventListener('drop', preventDrag);
+    };
   }, [refreshPlatform, refreshFfmpeg, refreshLibrary]);
 
   const openProject = useCallback(
@@ -158,15 +169,19 @@ export default function App() {
       </header>
 
       <div className="flex min-h-0 flex-1">
-        {/* Left nav */}
-        <nav className="flex w-14 flex-col items-center gap-1 border-r border-hairline py-3" aria-label="Primary">
-          <NavButton icon={<IconFolder />} label="Library" active={route === 'library'} onClick={() => navigate('library')} />
-          <NavButton icon={<IconRecord />} label="Record" active={route === 'record'} onClick={() => navigate('record')} />
-          <NavButton icon={<IconFilm />} label="Editor" active={route === 'editor'} onClick={() => editorOpen && navigate('editor')} disabled={!editorOpen} />
-          <div className="mt-auto">
-            <NavButton icon={<IconSettings />} label="Settings" active={route === 'settings'} onClick={() => navigate('settings')} />
-          </div>
-        </nav>
+        {/* Left nav — hidden in Editor view so the Studio rail has full-bleed width with zero duplicate rails */}
+        {route !== 'editor' ? (
+          <nav className="flex w-14 shrink-0 flex-col items-center gap-1 border-r border-hairline py-3" aria-label="Primary">
+            <NavButton icon={<IconFolder />} label="Library" active={route === 'library'} onClick={() => navigate('library')} />
+            <NavButton icon={<IconRecord />} label="Record" active={route === 'record'} onClick={() => navigate('record')} />
+            {editorOpen ? (
+              <NavButton icon={<IconFilm />} label="Editor" active={false} onClick={() => navigate('editor')} />
+            ) : null}
+            <div className="mt-auto">
+              <NavButton icon={<IconSettings />} label="Settings" active={route === 'settings'} onClick={() => navigate('settings')} />
+            </div>
+          </nav>
+        ) : null}
 
         {/* View */}
         <main className="min-w-0 flex-1 overflow-auto">
