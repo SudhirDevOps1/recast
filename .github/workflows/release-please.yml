@@ -9,6 +9,11 @@ on:
 permissions:
   contents: write
   pull-requests: write
+  issues: write
+
+concurrency:
+  group: release-please-main
+  cancel-in-progress: true
 
 jobs:
   release-please:
@@ -21,6 +26,7 @@ jobs:
       - uses: google-github-actions/release-please-action@v4
         id: release
         with:
+          token: ${{ secrets.GITHUB_TOKEN }}
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
           target-branch: main

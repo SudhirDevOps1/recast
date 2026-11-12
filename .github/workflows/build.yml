@@ -3,10 +3,6 @@ name: Nightly installers
 on:
   schedule:
     - cron: '0 2 * * *'
-  push:
-    branches: [main]
-    tags:
-      - 'v*'
   workflow_dispatch:
     inputs:
       publish_nightly:
@@ -86,16 +82,28 @@ jobs:
           cache: pnpm
 
       - name: Cache Electron binaries
-        uses: actions/cache@v6
+        uses: actions/cache@v4
         with:
           path: ${{ runner.os == 'Linux' && '~/.cache/electron' || (runner.os == 'macOS' && '~/Library/Caches/electron' || '%LOCALAPPDATA%\electron\Cache') }}
           key: electron-cache-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: |
+            electron-cache-${{ runner.os }}-
+
+      - name: Cache electron-builder binaries
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.os == 'Linux' && '~/.cache/electron-builder' || (runner.os == 'macOS' && '~/Library/Caches/electron-builder' || '%LOCALAPPDATA%\electron-builder\Cache') }}
+          key: electron-builder-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: |
+            electron-builder-${{ runner.os }}-
 
       - name: Cache FFmpeg binaries
-        uses: actions/cache@v6
+        uses: actions/cache@v4
         with:
           path: resources/ffmpeg
           key: ffmpeg-${{ runner.os }}-${{ hashFiles('ffmpeg.lock.json') }}
+          restore-keys: |
+            ffmpeg-${{ runner.os }}-
 
       - run: pnpm install --frozen-lockfile
       - run: pnpm ffmpeg:fetch ${{ matrix.ffmpeg_target }}
