@@ -1,6 +1,6 @@
 # Maintainer: Recast contributors
 pkgname=recast-bin
-pkgver=0.0.3
+pkgver=0.0.4
 pkgrel=1
 pkgdesc='Free, open-source, local-first screen recorder and cinematic editor'
 arch=('x86_64')

@@ -14,7 +14,7 @@ Record, auto-zoom, annotate, overlay keystrokes, and export high-impact product 
 [![CodeQL](https://github.com/SudhirDevOps1/recast/actions/workflows/codeql.yml/badge.svg)](https://github.com/SudhirDevOps1/recast/actions/workflows/codeql.yml)
 [![License: GPL-3.0-or-later](https://img.shields.io/badge/license-GPL--3.0--or--later-blue.svg)](LICENSE)
 [![Website](https://img.shields.io/badge/website-sudhirdevops1.github.io%2Frecast-7C5CFF)](https://sudhirdevops1.github.io/recast/)
-[![Latest release](https://img.shields.io/badge/download-v0.0.3-2EA043)](https://github.com/SudhirDevOps1/recast/releases/latest)
+[![Latest release](https://img.shields.io/badge/download-v0.0.4-2EA043)](https://github.com/SudhirDevOps1/recast/releases/latest)
 
 <br />
 
@@ -161,7 +161,7 @@ Recast is purpose-built for zero-trust, air-gapped, and locked-down corporate en
 - **Zero Inbound/Outbound Networking:** No firewall exceptions, allow-listing, or outbound proxy configuration needed.
 - **Silent MSI Rollout:** Supports standard enterprise installation flags:
   ```cmd
-  msiexec /i Recast-0.0.3-enterprise.msi /qn /norestart ALLUSERS=1
+  msiexec /i Recast-0.0.4-enterprise.msi /qn /norestart ALLUSERS=1
   ```
 - Detailed GPO instructions, checksum verification, and registry paths are available in the [Deployment Guide](docs/deployment.md).
 
