@@ -1,19 +1,19 @@
 {
   "$schema": "https://raw.githubusercontent.com/ScoopInstaller/Main/master/schema.json",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "Free, open-source, local-first screen recorder and cinematic editor. Record, auto-zoom, caption, export.",
   "homepage": "https://github.com/SudhirDevOps1/recast",
   "license": "GPL-3.0-or-later",
   "architecture": {
     "64bit": {
-      "url": "https://github.com/SudhirDevOps1/recast/releases/download/v0.0.2/Recast-Portable-0.0.2.exe",
+      "url": "https://github.com/SudhirDevOps1/recast/releases/download/v0.0.3/Recast-Portable-0.0.3.exe",
       "hash": "REPLACE_AT_RELEASE"
     }
   },
-  "bin": "Recast-Portable-0.0.2.exe",
+  "bin": "Recast-Portable-0.0.3.exe",
   "shortcuts": [
     [
-      "Recast-Portable-0.0.2.exe",
+      "Recast-Portable-0.0.3.exe",
       "Recast"
     ]
   ],

@@ -65,7 +65,7 @@ export class RecastMcpServer {
               },
               serverInfo: {
                 name: 'recast-mcp-server',
-                version: '0.0.2',
+                version: '0.0.3',
               },
             },
           };
