@@ -13,6 +13,10 @@ on:
 permissions:
   contents: write
 
+env:
+  ELECTRON_MIRROR: https://npmmirror.com/mirrors/electron/
+  ELECTRON_BUILDER_BINARIES_MIRROR: https://npmmirror.com/mirrors/electron-builder-binaries/
+
 concurrency:
   group: release-${{ github.ref_name || github.ref }}
   cancel-in-progress: false
@@ -153,13 +157,19 @@ jobs:
       - name: Publish GitHub release
         run: |
           TAG="${{ github.event.inputs.tag_name || github.ref_name }}"
-          gh release create "$TAG" \
-            --repo "$GITHUB_REPOSITORY" \
-            --generate-notes \
-            --title "Recast ${TAG#v}" \
-            --notes "Download the installer for your platform below. \`latest.yml\` / \`latest-mac.yml\` are the electron-updater feeds.
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release $TAG already exists, uploading all installer artifacts..."
+            gh release upload "$TAG" artifacts/* --repo "$GITHUB_REPOSITORY" --clobber
+          else
+            echo "Creating release $TAG and uploading all installer artifacts..."
+            gh release create "$TAG" \
+              --repo "$GITHUB_REPOSITORY" \
+              --generate-notes \
+              --title "Recast ${TAG#v}" \
+              --notes "Download the installer for your platform below. \`latest.yml\` / \`latest-mac.yml\` are the electron-updater feeds.
 
-          Installers are **unsigned** until signing certificates are configured (see docs/code-signing.md). Windows may show SmartScreen; macOS requires right-click → Open on first launch.
+            Installers are **unsigned** until signing certificates are configured (see docs/code-signing.md). Windows may show SmartScreen; macOS requires right-click → Open on first launch.
 
-          Verify downloads: \`sha256sum -c SHA256SUMS\`" \
-            artifacts/*
+            Verify downloads: \`sha256sum -c SHA256SUMS\`" \
+              artifacts/*
+          fi
