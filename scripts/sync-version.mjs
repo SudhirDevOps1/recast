@@ -319,32 +319,7 @@ export function syncVersion(options = {}) {
     }
   }
 
-  // 15. GitHub release workflow default tag: .github/workflows/release.yml
-  const releaseWfPath = '.github/workflows/release.yml';
-  if (fs.existsSync(path.join(ROOT, releaseWfPath))) {
-    let content = readFile(releaseWfPath);
-    const regexDefault = /(default:\s*'v)([^']+)'/;
-    const matchDefault = content.match(regexDefault);
-    if (matchDefault) {
-      record(releaseWfPath, 'workflow release tag default', matchDefault[2], targetVersion);
-      if (!isCheckOnly && matchDefault[2] !== targetVersion) {
-        content = content.replace(regexDefault, `$1${targetVersion}'`);
-      }
-    }
-    const regexDesc = /(description:\s*'Tag or version to release \(e\.g\. v)([^)]+)\)'/;
-    const matchDesc = content.match(regexDesc);
-    if (matchDesc) {
-      record(releaseWfPath, 'workflow release tag description', matchDesc[2], targetVersion);
-      if (!isCheckOnly && matchDesc[2] !== targetVersion) {
-        content = content.replace(regexDesc, `$1${targetVersion})'`);
-      }
-    }
-    if (!isCheckOnly) {
-      writeFile(releaseWfPath, content);
-    }
-  }
-
-  // 16. GitHub issue template placeholder: .github/ISSUE_TEMPLATE/bug_report.yml
+  // 15. GitHub issue template placeholder: .github/ISSUE_TEMPLATE/bug_report.yml
   const bugReportPath = '.github/ISSUE_TEMPLATE/bug_report.yml';
   if (fs.existsSync(path.join(ROOT, bugReportPath))) {
     const content = readFile(bugReportPath);
