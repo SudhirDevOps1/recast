@@ -10,6 +10,7 @@ permissions:
   contents: write
   pull-requests: write
   issues: write
+  actions: write
 
 concurrency:
   group: release-please-main
@@ -23,6 +24,10 @@ jobs:
       tag_name: ${{ steps.release.outputs.tag_name }}
       version: ${{ steps.release.outputs.version }}
     steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
       - uses: google-github-actions/release-please-action@v4
         id: release
         with:
@@ -36,3 +41,25 @@ jobs:
         run: |
           echo "🎉 New Enterprise Release Created: ${{ steps.release.outputs.tag_name }}"
           echo "Version: ${{ steps.release.outputs.version }}"
+
+      - name: Trigger Release Installer Build
+        if: ${{ steps.release.outputs.release_created }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "🎉 Triggering cross-platform installer build for ${{ steps.release.outputs.tag_name }}..."
+          gh workflow run release.yml -f tag_name=${{ steps.release.outputs.tag_name }}
+
+      - name: Sync version targets for release PR
+        if: ${{ steps.release.outputs.pr && !steps.release.outputs.release_created }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin release-please--branches--main--components--recast || exit 0
+          git checkout release-please--branches--main--components--recast || exit 0
+          node scripts/sync-version.mjs
+          if ! git diff --quiet; then
+            git add -A
+            git commit -m "chore(release): synchronize all repository targets with release version"
+            git push origin release-please--branches--main--components--recast
+          fi
