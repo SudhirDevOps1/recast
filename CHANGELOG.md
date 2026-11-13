@@ -2,6 +2,15 @@
 
 All notable changes to Recast are documented here. Format: Keep a Changelog; versioning: SemVer.
 
+## [0.0.4](https://github.com/SudhirDevOps1/recast/compare/v0.0.3...v0.0.4) (2026-11-13)
+
+
+### Bug Fixes
+
+* **ci:** remove invalid workflows permission keyword from release-please ([82a4906](https://github.com/SudhirDevOps1/recast/commit/82a4906a020f32c555a859adf3f19db5ecb983f4))
+* **release:** grant workflows permission and decouple workflow file from version sync ([df4e0e7](https://github.com/SudhirDevOps1/recast/commit/df4e0e7f57179447925b7eb4da2f7b7902868cfa))
+* **release:** wire automated cross-platform installer build to release-please ([2428894](https://github.com/SudhirDevOps1/recast/commit/2428894293d2405049ae2ec8de601e097b12b8a8))
+
 ## [0.0.3](https://github.com/SudhirDevOps1/recast/compare/v0.0.2...v0.0.3) (2026-11-13)
 
 
