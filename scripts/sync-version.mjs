@@ -380,23 +380,29 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.a
       check: isCheck,
     });
 
+    const useColor = !process.env.NO_COLOR && Boolean(process.stdout.isTTY);
+    const green = useColor ? '\x1b[32m' : '';
+    const red = useColor ? '\x1b[31m' : '';
+    const cyan = useColor ? '\x1b[36m' : '';
+    const reset = useColor ? '\x1b[0m' : '';
+
     if (isCheck) {
       if (result.diffs.length > 0) {
-        console.error(`\x1b[31m[ERROR]\x1b[0m Version drift detected across ${result.diffs.length} targets:`);
+        console.error(`${red}[ERROR]${reset} Version drift detected across ${result.diffs.length} targets:`);
         for (const d of result.diffs) {
           console.error(`  - ${d.file} [${d.desc}]: found "${d.current}", expected "${d.expected}"`);
         }
-        console.error(`\nRun \x1b[36mpnpm version:sync\x1b[0m to safely align all targets to v${result.targetVersion}.`);
+        console.error(`\nRun ${cyan}pnpm version:sync${reset} to safely align all targets to v${result.targetVersion}.`);
         process.exit(1);
       } else {
-        console.log(`\x1b[32m[OK]\x1b[0m All repo targets are in 100% sync at v${result.targetVersion}`);
+        console.log(`${green}[OK]${reset} All repo targets are in 100% sync at v${result.targetVersion}`);
         process.exit(0);
       }
     } else {
       if (result.diffs.length === 0) {
-        console.log(`\x1b[32m[OK]\x1b[0m All targets were already in sync at v${result.targetVersion}`);
+        console.log(`${green}[OK]${reset} All targets were already in sync at v${result.targetVersion}`);
       } else {
-        console.log(`\x1b[32m[SUCCESS]\x1b[0m Synchronized ${result.diffs.length} targets to v${result.targetVersion}:`);
+        console.log(`${green}[SUCCESS]${reset} Synchronized ${result.diffs.length} targets to v${result.targetVersion}:`);
         for (const d of result.diffs) {
           console.log(`  ✓ ${d.file} (${d.desc}: ${d.current || 'unset'} -> ${d.expected})`);
         }

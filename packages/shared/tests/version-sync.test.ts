@@ -12,8 +12,8 @@ describe('Version Synchronization & Single Source of Truth', () => {
     const scriptPath = resolve(__dirname, '../../../scripts/sync-version.mjs');
     const stdout = execFileSync(process.execPath, [scriptPath, '--check'], {
       encoding: 'utf8',
+      env: { ...process.env, NO_COLOR: '1' },
     });
-    const cleanOutput = stdout.replace(/\u001b\[\d+m/g, '');
-    expect(cleanOutput).toContain('[OK] All repo targets are in 100% sync');
+    expect(stdout).toContain('[OK] All repo targets are in 100% sync');
   });
 });
