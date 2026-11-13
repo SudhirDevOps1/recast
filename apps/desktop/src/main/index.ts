@@ -4,11 +4,13 @@ import { app, globalShortcut, powerMonitor, ipcMain, BrowserWindow } from 'elect
 app.setName('Recast');
 
 import { DEFAULT_HOTKEYS, URL_SCHEME } from '@recast/shared';
+import { RecastMcpServer } from '@recast/mcp';
 import { setContext, context } from './context';
 import { LibraryStore } from './store';
 import { SessionService } from './sessions';
 import { loadSettings, saveSettings } from './store';
 import { registerIpcHandlers } from './ipc';
+import { loadProject, saveProject } from './projects';
 
 import { createMainWindow } from './windows';
 import { setupTray, renderRecordingMenu, renderStoppedMenu } from './tray';
@@ -82,8 +84,6 @@ async function bootstrap(): Promise<void> {
   // CLI MCP Server mode (e.g. `recast --mcp` or `recast --mcp-server`)
   const isMcpCli = process.argv.includes('--mcp') || process.argv.includes('--mcp-server');
   if (isMcpCli) {
-    const { RecastMcpServer } = await import('@recast/mcp');
-    const { loadProject, saveProject } = await import('./projects');
     const mcpServer = new RecastMcpServer({
       getProject: () => {
         const lastId = context().activeProjectId;

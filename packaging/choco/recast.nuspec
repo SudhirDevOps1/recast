@@ -4,7 +4,7 @@
 <package xmlns="http://schemas.microsoft.com/packaging/2015/nuspec.xsd">
   <metadata>
     <id>recast</id>
-    <version>0.1.0</version>
+    <version>0.0.2</version>
     <title>Recast</title>
     <authors>Recast contributors</authors>
     <projectUrl>https://github.com/SudhirDevOps1/recast</projectUrl>

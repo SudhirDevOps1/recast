@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { bridge } from '../lib/bridge';
 import { IconPause, IconPlay, IconCamera, IconMic, IconMonitor } from '@recast/ui';
 
@@ -17,6 +17,24 @@ export default function ToolbarApp() {
   const [micDb, setMicDb] = useState<number | null>(null);
   const [stopping, setStopping] = useState(false);
   const [micMuted, setMicMuted] = useState(false);
+
+  const togglePause = useCallback(async (): Promise<void> => {
+    void bridge().invoke(paused ? 'recorder:resume' : 'recorder:pause', undefined);
+  }, [paused]);
+
+  const handleStop = useCallback(async (): Promise<void> => {
+    if (stopping) return;
+    setStopping(true);
+    const timer = setTimeout(() => {
+      setStopping(false);
+    }, 6_000);
+    try {
+      await bridge().invoke('recorder:triggerStop', undefined);
+    } catch {
+      clearTimeout(timer);
+      setStopping(false);
+    }
+  }, [stopping]);
 
   useEffect(() => {
     const off = bridge().on('recorder:state', (s) => {
@@ -46,25 +64,7 @@ export default function ToolbarApp() {
       off();
       window.removeEventListener('keydown', onKey);
     };
-  }, [paused]);
-
-  const togglePause = async (): Promise<void> => {
-    void bridge().invoke(paused ? 'recorder:resume' : 'recorder:pause', undefined);
-  };
-
-  const handleStop = async (): Promise<void> => {
-    if (stopping) return;
-    setStopping(true);
-    const timer = setTimeout(() => {
-      setStopping(false);
-    }, 6_000);
-    try {
-      await bridge().invoke('recorder:triggerStop', undefined);
-    } catch {
-      clearTimeout(timer);
-      setStopping(false);
-    }
-  };
+  }, [handleStop, togglePause]);
 
   // Convert dBFS (-60..0) into an activity meter fraction (0..1)
   const meterLevel = micDb == null ? 0 : Math.max(0, Math.min(1, (micDb + 50) / 45));

@@ -1,6 +1,6 @@
 {
   "name": "@recast/mcp",
-  "version": "0.1.0",
+  "version": "0.0.2",
   "private": true,
   "type": "module",
   "description": "Recast Model Context Protocol (MCP) server, tools and AI agent schemas",

@@ -249,7 +249,7 @@ export async function acquireCaptureSources(
 }
 
 export async function startRecordingFlow({ sessionId, startEpochMs, acquired }: FlowArgs): Promise<void> {
-  const opts = (await import('../state/stores')).useRecorder.getState();
+  const opts = useRecorder.getState();
   const app = useApp.getState();
   const showToast = app.showToast;
 
@@ -336,7 +336,7 @@ export async function startRecordingFlow({ sessionId, startEpochMs, acquired }: 
     logCapture('pipeline', 'info', `recording started via ${handle.encoderPath}`);
   }
 
-  (await import('../state/stores')).useApp.setState({ recorderState: {
+  useApp.setState({ recorderState: {
     phase: 'recording',
     sessionId,
     elapsedUs: 0,

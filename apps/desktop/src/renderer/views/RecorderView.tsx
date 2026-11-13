@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useApp, useRecorder } from '../state/stores';
+import { useApp, useRecorder, useEditor } from '../state/stores';
 import { bridge } from '../lib/bridge';
 import { Button, Field, Select, Switch, Slider, Badge, IconRecord, IconStop, IconPause, IconPlay, IconMonitor, IconMic, IconSpeaker, IconCamera, IconRefresh, IconWarning } from '@recast/ui';
 import type { DeviceInfo, ListSourcesResponse } from '@recast/shared';
@@ -29,6 +29,7 @@ export function RecorderView() {
   const acquiredRef = useRef<AcquiredSources | null>(null);
   const cancelledRef = useRef(false);
   const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
+  const cameraStreamRef = useRef<MediaStream | null>(null);
   const [micBlocked, setMicBlocked] = useState(false);
   const [cameraBlocked, setCameraBlocked] = useState(false);
   const [permissionCheckTick, setPermissionCheckTick] = useState(0);
@@ -178,14 +179,16 @@ export function RecorderView() {
   // Live face-cam preview when enabled in recorder options
   useEffect(() => {
     if (!opts.cameraEnabled) {
-      if (cameraStream) {
-        cameraStream.getTracks().forEach((t) => t.stop());
+      if (cameraStreamRef.current) {
+        cameraStreamRef.current.getTracks().forEach((t) => t.stop());
+        cameraStreamRef.current = null;
         setCameraStream(null);
       }
       setCameraBlocked(false);
       return;
     }
     let cancelled = false;
+    let activeStream: MediaStream | null = null;
     void (async () => {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
@@ -194,14 +197,17 @@ export function RecorderView() {
               ? { deviceId: { exact: opts.cameraDeviceId } }
               : { width: { ideal: 640 }, height: { ideal: 480 } },
         });
+        activeStream = stream;
         if (cancelled) {
           stream.getTracks().forEach((t) => t.stop());
           return;
         }
+        cameraStreamRef.current = stream;
         setCameraBlocked(false);
         setCameraStream(stream);
       } catch {
         if (!cancelled) {
+          cameraStreamRef.current = null;
           setCameraBlocked(true);
           setCameraStream(null);
         }
@@ -209,8 +215,11 @@ export function RecorderView() {
     })();
     return () => {
       cancelled = true;
-      if (cameraStream) {
-        cameraStream.getTracks().forEach((t) => t.stop());
+      if (activeStream) {
+        activeStream.getTracks().forEach((t) => t.stop());
+        if (cameraStreamRef.current === activeStream) {
+          cameraStreamRef.current = null;
+        }
       }
     };
   }, [opts.cameraEnabled, opts.cameraDeviceId, permissionCheckTick]);
@@ -669,7 +678,6 @@ export function RecorderView() {
     if (projectId) {
       const project = await bridge().invoke('library:open', { id: projectId });
       if (project) {
-        const { useEditor } = await import('../state/stores');
         useEditor.getState().setProject(project);
         // Carry the id in the app store too — the Export view loads its project
         // from useApp.projectId; without it export showed "No project selected".

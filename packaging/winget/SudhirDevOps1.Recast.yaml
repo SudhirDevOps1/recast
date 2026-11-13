@@ -1,5 +1,5 @@
 PackageIdentifier: SudhirDevOps1.Recast
-PackageVersion: 0.1.0
+PackageVersion: 0.0.2
 PackageLocale: en-US
 Publisher: Recast contributors
 PackageName: Recast
@@ -12,7 +12,7 @@ Installers:
   - Architecture: x64
     InstallerType: nullsoft
     Scope: user
-    InstallerUrl: https://github.com/SudhirDevOps1/recast/releases/download/v0.1.0/Recast-Setup-0.1.0.exe
+    InstallerUrl: https://github.com/SudhirDevOps1/recast/releases/download/v0.0.2/Recast-Setup-0.0.2.exe
     InstallerSha256: REPLACE_AT_RELEASE
 ManifestType: singleton
 ManifestVersion: 1.6.0

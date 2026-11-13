@@ -1,6 +1,8 @@
 import { promises as fs, createWriteStream } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { spawn } from 'node:child_process';
+import { Readable } from 'node:stream';
+import { pipeline } from 'node:stream/promises';
 import { modelsDir, whisperDir } from './paths';
 import type { CaptionModel } from '@recast/shared';
 import type { FfmpegRunner } from '@recast/shared/node';
@@ -33,14 +35,12 @@ export async function installWhisperBinary(onProgress: (pct: number) => void): P
   try {
     const res = await fetch(url, {
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Recast/0.1.4',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Recast/0.0.2',
       },
     });
     if (!res.ok) throw new Error(`HTTP ${res.status} fetching whisper binary package`);
     const total = Number(res.headers.get('content-length') ?? 9_000_000);
     const writer = createWriteStream(archivePath);
-    const { Readable } = await import('node:stream');
-    const { pipeline } = await import('node:stream/promises');
     let received = 0;
     let lastPct = -1;
     const reader = Readable.fromWeb(res.body as import('node:stream/web').ReadableStream);
@@ -222,7 +222,7 @@ export async function downloadWhisperModel(modelId: string, onProgress: (pct: nu
     try {
       const res = await fetch(url, {
         headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Recast/0.1.4',
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Recast/0.0.2',
         },
       });
       if (!res.ok) {

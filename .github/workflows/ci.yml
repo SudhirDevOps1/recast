@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 permissions:
@@ -76,6 +76,9 @@ jobs:
       - name: Documentation links and anchors
         run: node scripts/check-docs.mjs
 
+      - name: Verify repository version synchronization
+        run: node scripts/sync-version.mjs --check
+
   verify:
     name: Lint, types, tests
     needs: [preflight, docs]
@@ -107,13 +110,21 @@ jobs:
           node-version: 22
           cache: pnpm
 
+      - name: Cache Electron binaries
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.os == 'Linux' && '~/.cache/electron' || (runner.os == 'macOS' && '~/Library/Caches/electron' || '%LOCALAPPDATA%\electron\Cache') }}
+          key: electron-cache-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: |
+            electron-cache-${{ runner.os }}-
+
       - run: pnpm install --frozen-lockfile
       - run: pnpm verify
 
   smoke:
     name: Smoke (ubuntu-22.04)
     needs: [preflight, verify]
-    if: needs.preflight.outputs.has_app == 'true'
+    if: needs.preflight.outputs.has_app == 'true' && !startsWith(github.head_ref, 'release-please--')
     runs-on: ubuntu-22.04
     timeout-minutes: 20
     steps:
@@ -127,6 +138,14 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: |
+            playwright-${{ runner.os }}-
 
       - name: Install system dependencies for Electron + native build headers
         run: |
