@@ -2,6 +2,71 @@
 
 All notable changes to Recast are documented here. Format: Keep a Changelog; versioning: SemVer.
 
+## [0.0.3](https://github.com/SudhirDevOps1/recast/compare/v0.0.2...v0.0.3) (2026-11-13)
+
+
+### Features
+
+* **desktop:** face-cam PiP, background image, cursor FX controls, Library thumbnails, export presets, premium polish ([e9cf7bc](https://github.com/SudhirDevOps1/recast/commit/e9cf7bcc34ac6a6c9c08ba7bedd793d3ed904d5a))
+* **editor:** add interactive frame cropping, webcam bubble controls, and GIF loop options ([a354c9b](https://github.com/SudhirDevOps1/recast/commit/a354c9b401d604cbec4fb9973b49ea72e4f73a44))
+* **editor:** design panel — full color pickers, gradient presets + angle, echo controls, custom aspect, cursor styling surface; refresh app screenshots + docs ([600c76b](https://github.com/SudhirDevOps1/recast/commit/600c76bed6268844890086ec26a0840a5785a479))
+* eliminate double cursor, add video import pipeline, optimize low-spec performance ([172a8fb](https://github.com/SudhirDevOps1/recast/commit/172a8fb9ed894a50a2d1e26a41803d53c62ecd3c))
+* implement Recast end-to-end — capture, editor, export, packaging ([894a3d0](https://github.com/SudhirDevOps1/recast/commit/894a3d0d39e37f0ad2fbddc9a5b07f1fc1fef271))
+* **mcp:** add Model Context Protocol server and in-app AI Copilot panel ([12c66fe](https://github.com/SudhirDevOps1/recast/commit/12c66fe24a54fa1769fcb146c80602b5eb3db398))
+* **mcp:** complete AI copilot engine, cursor toggle and clean whisper stream checks ([a170b20](https://github.com/SudhirDevOps1/recast/commit/a170b2082ee32ff5be14a6918eef46719f14edc7))
+* Motion 2.0 — animation editing (easing, transitions, fades, cursor FX) + Timeline 2.0 ([f088210](https://github.com/SudhirDevOps1/recast/commit/f088210b0408e00f72b1df680c4314ffca38e363))
+* **recorder:** Capptivo-parity phase 2 — live source thumbnails, refresh, pause/resume fix, actionable toasts ([931c023](https://github.com/SudhirDevOps1/recast/commit/931c023e7a500aba8fd624f9bae396acb16685b3))
+* release v0.1.4 - crash-safe stop flow, suggest zooms, keystroke HUD & live annotations ([48db629](https://github.com/SudhirDevOps1/recast/commit/48db629924bc7adca312cd71766d393f0d080cb2))
+* **settings:** Diagnostics section with Copy diagnostics bundle ([822721e](https://github.com/SudhirDevOps1/recast/commit/822721efad842fba0a54ac0b40196a97e0aa697a))
+* **studio-grade:** implement market-parity recording lifecycle, capture exclusion, live HUD and cosmic studio aesthetics ([285a462](https://github.com/SudhirDevOps1/recast/commit/285a462c604c5c8464873c561c064befeaf6920b))
+* **ui:** premium interaction states, rebuilt library, and media fixes ([ec0d50c](https://github.com/SudhirDevOps1/recast/commit/ec0d50c46ba22c5f3e1be417be0cc3459bb3b3c7))
+* **website:** per-file SHA-256 preview and a mobile sticky download bar ([bfb36ec](https://github.com/SudhirDevOps1/recast/commit/bfb36ec49ac346dabcc99a91118c160d48eb1f89))
+* **website:** premium redesign with motion and live release data ([c86bda0](https://github.com/SudhirDevOps1/recast/commit/c86bda0217f3a99812dd23e35e2985192cda83d8))
+* **website:** use cases, internals, verify and live release list ([f127b27](https://github.com/SudhirDevOps1/recast/commit/f127b27c573256a675c7fb50081e293eb660dbe3))
+
+
+### Bug Fixes
+
+* **build:** bundle @recast/mcp and configure headless flags for smoke runner ([e15fa06](https://github.com/SudhirDevOps1/recast/commit/e15fa06e44c4181639a152cb253e1851d82699b2))
+* **build:** eliminate vite dynamic import warnings and lint hook dependencies ([c87c990](https://github.com/SudhirDevOps1/recast/commit/c87c990778f424118baa31f4937933a55bb79514))
+* **capture:** optimize recording performance, stop button responsiveness, and audio extraction resilience ([2dfcada](https://github.com/SudhirDevOps1/recast/commit/2dfcada0a1e58b6b252c539b8c14afd93abaa24b))
+* **capture:** recording froze after the first 2s segment ([568baa2](https://github.com/SudhirDevOps1/recast/commit/568baa2282cef4d83c7d0afb09927d6001ebbeda))
+* **capture:** register display-media handler — getDisplayMedia was always denied on Electron &gt;=22, recording never started; add Capptivo-parity plan ([593392b](https://github.com/SudhirDevOps1/recast/commit/593392bfd5674cd69f5b17782687fd853b82a15f))
+* **capture:** root-cause the Windows 'Not supported' recording failure ([0ed43d4](https://github.com/SudhirDevOps1/recast/commit/0ed43d4e7331e90f71cf3c607e4e31f4cf7429d1))
+* **ci:** drop packageManager pin — conflicts with pnpm/action-setup version input ([5b28b29](https://github.com/SudhirDevOps1/recast/commit/5b28b291ec38a43a6f7cd2eceb46f0cccd2ffcb1))
+* declare browser globals in screenshot script (eslint no-undef on window) ([3d941b9](https://github.com/SudhirDevOps1/recast/commit/3d941b919ef0422394ff62b80ba48185d29789c5))
+* **desktop:** bundle workspace deps + CJS sandboxed preload, dev-safe updater, renderer process.platform via bridge, honest smoke assertions ([61342d8](https://github.com/SudhirDevOps1/recast/commit/61342d863f252bf37bde2d4466bb0dde4d112cf7))
+* **desktop:** restore default permissions and enable immediate show in smoke mode ([bb95c0e](https://github.com/SudhirDevOps1/recast/commit/bb95c0e57bec051a38deae8680003f16dc0520ef))
+* **editor:** drive preview decode videos through FrameSync + segment-local seek mapping ([b23432e](https://github.com/SudhirDevOps1/recast/commit/b23432e45edb0c08f8efd38715dff74dfbd3b26a))
+* **editor:** fix cursor loading and zoom camera viewport bounds ([cd62c7d](https://github.com/SudhirDevOps1/recast/commit/cd62c7d03ea54c559ed73d9daacc986012f5846f))
+* **export:** repair the full record→edit→export chain — six blockers found by live debugging ([7bd770c](https://github.com/SudhirDevOps1/recast/commit/7bd770c1f4897b913adfe1aa7f31107ab1705114))
+* **ffmpeg:** persist TOFU pinning for existing binaries; pin real linux-x64 hashes ([9713ac8](https://github.com/SudhirDevOps1/recast/commit/9713ac8b53fa8c946b7505aa3765e4fb543c71b7))
+* **ffmpeg:** skip manifest for targets without binaries (win32-arm64) ([9480e0c](https://github.com/SudhirDevOps1/recast/commit/9480e0c4fac7553e4af5741f7e37d0e12a7921d2))
+* **lint:** replace control regex with NO_COLOR in version sync test ([9197ea8](https://github.com/SudhirDevOps1/recast/commit/9197ea8b6e895b659eda5e7698e06fa78b1b8b55))
+* **main:** isolate single-instance lock and guard tray init in smoke test mode ([dd6e0c4](https://github.com/SudhirDevOps1/recast/commit/dd6e0c4be98df846d51d0b7e2c13e8860c1c4759))
+* **media:** resolve Windows drive paths in the recast-media handler ([3ac57df](https://github.com/SudhirDevOps1/recast/commit/3ac57dfb54989d6c9150b0cc82748e9d95e8c256))
+* **media:** serve range requests from the recast-media protocol ([5db6d7c](https://github.com/SudhirDevOps1/recast/commit/5db6d7c0c779ebb60b01c4d69a91a280bc8eea56))
+* **onboarding:** persist firstRunDone — Welcome dialog reopened on every launch ([ffa9ee2](https://github.com/SudhirDevOps1/recast/commit/ffa9ee228da5684ad414e37f4c3445aa84e522c2))
+* **packaging:** electron-builder 26 schema — drop nsis.perUser, rename linux.desktop to desktopEntry ([505216d](https://github.com/SudhirDevOps1/recast/commit/505216da47282e87b0ec2343a5794e5857415700))
+* **packaging:** linux desktop file uses nested entry map (v26 schema), validated locally ([66884f3](https://github.com/SudhirDevOps1/recast/commit/66884f323d8c1fb9057ebe56a6987363686ef8b4))
+* **perf:** keep Chromium media buffers off tiny /dev/shm ([6de2352](https://github.com/SudhirDevOps1/recast/commit/6de23522ced49392fa3238709d3bd258b4853c0a))
+* **protocol:** remove unused net reference to restore green CI ([c4557df](https://github.com/SudhirDevOps1/recast/commit/c4557dffcb828af40fdb8e862351763e54fb1fd2))
+* recast-media served absolute paths relative to process cwd — black preview/exports ([8deaa6f](https://github.com/SudhirDevOps1/recast/commit/8deaa6f21d1775d20bd9c21f42ff31bf372a67e8))
+* **recorder:** anchor capture clock to epoch, exclude toolbar, and harden cursor/audio pipelines ([b3a08bb](https://github.com/SudhirDevOps1/recast/commit/b3a08bb76fc16037a587b8938f64b76967250509))
+* resolve black preview via dynamic media protocol & expand floating stop toolbar ([46e45bc](https://github.com/SudhirDevOps1/recast/commit/46e45bc84705586359c7cae02272e8fff031ae88))
+* **smoke:** align export button selector and label ([f677e48](https://github.com/SudhirDevOps1/recast/commit/f677e48418074d4c4a11bdb4272ed04ea5568671))
+* **tests:** handle ANSI escape codes in version sync unit test ([032e47d](https://github.com/SudhirDevOps1/recast/commit/032e47d72c4d9930d7e57926e2b73b2738736d36))
+* **toolbar:** reposition stop control upfront and widen toolbar window to 620px ([3ef5c0d](https://github.com/SudhirDevOps1/recast/commit/3ef5c0de370f0c6939a9da11c02cd8c312bf9e0a))
+* **ui:** English-only interface — drop the Hindi locale ([8a7ebeb](https://github.com/SudhirDevOps1/recast/commit/8a7ebeb8cd31b77d9901fd13aebcd9e12d5d6f86))
+* **website:** explain the no-JS download state instead of a stuck spinner ([0ddcdd4](https://github.com/SudhirDevOps1/recast/commit/0ddcdd42d1155ec4355d400d28184027919a533d))
+* **website:** lift the muted label colour to AA contrast ([c8be647](https://github.com/SudhirDevOps1/recast/commit/c8be64754eaa2de48d364b609578338704ef96f0))
+* **website:** platform-aware, no-JS-proof downloads with feedback ([63d3835](https://github.com/SudhirDevOps1/recast/commit/63d3835474847fc6191d4d6310f7f04579bb093d))
+* **website:** stop the hero version chip claiming v0.1.1 when release data fails ([d668e55](https://github.com/SudhirDevOps1/recast/commit/d668e55be4a7661457b6494e930877d746091205))
+* **website:** stop the hidden mobile menu from swallowing every click ([ec2d35d](https://github.com/SudhirDevOps1/recast/commit/ec2d35d83d3a9cb03808843934acba949239d8ef))
+* **website:** the FAQ accordion never opened its answer ([212f09b](https://github.com/SudhirDevOps1/recast/commit/212f09b891aeee8b8d40db0e13e670e9e327a090))
+* **website:** trim meta description to search-result length ([2bd5cc4](https://github.com/SudhirDevOps1/recast/commit/2bd5cc4c7a333a092d000a9a83529e076c7a3673))
+* **website:** version asset URLs so a fix is not hidden behind a 10-minute cache ([ce88343](https://github.com/SudhirDevOps1/recast/commit/ce88343ad5eab8b6b6f3d6d2b4026a4bc1ddf7f0))
+
 ## [0.0.2](https://github.com/SudhirDevOps1/recast/compare/v0.0.1...v0.0.2) (2026-11-12)
 
 
